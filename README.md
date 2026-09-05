@@ -30,6 +30,8 @@ bun run test:browser
 
 Tests require the private database to be running and create/drop only their own randomly named schema. Browser checks use `R2_BROWSER_PATH` or this VPS’s existing ARM64 Chromium. On this VPS, run `python3 scripts/prepare-browser.py` once to prepare a project-private copy with compatible existing libraries; no browser download or system modification is needed.
 
+For an explicitly authorised temporary UI tunnel, set `R2_DEV_ORIGIN` to its exact HTTPS origin and `R2_PREVIEW_ORIGIN` to a different HTTPS tunnel forwarding the fixture preview on port 4311. The app origin forwards Vite on port 5173. No wildcard tunnel origins are accepted. This exposes the fixture participant selector and simulated data to anyone with the link; it is not production authentication. Vite blocks project-private toolchain/data directories. Stop the tunnel processes when review ends.
+
 ## Structure
 
 ```text

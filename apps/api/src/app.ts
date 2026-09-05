@@ -40,6 +40,13 @@ const origins = new Set([
   'http://localhost:5173',
   'http://localhost:4310',
 ]);
+// An explicit temporary fixture origin; never accept arbitrary tunnel subdomains.
+if (process.env.R2_MODE === 'fixture' && process.env.R2_DEV_ORIGIN) {
+  const origin = new URL(process.env.R2_DEV_ORIGIN);
+  if (origin.protocol !== 'https:' || origin.username || origin.password)
+    throw new Error('R2_DEV_ORIGIN must be an HTTPS origin.');
+  origins.add(origin.origin);
+}
 export function createApp(options: { fixture: boolean }) {
   const app = express();
   app.set('json replacer', (_key: string, value: unknown) =>
@@ -81,6 +88,7 @@ export function createApp(options: { fixture: boolean }) {
       ]);
       res.cookie('r2session', token, {
         httpOnly: true,
+        secure: Boolean(process.env.R2_DEV_ORIGIN),
         sameSite: 'strict',
         path: '/',
         maxAge: 8 * 3600 * 1000,

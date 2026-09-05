@@ -28,4 +28,4 @@ All four original documents were read and moved from the mistaken project direct
 
 Local implementation uses clearly labelled fixtures for external execution and publication until approved accounts and vendor implementations exist. A fixture result never proves real cloud execution or GitHub publication. See [IMPLEMENTATION.md](IMPLEMENTATION.md) for the current boundaries and validation record.
 
-The user explicitly authorised incremental commits and pushes to the remote main branch during implementation. Deployment and paid provisioning remain unauthorised.
+The user clarified that incremental commits must remain local. Push all accumulated commits only after explicit final approval. Earlier commits were already pushed under the previous instruction. A temporary Cloudflare tunnel to the local fixture was subsequently authorised for UI review; paid provisioning and production deployment remain unauthorised.

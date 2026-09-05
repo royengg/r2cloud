@@ -19,7 +19,16 @@ export async function issuePreview(actor: Actor, projectId: string, candidateId:
       actor.id,
       c.id,
     ]);
-    return { url: `http://127.0.0.1:4311/view#${token}`, expiresInSeconds: 300, fixture: true };
+    const origin =
+      process.env.R2_MODE === 'fixture' && process.env.R2_PREVIEW_ORIGIN
+        ? new URL(process.env.R2_PREVIEW_ORIGIN).origin
+        : 'http://127.0.0.1:4311';
+    requireThat(
+      origin === 'http://127.0.0.1:4311' || origin.startsWith('https://'),
+      500,
+      'Preview origin must use HTTPS.',
+    );
+    return { url: `${origin}/view#${token}`, expiresInSeconds: 300, fixture: true };
   });
 }
 export async function readPreview(token: string) {

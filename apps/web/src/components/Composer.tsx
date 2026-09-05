@@ -74,10 +74,6 @@ export function Composer({
           </div>
         </details>
       )}
-      <div className="composer-footnote">
-        <Icon name="shield" size={13} />
-        You choose when work starts and what gets published.
-      </div>
     </div>
   );
 }

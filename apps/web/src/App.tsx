@@ -334,10 +334,6 @@ export function App() {
               )
             }
           />
-          <div className="board-fixture-label">
-            <span className="fixture-indicator" />
-            Local fixture <span>·</span> Simulated cloud & GitHub
-          </div>
         </main>
       </div>
       {task && project && (

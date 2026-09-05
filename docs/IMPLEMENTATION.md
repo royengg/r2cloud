@@ -38,3 +38,7 @@ Verified on 2026-09-05 against the official [app-server documentation](https://l
 
 These are local application tests. External execution, application test evidence and repository operations are explicitly fixtures. No real cloud/Codex/GitHub/Neon end-to-end validation has occurred.
 
+
+## Temporary UI tunnel check
+
+An explicitly requested Cloudflare Quick Tunnel serves the local dev UI, with an exact HTTPS origin allowlist and a separate preview tunnel. The fixture preview process repeatedly hit a Bun 1.4.2 ARM64 native abort behind the tunnel; changing its HTTP renderer did not resolve the crash. The launcher now keeps the board running if this optional fixture preview exits. Remote fixture preview reliability remains unresolved. No runtime crash report or credentials were uploaded. Tunnel-related commits remain local pending the user's final push approval.

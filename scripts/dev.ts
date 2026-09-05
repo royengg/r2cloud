@@ -17,8 +17,14 @@ function stop() {
 }
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
-for (const c of children)
+for (const [index, c] of children.entries())
   c.on('exit', (code) => {
+    if (!closing && index === 3) {
+      console.error(
+        'Fixture preview stopped. The board remains available; restart the preview separately.',
+      );
+      return;
+    }
     if (!closing) {
       console.error('A development process stopped:', code);
       stop();

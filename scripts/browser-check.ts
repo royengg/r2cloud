@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { chromium } from 'playwright-core';
 import pg from 'pg';
 import { readFile, mkdir } from 'node:fs/promises';
@@ -53,9 +54,34 @@ try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1050 } });
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
+  async function audit(label: string) {
+    // Assess settled surfaces, not the transparent frames of an entering dialog.
+    await page.evaluate(async () => {
+      await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+      await Promise.all(
+        document
+          .getAnimations()
+          .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+          .map((a) => a.finished.catch(() => {})),
+      );
+    });
+    const result = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    await Bun.write(
+      `.local/screenshots/accessibility-${label}.json`,
+      JSON.stringify(result.violations, null, 2),
+    );
+    assert.deepEqual(
+      result.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) })),
+      [],
+      `Accessibility: ${label}`,
+    );
+  }
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('http://127.0.0.1:4310');
+  await audit('sign-in');
   await page.getByRole('button', { name: /Maya Chen/ }).click();
   await page.getByRole('heading', { name: /^Website launch/ }).waitFor();
   await page.getByText('Live', { exact: true }).waitFor();
@@ -82,8 +108,10 @@ try {
   await page
     .getByRole('button', { name: 'Publish changes for code review', exact: true })
     .waitFor();
-  await page.screenshot({ path: '.local/screenshots/task-review.png', fullPage: true });
+  await audit('review');
+  await page.screenshot({ path: '.local/screenshots/task-review.png' });
   await page.getByRole('button', { name: 'Publish changes for code review', exact: true }).click();
+  await audit('publication');
   await page.getByRole('button', { name: 'Approve publication', exact: true }).click();
   await page.getByText('Publishing for code review', { exact: true }).last().waitFor();
   await publishOne(new FixturePublisher());
@@ -104,7 +132,11 @@ try {
   await executeOne(new FixtureExecution());
   await page.getByRole('button', { name: 'Try the preview', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Close task details', exact: true }).last().click();
+  await audit('board-desktop');
   await page.screenshot({ path: '.local/screenshots/board-desktop.png', fullPage: true });
+  await page
+    .getByRole('button', { name: 'New task', exact: true })
+    .screenshot({ path: '.local/screenshots/raised-button.png' });
   await page.getByRole('button', { name: 'New task', exact: true }).click();
   await page.getByLabel('Task title', { exact: true }).fill('Make helpful answers easy to find');
   await page
@@ -117,6 +149,7 @@ try {
   await page
     .getByRole('dialog', { name: 'Make helpful answers easy to find', exact: true })
     .waitFor();
+  await page.getByRole('button', { name: 'Conversation', exact: true }).click();
   await page
     .getByLabel('Task feedback', { exact: true })
     .fill('Keep the answers short and friendly.');
@@ -126,12 +159,75 @@ try {
     .filter({ hasText: 'Keep the answers short and friendly.' })
     .waitFor();
   await page.getByRole('button', { name: 'Close task details', exact: true }).last().click();
+  await page.setViewportSize({ width: 720, height: 525 });
+  assert.equal(
+    await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    true,
+    '200% desktop-equivalent reflow',
+  );
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: '.local/screenshots/board-mobile.png', fullPage: true });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await audit('board-mobile');
+  await page.setViewportSize({ width: 320, height: 720 });
+  assert.equal(
+    await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    true,
+    '320px reflow',
+  );
+  const menu = page.getByRole('button', { name: 'Show sidebar', exact: true });
+  await menu.click();
+  await page.getByRole('dialog', { name: 'Workspace navigation', exact: true }).waitFor();
+  await audit('mobile-navigation');
+  await page.keyboard.press('Escape');
+  assert.equal(
+    await menu.evaluate((el) => el === document.activeElement),
+    true,
+    'Sidebar restores focus',
+  );
+  await page.getByRole('button', { name: 'Ongoing', exact: false }).first().click();
+  await page.getByRole('button', { name: /Make pricing easier to compare/ }).click();
+  await audit('mobile-review');
+  assert.equal(
+    await page.locator('.task-detail').evaluate((el) => el.scrollWidth <= el.clientWidth),
+    true,
+    'Review reflow',
+  );
+  await page.screenshot({ path: '.local/screenshots/review-mobile-320.png', fullPage: true });
+  await page.keyboard.press('Escape');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.getByRole('button', { name: 'New task', exact: true }).click();
+  assert.equal(
+    await page
+      .getByRole('dialog', { name: 'Create a task' })
+      .evaluate((el) => getComputedStyle(el).transitionDuration),
+    '0s',
+  );
+  await page.keyboard.press('Escape');
+  await page.setViewportSize({ width: 1440, height: 1050 });
+  await page.getByRole('button', { name: /Polish navigation on smaller screens/ }).click();
+  await page.getByRole('button', { name: 'Start work', exact: true }).click();
+  await page.getByRole('dialog').getByRole('alert').filter({ hasText: 'Another change' }).waitFor();
+  await page.keyboard.press('Escape');
+  const touchContext = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+    storageState: await context.storageState(),
+  });
+  const touchPage = await touchContext.newPage();
+  await touchPage.goto('http://127.0.0.1:4310');
+  const touchButton = touchPage.getByRole('button', { name: 'New task', exact: true });
+  await touchButton.waitFor();
+  assert.equal(
+    await touchButton.evaluate((el) => el.getBoundingClientRect().height >= 44),
+    true,
+    'Touch target',
+  );
+  await touchContext.close();
   assert.deepEqual(errors, []);
   console.log(
-    'Browser journey passed: sign-in, exclusive start, private preview, correction, publication, separate verified merge, task creation and feedback. Desktop and mobile screenshots saved.',
+    'Browser journey passed: sign-in, exclusive start, private preview, correction, publication, separate verified merge, task creation and feedback. Desktop/mobile reflow, keyboard focus, reduced motion, touch targets, inline recovery and seven axe audits passed. Screenshots saved.',
   );
 } finally {
   await browser.close();

@@ -269,7 +269,7 @@ Suggested skills: turn a request into acceptance criteria; prepare a product bri
 
 ## 12. Frontend expansion of the supplied sketch
 
-Preserve the simple visual structure: navigation menu at top left, project context, participant avatars at top right, three columns, and a broad composer anchored below the board. Keep high-contrast readable typography and modest card density; the dark appearance is an initial visual direction, not a requirement to sacrifice accessibility.
+Preserve the simple visual structure: navigation menu at top left, project context, participant avatars at top right, three columns, and a broad composer anchored below the board. Keep high-contrast readable typography and modest card density; the user's latest direction is a soft light palette, rounded surfaces, Hugeicons, raised neumorphic action buttons and restrained motion. The root DESIGN.md records the current visual system.
 
 | Area | Behaviour |
 | --- | --- |

@@ -24,6 +24,7 @@ Postgres uses existing ARM64 binaries with project-private storage and a Unix so
 bun run typecheck
 bun test
 bun run build
+bun run design:lint
 bun run test:browser
 ```
 
@@ -45,6 +46,8 @@ Bun 1.4.2 is the runtime and package manager; `bun.lock` is the only project loc
 
 ## Documents
 
+- [Design system](DESIGN.md)
+- [UI verification](docs/UI-VERIFICATION.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Confirmed decisions](docs/DECISIONS.md)
 - [Inherited source review](docs/RESEARCH.md)

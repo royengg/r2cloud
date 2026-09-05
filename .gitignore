@@ -3,3 +3,6 @@ dist/
 .local/
 .env
 *.log
+
+# User-requested upstream skills are installed locally; provenance lives in docs.
+.agents/skills/

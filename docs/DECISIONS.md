@@ -11,7 +11,7 @@ Confirmed by the user on 5 September 2026. This record supersedes the preliminar
 | Autonomy | Individually started tasks and explicitly authorised bounded batches; no unrestricted continuous picking. |
 | Repository scope | Websites and web applications. |
 | Completion | Coding tasks complete only after actual PR merge is verified. Production deployment is separate and out of scope. |
-| Experience | Dark, approachable three-column board; technical detail is progressively disclosed. |
+| Experience | Fresh light interface with soft blue/apricot/sage surfaces, rounded shapes, collapsible org/project sidebar, Hugeicons and Plus Jakarta Sans. Three board columns, scoped composer and progressively disclosed review details. Neumorphic buttons and restrained motion follow the latest references. |
 | Workspace | `/home/paseo-agent/workspace/r2cloud`. Both session and VPS instructions explicitly permit this path. |
 
 Reversible engineering choices: React/TypeScript/Vite, Express/TypeScript, Postgres, separate API/workflow/publisher processes, durable database jobs and events, immutable review manifests, authenticated preview grants, versioned run-pinned skills. The user subsequently selected Prisma for Neon Postgres, Socket.IO for realtime, and Bun workspaces/package manager/runtime. No Neon resource has been provisioned.

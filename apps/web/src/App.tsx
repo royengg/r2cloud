@@ -1,1209 +1,436 @@
-import { io } from 'socket.io-client';
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import {
-  ArrowUp,
-  ArrowUpRight,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  Circle,
-  Clock3,
-  Code2,
-  Command as CommandIcon,
-  FileCheck2,
-  Flag,
-  GitMerge,
-  Layers3,
-  Menu,
-  MessageSquare,
-  MoreHorizontal,
-  PanelRightClose,
-  Plus,
-  Search,
-  SlidersHorizontal,
-  Sparkles,
-  X,
-  AlertCircle,
-  ExternalLink,
-  Play,
-  ShieldCheck,
-  Users,
-} from 'lucide-react';
-import type { Command, CandidateManifest, Evidence } from '@r2cloud/contracts/domain';
-type Task = {
-  id: string;
-  title: string;
-  outcome: string;
-  criteria: string[];
-  priority: string;
-  state: string;
-  version: number;
-  generation: number;
-  owner_name: string | null;
-  owner_id: string | null;
-  run: { state: string; manifest: any } | null;
-  candidate: { id: string; digest: string; manifest: CandidateManifest; evidence: Evidence } | null;
-  publication: { pr_number: number; url: string } | null;
-  completed_at: string | null;
-};
-type Project = {
-  id: string;
-  name: string;
-  org_name?: string;
-  org_id: string;
-  contribute: boolean;
-  review: boolean;
-  merge: boolean;
-};
-type Snapshot = {
-  project: Project;
-  tasks: Task[];
-  participants: { id: string; name: string; review: boolean }[];
-  comments: {
-    id: string;
-    task_id: string | null;
-    body: string;
-    name: string;
-    created_at: string;
-  }[];
-  events: { id: string; task_id: string; kind: string; created_at: string }[];
-  cursor: string;
-};
-type Me = { user: { id: string; name: string }; projects: Project[]; mode: string };
-const stateLabel: Record<string, string> = {
-  todo: 'Ready to start',
-  building: 'Building the outcome',
-  review: 'Needs your review',
-  publishing: 'Publishing for code review',
-  code_review: 'In code review',
-  merging: 'Verifying merge',
-  completed: 'Merged and verified',
-  blocked: 'Blocked',
-  cancelled: 'Cancelled',
-};
-async function api(path: string, body?: unknown, key?: string) {
-  const response = await fetch('/api' + path, {
-    method: body === undefined ? 'GET' : 'POST',
-    headers:
-      body === undefined
-        ? {}
-        : { 'Content-Type': 'application/json', 'Idempotency-Key': key ?? crypto.randomUUID() },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error ?? 'Unable to connect.');
-  return data;
-}
-function initials(name: string) {
-  return name
-    .split(' ')
-    .map((x) => x[0])
-    .slice(0, 2)
-    .join('');
-}
+import { useEffect, useState } from 'react';
+import { Sidebar } from './components/Sidebar';
+import { Board } from './components/Board';
+import { Composer } from './components/Composer';
+import { TaskDetail } from './components/TaskDetail';
+import { NewTask } from './components/NewTask';
+import { Icon } from './components/Icon';
+import { Avatar, Button, IconButton, Modal } from './components/ui';
+import { useWorkspace } from './lib/useWorkspace';
+import { api } from './lib/api';
 export function App() {
-  const [me, setMe] = useState<Me | null>(null),
-    [login, setLogin] = useState(false),
-    [projectId, setProjectId] = useState('launch'),
-    [data, setData] = useState<Snapshot | null>(null),
-    [selected, setSelected] = useState<string | null>(null),
-    [search, setSearch] = useState(''),
+  const w = useWorkspace();
+  const [mobile, setMobile] = useState(() => innerWidth < 900),
+    [sidebarOpen, setSidebarOpen] = useState(() => innerWidth >= 900),
     [attention, setAttention] = useState(false),
+    [search, setSearch] = useState(''),
     [priority, setPriority] = useState('All priorities'),
-    [filters, setFilters] = useState(false),
-    [nav, setNav] = useState(false),
-    [newTask, setNewTask] = useState(false),
-    [error, setError] = useState(''),
-    [busy, setBusy] = useState(false),
-    [connection, setConnection] = useState('Connecting'),
-    [message, setMessage] = useState(''),
-    [notice, setNotice] = useState(''),
-    [confirm, setConfirm] = useState<'publish' | 'merge' | null>(null),
-    [correct, setCorrect] = useState(false),
-    [feedback, setFeedback] = useState('');
-  const requestSerial = useRef(0),
-    composer = useRef<HTMLTextAreaElement>(null),
-    drawer = useRef<HTMLElement>(null),
-    lastFocus = useRef<HTMLElement | null>(null);
-  const refresh = useCallback(async () => {
-    const serial = ++requestSerial.current;
-    try {
-      const next = await api(`/projects/${projectId}/snapshot`);
-      if (serial === requestSerial.current) setData(next);
-    } catch (e) {
-      if (serial === requestSerial.current) setError((e as Error).message);
-    }
-  }, [projectId]);
+    [showFilters, setShowFilters] = useState(false),
+    [selectedId, setSelectedId] = useState<string | null>(null),
+    [creating, setCreating] = useState(false),
+    [connections, setConnections] = useState(false),
+    [participants, setParticipants] = useState(false);
   useEffect(() => {
-    api('/me')
-      .then((m: Me) => {
-        setMe(m);
-        setProjectId(
-          m.projects.some((p) => p.id === 'launch') ? 'launch' : (m.projects[0]?.id ?? ''),
-        );
-      })
-      .catch(() => setLogin(true));
+    const media = matchMedia('(max-width: 899px)');
+    const change = () => {
+      setMobile(media.matches);
+      setSidebarOpen(!media.matches);
+    };
+    media.addEventListener('change', change);
+    return () => media.removeEventListener('change', change);
   }, []);
   useEffect(() => {
-    if (!me || !projectId) return;
-    setData(null);
-    setSelected(null);
-    void refresh();
-    const socket = io({ auth: { projectId }, withCredentials: true, transports: ['websocket'] });
-    socket.on('connect', () => {
-      setConnection('Live');
-      void refresh();
-    });
-    socket.on('snapshot-required', () => void refresh());
-    socket.on('disconnect', () => setConnection('Reconnecting'));
-    socket.on('connect_error', () => setConnection('Connection unavailable'));
-    socket.on('access-ended', () => {
-      setData(null);
-      setError('Your access ended. Sign in again.');
-      setConnection('Access ended');
-    });
+    setSelectedId(null);
+    setSearch('');
+    setPriority('All priorities');
+    setAttention(false);
+  }, [w.projectId]);
+  useEffect(() => {
+    const pointer = () => document.body.removeAttribute('data-keyboard');
+    const keyboard = (event: KeyboardEvent) => {
+      if (event.key === 'Tab') document.body.dataset.keyboard = 'true';
+    };
+    window.addEventListener('pointerdown', pointer);
+    window.addEventListener('keydown', keyboard);
     return () => {
-      socket.disconnect();
-      requestSerial.current++;
+      window.removeEventListener('pointerdown', pointer);
+      window.removeEventListener('keydown', keyboard);
     };
-  }, [me, projectId, refresh]);
-  useEffect(() => {
-    if (selected) {
-      lastFocus.current = document.activeElement as HTMLElement;
-      drawer.current?.focus();
-    } else {
-      lastFocus.current?.focus();
-    }
-    setCorrect(false);
-    setConfirm(null);
-    setFeedback('');
-  }, [selected]);
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setSelected(null);
-        setNewTask(false);
-        setConfirm(null);
-        setNav(false);
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
   }, []);
-  const task = data?.tasks.find((t) => t.id === selected),
-    p = data?.project;
-  const mutate = async (fn: () => Promise<unknown>, success?: string) => {
-    setBusy(true);
-    setError('');
-    try {
-      await fn();
-      await refresh();
-      if (success) setNotice(success);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+  const project = w.snapshot?.project,
+    context = w.identity?.projects.find((p) => p.id === w.projectId),
+    task = w.snapshot?.tasks.find((t) => t.id === selectedId),
+    tasks = w.snapshot?.tasks ?? [];
+  const needsAttention = (t: (typeof tasks)[number]) =>
+    t.state === 'blocked' ||
+    (project?.review && t.state === 'review') ||
+    (project?.merge && t.state === 'code_review');
+  const attentionCount = tasks.filter(needsAttention).length;
+  const filtered = tasks.filter(
+    (t) =>
+      (!attention || needsAttention(t)) &&
+      `${t.title} ${t.outcome}`.toLowerCase().includes(search.toLowerCase()) &&
+      (priority === 'All priorities' || t.priority === priority),
+  );
+  const selectProject = (id: string) => {
+    w.setProjectId(id);
+    if (mobile) setSidebarOpen(false);
   };
-  const runCommand = (input: Command) =>
-    mutate(() => api(`/projects/${projectId}/tasks/${task!.id}/commands`, input), 'Task updated.');
-  async function signIn(userId: string) {
-    setBusy(true);
-    try {
-      await api('/local-session', { userId });
-      const m = await api('/me');
-      setMe(m);
-      setLogin(false);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function sendMessage(e: FormEvent) {
-    e.preventDefault();
-    if (!message.trim()) return;
-    await mutate(async () => {
-      await api(`/projects/${projectId}/comments`, { taskId: selected, body: message });
-      setMessage('');
-    }, 'Feedback shared with the project.');
-  }
-  async function openPreview() {
+  async function preview() {
     if (!task?.candidate) return;
     const tab = window.open('about:blank', '_blank');
     if (tab) tab.opener = null;
     try {
-      const result = await api(
-        `/projects/${projectId}/candidates/${task.candidate.id}/preview`,
+      const grant = await api<{ url: string }>(
+        `/projects/${w.projectId}/candidates/${task.candidate.id}/preview`,
         {},
       );
-      if (tab) tab.location.href = result.url;
-      else setError('Allow a new tab to open the private preview.');
-    } catch (e) {
+      if (tab) tab.location.href = grant.url;
+      else w.setError('Allow a new tab, then try the preview again.');
+    } catch (error) {
       tab?.close();
-      setError((e as Error).message);
+      w.setError((error as Error).message);
     }
   }
-  const filtered =
-    data?.tasks.filter(
-      (t) =>
-        (!search || `${t.title} ${t.outcome}`.toLowerCase().includes(search.toLowerCase())) &&
-        (priority === 'All priorities' || t.priority === priority) &&
-        (!attention ||
-          t.state === 'blocked' ||
-          (p?.review && t.state === 'review') ||
-          (p?.merge && t.state === 'code_review')),
-    ) ?? [];
-  const attentionCount =
-    data?.tasks.filter(
-      (t) =>
-        t.state === 'blocked' ||
-        (p?.review && t.state === 'review') ||
-        (p?.merge && t.state === 'code_review'),
-    ).length ?? 0;
-  const currentProject = me?.projects.find((x) => x.id === projectId);
-  if (login)
+  if (!w.ready)
     return (
-      <div className="welcome">
-        <div className="brandmark">
-          <Layers3 size={28} />
+      <div className="initial-loading">
+        <span className="brand-symbol">
+          <Icon name="cloud" size={28} />
+        </span>
+        <span>Opening your workspace…</span>
+      </div>
+    );
+  if (!w.identity)
+    return (
+      <div className="sign-in-page">
+        <div className="sign-in-art" aria-hidden="true">
+          <span className="sign-in-cloud">
+            <Icon name="cloud" size={58} />
+          </span>
+          <span className="floating-note note-blue">
+            <Icon name="flag" />
+            <i />
+            <i />
+          </span>
+          <span className="floating-note note-sage">
+            <Icon name="complete" />
+            <i />
+            <i />
+          </span>
+          <span className="art-small-dot" />
         </div>
-        <span className="eyebrow">R2CLOUD / PRODUCT WORKSPACE</span>
-        <h1>
-          Good ideas deserve
-          <br />a place to become real.
-        </h1>
-        <p>
-          Describe the outcome. Make progress together.
-          <br />
-          Review every change before it reaches your repository.
-        </p>
-        <div className="login-box">
-          <span className="fixture-tag">LOCAL FIXTURE</span>
-          <h2>Explore the workspace</h2>
-          <p>
-            Choose a sample participant. Cloud runs, previews and repository actions are simulated.
-          </p>
+        <div className="sign-in-card">
+          <span className="brand sign-in-brand">
+            <Icon name="cloud" size={26} />
+            r2cloud.
+          </span>
+          <h1>A space for your next good idea.</h1>
+          <p>Make progress together. Review every change.</p>
+          <div className="sign-in-divider">
+            <span>Explore the local fixture</span>
+          </div>
           {[
-            ['maya', 'Maya Chen', 'Contributor · Reviewer · Merge authoriser'],
+            ['maya', 'Maya Chen', 'Contributor & reviewer'],
             ['alex', 'Alex Morgan', 'Contributor'],
             ['sam', 'Sam Rivera', 'Viewer'],
-          ].map(([id, name, role]) => (
-            <button key={id} onClick={() => void signIn(id)} disabled={busy}>
-              <span className="avatar">{initials(name)}</span>
+          ].map(([id, name, role], index) => (
+            <button
+              className="participant-choice"
+              key={id}
+              disabled={w.busy}
+              onClick={() => void w.signIn(id)}
+            >
+              <Avatar name={name} tone={index} />
               <span>
                 <strong>{name}</strong>
                 <small>{role}</small>
               </span>
-              <ArrowUpRight size={18} />
+              <Icon name="right" size={19} />
             </button>
           ))}
+          <small className="sign-in-fixture">
+            Cloud runs, previews and GitHub actions are simulated.
+          </small>
+          {w.error && (
+            <p className="inline-error" role="alert">
+              {w.error}
+            </p>
+          )}
         </div>
-        {error && (
-          <div role="alert" className="error">
-            {error}
-          </div>
-        )}
       </div>
     );
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="top-left">
-          <button className="icon-button" aria-label="Open navigation" onClick={() => setNav(!nav)}>
-            <Menu size={20} />
-          </button>
-          <div className="brand">
-            <Layers3 size={20} />
-            <span>r2cloud</span>
+    <div className={`workspace-shell ${sidebarOpen && !mobile ? 'with-sidebar' : ''}`}>
+      <a href="#main-content" className="skip-link">
+        Skip to board
+      </a>
+      {sidebarOpen && (
+        <Sidebar
+          identity={w.identity}
+          project={context}
+          attention={attention}
+          attentionCount={attentionCount}
+          onAttention={(value) => {
+            setAttention(value);
+            if (mobile) setSidebarOpen(false);
+          }}
+          onProject={selectProject}
+          onClose={() => setSidebarOpen(false)}
+          onConnections={() => setConnections(true)}
+          onSignOut={() => void w.signOut()}
+          mobile={mobile}
+        />
+      )}
+      <div className="workspace-main">
+        <header className="context-bar">
+          <div className="context-leading">
+            <IconButton
+              name={sidebarOpen ? 'sidebar' : 'menu'}
+              label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+              aria-expanded={sidebarOpen}
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+            />
+            <span className="context-organisation">{context?.org_name}</span>
+            <Icon name="right" size={13} />
+            <span className="context-project">{context?.name}</span>
           </div>
-          <span className="divider" />
-          <button className="context-switch" onClick={() => setNav(!nav)}>
-            <span className="org-symbol">N</span>
-            {currentProject?.org_name ?? 'Your organisation'}
-            <ChevronDown size={13} />
-          </button>
-          <ChevronRight className="breadcrumb-chevron" size={13} />
-          <label className="project-select">
-            <span className="sr-only">Select project</span>
-            <select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-              {me?.projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
+          <div className="context-trailing">
+            <span className={`connection-state ${w.connection === 'Live' ? 'is-live' : ''}`}>
+              <i />
+              {w.connection}
+            </span>
+            <button
+              className="participant-stack"
+              aria-label="View project participants"
+              onClick={() => setParticipants(true)}
+            >
+              {w.snapshot?.participants.slice(0, 4).map((person, i) => (
+                <Avatar key={person.id} name={person.name} tone={i} />
               ))}
-            </select>
-          </label>
-        </div>
-        <div className="top-right">
-          <span className="collaboration">
-            <span className={'live-dot ' + (connection === 'Live' ? '' : 'offline')} />
-            {connection}
-          </span>
-          <div className="avatars" aria-label="Project participants">
-            {data?.participants.map((u, i) => (
-              <span key={u.id} className={`avatar avatar-${i}`} title={u.name}>
-                {initials(u.name)}
+              <span className="participant-plus">
+                <Icon name="people" size={16} />
               </span>
-            ))}
-          </div>
-          <button
-            className="icon-button my-profile"
-            aria-label={`Signed in as ${me?.user.name}`}
-            title={me?.user.name}
-            onClick={() => setNav(!nav)}
-          >
-            {initials(me?.user.name ?? 'You')}
-          </button>
-        </div>
-      </header>
-      {nav && (
-        <div className="nav-popover">
-          <span className="eyebrow">YOUR WORKSPACE</span>
-          <strong>{currentProject?.org_name}</strong>
-          {me?.projects.map((pr) => (
-            <button
-              key={pr.id}
-              onClick={() => {
-                setProjectId(pr.id);
-                setNav(false);
-              }}
-            >
-              <Layers3 size={16} />
-              {pr.name}
-              {pr.id === projectId && <Check size={15} />}
-            </button>
-          ))}
-          <hr />
-          <p>
-            <ShieldCheck size={16} />
-            Repository and AI connections are separate from project membership.
-          </p>
-          <button
-            onClick={() =>
-              void api('/logout', {}).then(() => {
-                setMe(null);
-                setLogin(true);
-                setNav(false);
-              })
-            }
-          >
-            Switch fixture participant
-            <ArrowUpRight size={16} />
-          </button>
-        </div>
-      )}
-      <main className="workspace">
-        <div className="project-heading">
-          <div>
-            <div className="eyebrow">
-              <span className="tiny-square" /> THE NEXT CHAPTER
-            </div>
-            <h1>
-              {currentProject?.name ?? 'Your project'}
-              <span className="project-dot">.</span>
-            </h1>
-            <p>A shared place to turn intentions into working outcomes.</p>
-          </div>
-          <button
-            className="primary small"
-            disabled={!p?.contribute}
-            onClick={() => setNewTask(true)}
-          >
-            <Plus size={16} />
-            New task
-          </button>
-        </div>
-        <div className="board-toolbar">
-          <div className="view-tabs">
-            <button className={!attention ? 'active' : ''} onClick={() => setAttention(false)}>
-              <Layers3 size={16} />
-              Board<span>{data?.tasks.length ?? 0}</span>
-            </button>
-            <button className={attention ? 'active' : ''} onClick={() => setAttention(true)}>
-              <Circle size={15} />
-              Needs my attention
-              {attentionCount > 0 && <span className="attention-count">{attentionCount}</span>}
             </button>
           </div>
-          <div className="board-tools">
-            <label className="search-box">
-              <Search size={15} />
-              <input
-                aria-label="Search tasks"
-                placeholder="Search tasks…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              <span>/</span>
-            </label>
-            <button
-              className={'filter-button ' + (filters ? 'active' : '')}
-              onClick={() => setFilters(!filters)}
-            >
-              <SlidersHorizontal size={15} />
-              Filter
-            </button>
-          </div>
-        </div>
-        {filters && (
-          <div className="filter-row">
-            <label>
-              Priority{' '}
-              <select
-                aria-label="Filter priority"
-                value={priority}
-                onChange={(e) => setPriority(e.target.value)}
-              >
-                {['All priorities', 'High', 'Medium', 'Low'].map((x) => (
-                  <option key={x}>{x}</option>
-                ))}
-              </select>
-            </label>
-            <button
-              onClick={() => {
-                setPriority('All priorities');
-                setSearch('');
-              }}
-            >
-              Clear filters
-            </button>
-          </div>
-        )}
-        {error && (
-          <div role="alert" className="error">
-            <AlertCircle size={16} />
-            {error}
-            <button aria-label="Dismiss error" onClick={() => setError('')}>
-              <X size={15} />
-            </button>
-          </div>
-        )}
-        <div className="board" aria-label="Project task board">
-          {['Todo', 'Ongoing', 'Completed'].map((column, index) => {
-            const tasks = filtered.filter((t) =>
-              index === 0
-                ? t.state === 'todo'
-                : index === 2
-                  ? t.state === 'completed'
-                  : !['todo', 'completed'].includes(t.state),
-            );
-            return (
-              <section className="column" key={column} aria-label={column}>
-                <div className="column-title">
-                  <div>
-                    <span className={`status-dot dot-${index}`} />
-                    <h2>{column}</h2>
-                    <span className="column-count">{tasks.length}</span>
-                  </div>
-                  {index === 0 ? (
-                    <button
-                      aria-label="Add a task to Todo"
-                      className="icon-button"
-                      disabled={!p?.contribute}
-                      onClick={() => setNewTask(true)}
-                    >
-                      <Plus size={16} />
-                    </button>
-                  ) : (
-                    <span className="column-hint">{index === 1 ? 'In motion' : 'Merged'}</span>
-                  )}
-                </div>
-                <div className="column-content">
-                  {tasks.map((t, i) => (
-                    <button
-                      className={'task-card ' + (selected === t.id ? 'selected' : '')}
-                      key={t.id}
-                      onClick={() => setSelected(t.id)}
-                    >
-                      <div className="card-top">
-                        <span className="task-code">
-                          WEB–{String(data!.tasks.indexOf(t) + 1).padStart(2, '0')}
-                        </span>
-                        <span className={'priority priority-' + t.priority.toLowerCase()}>
-                          <Flag size={11} />
-                          {t.priority}
-                        </span>
-                      </div>
-                      <h3>{t.title}</h3>
-                      <p className="card-outcome">{t.outcome}</p>
-                      {t.state !== 'todo' && (
-                        <div className={'progress-badge badge-' + t.state}>
-                          {t.state === 'review' ? (
-                            <Circle size={11} />
-                          ) : t.state === 'completed' ? (
-                            <Check size={12} />
-                          ) : t.state === 'blocked' ? (
-                            <AlertCircle size={12} />
-                          ) : (
-                            <Clock3 size={12} />
-                          )}{' '}
-                          {stateLabel[t.state]}
-                        </div>
-                      )}
-                      <div className="card-footer">
-                        <div>
-                          {t.owner_name ? (
-                            <>
-                              <span className="avatar mini">{initials(t.owner_name)}</span>
-                              <span>{t.owner_name.split(' ')[0]}</span>
-                            </>
-                          ) : (
-                            <>
-                              <span className="unassigned">
-                                <Users size={12} />
-                              </span>
-                              <span>Unassigned</span>
-                            </>
-                          )}
-                        </div>
-                        <span className="agent-marker">
-                          {t.run ? (
-                            <>
-                              <Sparkles size={12} />
-                              Agent
-                            </>
-                          ) : (
-                            <>
-                              <FileCheck2 size={12} />
-                              {t.criteria.length} criteria
-                            </>
-                          )}
-                        </span>
-                      </div>
-                      {t.state === 'building' && (
-                        <div className="card-progress">
-                          <span />
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                  {tasks.length === 0 && (
-                    <div className="empty-column">
-                      {index === 0 ? (
-                        <Layers3 size={24} />
-                      ) : index === 1 ? (
-                        <Sparkles size={24} />
-                      ) : (
-                        <Check size={24} />
-                      )}
-                      <h3>
-                        {search || attention || priority !== 'All priorities'
-                          ? 'No matching tasks'
-                          : index === 0
-                            ? 'Room for your next idea'
-                            : index === 1
-                              ? 'Ready when you are'
-                              : 'Outcomes, delivered'}
-                      </h3>
-                      <p>
-                        {index === 0
-                          ? 'Describe something you want to improve.'
-                          : index === 1
-                            ? 'Start a task to bring it into motion.'
-                            : 'Tasks arrive here after a verified merge.'}
-                      </p>
-                    </div>
-                  )}
-                </div>
-                {index === 0 && (
-                  <button
-                    className="add-task"
-                    disabled={!p?.contribute}
-                    onClick={() => setNewTask(true)}
-                  >
-                    <Plus size={15} />
-                    Add a task
-                  </button>
-                )}
-              </section>
-            );
-          })}
-        </div>
-        <form className="composer" onSubmit={sendMessage}>
-          <div className="composer-heading">
-            <span className="composer-icon">
-              <Sparkles size={16} />
-            </span>
-            <span>Keep the work moving</span>
-            <span className="scope-pill">
-              {selected ? 'Task' : 'Project'}
-              <ChevronRight size={12} />
-              {task?.title ?? currentProject?.name}
-            </span>
-            {selected && (
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="Use project composer"
-                onClick={() => setSelected(null)}
-              >
-                <X size={13} />
-              </button>
-            )}
-          </div>
-          <textarea
-            ref={composer}
-            aria-label="Share project or task feedback"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder={
-              selected
-                ? 'Share feedback or clarify the intended outcome…'
-                : 'Share an idea, a little context, or what a great outcome looks like…'
-            }
-            rows={2}
-            disabled={!p?.contribute}
-          />
-          <div className="composer-bottom">
-            <span>
-              <MessageSquare size={13} />
-              Feedback is shared. Work starts when you choose “Start work”.
-            </span>
-            <button
-              className="send-button"
-              aria-label="Send feedback"
-              disabled={busy || !message.trim() || !p?.contribute}
-            >
-              <ArrowUp size={18} />
-            </button>
-          </div>
-        </form>
-        <footer className="workspace-footer">
-          <span>
-            <span className="fixture-dot" />
-            Local fixture · Cloud runs and GitHub actions are simulated
-          </span>
-          <span>
-            You decide what gets published <ShieldCheck size={13} />
-          </span>
-        </footer>
-      </main>
-      {task && (
-        <>
-          <button
-            className="drawer-backdrop"
-            aria-label="Close task details"
-            onClick={() => setSelected(null)}
-          />
-          <aside
-            ref={drawer}
-            tabIndex={-1}
-            className="task-drawer"
-            role="dialog"
-            aria-modal="true"
-            aria-label={task.title}
-            onKeyDown={(e) => {
-              if (e.key === 'Tab') {
-                const els = drawer.current?.querySelectorAll<HTMLElement>(
-                  'button:not(:disabled),input,textarea,select,a[href],[tabindex="0"]',
-                );
-                if (!els?.length) return;
-                const first = els[0],
-                  last = els[els.length - 1];
-                if (
-                  e.shiftKey &&
-                  (document.activeElement === first || document.activeElement === drawer.current)
-                ) {
-                  e.preventDefault();
-                  last.focus();
-                } else if (!e.shiftKey && document.activeElement === last) {
-                  e.preventDefault();
-                  first.focus();
-                }
-              }
-            }}
-          >
-            <div className="drawer-top">
-              <span>
-                <Layers3 size={15} /> {currentProject?.name}
-                <ChevronRight size={13} />
-                Task details
+        </header>
+        <main id="main-content" className="board-workspace">
+          <section className="project-intro">
+            <div className="project-title-group">
+              <span className="project-cover-icon">
+                <Icon name="globe" size={28} />
               </span>
-              <button
-                className="icon-button"
-                aria-label="Close task details"
-                onClick={() => setSelected(null)}
-              >
-                <PanelRightClose size={20} />
-              </button>
-            </div>
-            <div className="drawer-body">
-              <span className={'progress-badge badge-' + task.state}>{stateLabel[task.state]}</span>
-              <h1>{task.title}</h1>
-              <div className="task-meta">
-                <span>
-                  <Flag size={13} />
-                  {task.priority} priority
-                </span>
-                <span>{task.owner_name ?? 'Ready for an owner'}</span>
-                {task.run && (
-                  <span>
-                    <Sparkles size={13} />
-                    Codex · fixture
-                  </span>
-                )}
+              <div>
+                <div className="project-eyebrow">
+                  A shared project <span>·</span> Web application
+                </div>
+                <h1>{context?.name ?? 'Your project'}</h1>
               </div>
-              <section>
-                <h2>The intended outcome</h2>
-                <p>{task.outcome}</p>
-              </section>
-              <section>
-                <h2>What success looks like</h2>
-                <ul className="criteria-list">
-                  {task.criteria.map((c, i) => (
-                    <li key={i}>
-                      <span
-                        className={
-                          task.candidate?.evidence.checks[i]?.status === 'passed'
-                            ? 'criterion-check'
-                            : ''
-                        }
-                      >
-                        {task.candidate?.evidence.checks[i]?.status === 'passed' ? (
-                          <Check size={13} />
-                        ) : (
-                          <Circle size={13} />
-                        )}
-                      </span>
-                      {c}
-                    </li>
-                  ))}
-                </ul>
-                {task.candidate?.manifest.fixture && (
-                  <small className="muted">
-                    Check results below are fixtures, not executed application tests.
-                  </small>
-                )}
-              </section>
-              {task.state === 'todo' && (
-                <div className="start-panel">
-                  <Sparkles size={22} />
-                  <h3>Give this outcome a first pass</h3>
-                  <p>
-                    One owner, an isolated execution, and a review before anything is published.
-                  </p>
-                  <small>Authorise one run · up to 15 minutes · $3 model budget limit</small>
-                  <button
-                    className="primary"
-                    disabled={busy || !p?.contribute}
-                    onClick={() =>
-                      void runCommand({
-                        action: 'start',
-                        version: task.version,
-                        minutes: 15,
-                        budgetCents: 300,
-                      })
-                    }
-                  >
-                    <Play size={14} />
-                    Start work
-                  </button>
-                </div>
-              )}
-              {task.state === 'building' && (
-                <div className="info-panel">
-                  <Sparkles size={18} />
-                  <div>
-                    <strong>Working toward your outcome</strong>
-                    <p>This task stays with its current owner, even if you close this window.</p>
-                  </div>
-                </div>
-              )}
-              {task.state === 'blocked' && (
-                <div className="info-panel warning">
-                  <AlertCircle size={18} />
-                  <div>
-                    <strong>This task needs attention</strong>
-                    <p>
-                      Ownership is reserved while the worker verifies what happened. See activity
-                      for details.
-                    </p>
-                  </div>
-                </div>
-              )}
-              {task.candidate && (
-                <>
-                  <section className="preview-panel">
-                    <div className="preview-window">
-                      <div>
-                        <span />
-                        <span />
-                        <span />
-                        <small>PRIVATE SNAPSHOT PREVIEW</small>
-                      </div>
-                      <div className="preview-placeholder">
-                        <Layers3 size={34} />
-                        <strong>See the outcome for yourself.</strong>
-                        <span>
-                          Immutable candidate {task.candidate.digest.slice(0, 8)} · fixture
-                        </span>
-                        <button className="primary" onClick={() => void openPreview()}>
-                          <ArrowUpRight size={15} />
-                          Try the preview
-                        </button>
-                      </div>
-                    </div>
-                    <p>
-                      <ShieldCheck size={13} />
-                      Private, expiring access in a separate tab.
-                    </p>
-                  </section>
-                  <section>
-                    <h2>What changed</h2>
-                    <p>{task.candidate.manifest.summary}</p>
-                    <h3 className="subheading">Known limitations</h3>
-                    {task.candidate.manifest.limitations.map((l, i) => (
-                      <p key={i} className="limitation">
-                        {l}
-                      </p>
-                    ))}
-                  </section>
-                  <section>
-                    <h2>
-                      Acceptance evidence <span className="fixture-tag">FIXTURE</span>
-                    </h2>
-                    {task.candidate.evidence.checks.map((c, i) => (
-                      <div className="evidence-row" key={i}>
-                        {c.status === 'passed' ? <Check size={15} /> : <AlertCircle size={15} />}
-                        <span>{c.name}</span>
-                        <small>{c.status}</small>
-                      </div>
-                    ))}
-                  </section>
-                </>
-              )}
-              {task.state === 'review' && (
-                <section className="review-panel">
-                  <h2>Your review makes the difference</h2>
-                  <p>
-                    Try the outcome and check the evidence. Publishing will push this exact
-                    candidate and open a pull request for code review.
-                  </p>
-                  {!p?.review && (
-                    <small>A designated project reviewer must approve publication.</small>
-                  )}
-                  <div className="review-buttons">
-                    <button
-                      disabled={busy || !(p?.review || task.owner_id === me?.user.id)}
-                      onClick={() => setCorrect(!correct)}
-                    >
-                      Request changes
-                    </button>
-                    <button
-                      className="primary"
-                      disabled={busy || !p?.review}
-                      onClick={() => setConfirm('publish')}
-                    >
-                      <ArrowUpRight size={14} />
-                      Publish changes for code review
-                    </button>
-                  </div>
-                  {correct && (
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        void runCommand({ action: 'changes', version: task.version, feedback });
-                      }}
-                    >
-                      <label>
-                        What should be different?
-                        <textarea
-                          autoFocus
-                          required
-                          minLength={3}
-                          value={feedback}
-                          onChange={(e) => setFeedback(e.target.value)}
-                          placeholder="Describe the correction you want to see…"
-                        />
-                      </label>
-                      <button className="primary" disabled={busy || feedback.trim().length < 3}>
-                        Request correction and resume
-                      </button>
-                      <small>Another bounded run starts under the existing owner.</small>
-                    </form>
-                  )}
-                </section>
-              )}
-              {task.state === 'code_review' && (
-                <section className="review-panel">
-                  <GitMerge size={22} />
-                  <h2>Published for code review</h2>
-                  <p>
-                    Fixture pull request #{task.publication?.pr_number}. This task stays Ongoing
-                    until a separately authorised merge is verified.
-                  </p>
-                  <button
-                    className="primary"
-                    disabled={busy || !p?.merge}
-                    onClick={() => setConfirm('merge')}
-                  >
-                    Authorise merge
-                  </button>
-                </section>
-              )}
-              {task.state === 'completed' && (
-                <div className="info-panel">
-                  <Check size={20} />
-                  <div>
-                    <strong>Merge verified · fixture</strong>
-                    <p>
-                      The coding outcome is complete. Production deployment is tracked separately.
-                    </p>
-                  </div>
-                </div>
-              )}
-              {confirm && task.candidate && (
-                <section
-                  className="confirmation"
-                  role="alertdialog"
-                  aria-label={confirm === 'publish' ? 'Confirm publication' : 'Confirm merge'}
+            </div>
+            {project?.contribute ? (
+              <Button icon="add" variant="primary" onClick={() => setCreating(true)}>
+                New task
+              </Button>
+            ) : (
+              <span className="view-only">View only</span>
+            )}
+          </section>
+          <div className="board-control-row">
+            <div className="board-views">
+              <button aria-pressed={!attention} onClick={() => setAttention(false)}>
+                <Icon name="board" size={17} />
+                Board<span>{tasks.length}</span>
+              </button>
+              <button aria-pressed={attention} onClick={() => setAttention(true)}>
+                <Icon name="attention" size={17} />
+                <span className="attention-label">Needs my attention</span>
+                {attentionCount > 0 && <span className="attention-number">{attentionCount}</span>}
+              </button>
+            </div>
+            <div className="board-filters">
+              <label className="task-search">
+                <Icon name="search" size={18} />
+                <span className="sr-only">Search tasks</span>
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search tasks"
+                />
+              </label>
+              <button
+                className={`filter-trigger ${showFilters ? 'is-active' : ''}`}
+                aria-expanded={showFilters}
+                onClick={() => setShowFilters(!showFilters)}
+              >
+                <Icon name="filter" size={18} />
+                <span>Filter</span>
+              </button>
+            </div>
+          </div>
+          {showFilters && (
+            <div className="active-filters">
+              <label>
+                Priority
+                <select
+                  aria-label="Filter priority"
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value)}
                 >
-                  <ShieldCheck size={24} />
-                  <h2>
-                    {confirm === 'publish'
-                      ? 'Publish this exact candidate?'
-                      : 'Authorise this merge?'}
-                  </h2>
-                  <p>
-                    {confirm === 'publish'
-                      ? 'This permission covers pushing the candidate branch and opening one PR. Repository workflows may run.'
-                      : 'This is a separate merge permission. Required repository checks and verified merge facts are needed before completion.'}
-                  </p>
-                  <dl>
-                    <dt>Repository</dt>
-                    <dd>{task.candidate.manifest.repository}</dd>
-                    <dt>Target</dt>
-                    <dd>{task.candidate.manifest.targetRef}</dd>
-                    <dt>Candidate</dt>
-                    <dd>{task.candidate.digest.slice(0, 16)}</dd>
-                    <dt>Expires</dt>
-                    <dd>30 minutes</dd>
-                  </dl>
-                  <p className="muted">Fixture mode: no real GitHub operation will occur.</p>
-                  <div>
-                    <button onClick={() => setConfirm(null)}>Go back</button>
-                    <button
-                      className="primary"
-                      disabled={busy}
-                      onClick={() => {
-                        void runCommand({
-                          action: confirm,
-                          version: task.version,
-                          candidateId: task.candidate!.id,
-                          digest: task.candidate!.digest,
-                        });
-                        setConfirm(null);
-                      }}
-                    >
-                      {confirm === 'publish' ? 'Approve publication' : 'Approve merge'}
-                    </button>
-                  </div>
-                </section>
-              )}
-              <section>
-                <h2>Conversation & feedback</h2>
-                {data?.comments
-                  .filter((c) => c.task_id === task.id)
-                  .map((c) => (
-                    <article className="comment" key={c.id}>
-                      <span className="avatar mini">{initials(c.name)}</span>
-                      <div>
-                        <strong>{c.name}</strong>
-                        <p>{c.body}</p>
-                      </div>
-                    </article>
+                  {['All priorities', 'High', 'Medium', 'Low'].map((p) => (
+                    <option key={p}>{p}</option>
                   ))}
-                {!data?.comments.some((c) => c.task_id === task.id) && (
-                  <p className="muted">
-                    A little context goes a long way. Add your thoughts below.
-                  </p>
-                )}
-                <form className="feedback-form" onSubmit={sendMessage}>
-                  <textarea
-                    aria-label="Task feedback"
-                    placeholder="Share feedback with the task owner…"
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    disabled={!p?.contribute}
-                  />
-                  <button disabled={busy || !message.trim() || !p?.contribute}>
-                    Send feedback
-                    <MessageSquare size={14} />
-                  </button>
-                </form>
-              </section>
-              <section>
-                <h2>Activity</h2>
-                <div className="activity">
-                  {data?.events
-                    .filter((e) => e.task_id === task.id)
-                    .map((e) => (
-                      <div key={e.id}>
-                        <span />
-                        <p>
-                          {e.kind}
-                          <small>
-                            {new Date(e.created_at).toLocaleString(undefined, {
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </small>
-                        </p>
-                      </div>
-                    ))}
-                  {!data?.events.some((e) => e.task_id === task.id) && (
-                    <p className="muted">Ready for the first step.</p>
-                  )}
-                </div>
-              </section>
-              <details className="advanced">
-                <summary>
-                  <Code2 size={16} />
-                  Advanced details
-                  <ChevronDown size={14} />
-                </summary>
-                <p>
-                  Execution: {task.run?.state ?? 'Not started'} · generation {task.generation}
-                </p>
-                {task.candidate && (
-                  <>
-                    <p>Branch: {task.candidate.manifest.branch}</p>
-                    <p>Base: {task.candidate.manifest.baseSha}</p>
-                    <p>Head: {task.candidate.manifest.headSha}</p>
-                    <p>Artifact: {task.candidate.manifest.artifactDigest}</p>
-                    <p>Fixture runs contain no real diff or execution transcript.</p>
-                  </>
-                )}
-                {task.run && (
-                  <p>
-                    Skills pinned:{' '}
-                    {task.run.manifest.skills.map((s: any) => `${s.id}@${s.version}`).join(', ') ||
-                      'None'}
-                  </p>
-                )}
-              </details>
+                </select>
+              </label>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setSearch('');
+                  setPriority('All priorities');
+                  setAttention(false);
+                }}
+              >
+                Clear filters
+              </Button>
             </div>
-            <div className="drawer-foot">
-              <ShieldCheck size={14} />
-              Agents cannot authorise publication or merge.
+          )}
+          {w.snapshot ? (
+            <Board
+              tasks={filtered}
+              allTasks={tasks}
+              onSelect={setSelectedId}
+              onCreate={() => setCreating(true)}
+              canCreate={!!project?.contribute}
+              filtered={!!search || attention || priority !== 'All priorities'}
+            />
+          ) : (
+            <div className="board-loading" role="status">
+              <Icon name="loading" size={24} />
+              {w.error ? 'The board is unavailable.' : 'Gathering your tasks…'}
+              {w.error && <Button onClick={() => location.reload()}>Reload workspace</Button>}
             </div>
-          </aside>
-        </>
-      )}
-      {newTask && (
-        <NewTask
-          busy={busy}
-          close={() => setNewTask(false)}
-          save={(input) =>
-            mutate(async () => {
-              const t = await api(`/projects/${projectId}/tasks`, input);
-              setNewTask(false);
-              setSelected(t.id);
-            }, 'Task created.')
+          )}
+          <Composer
+            projectName={context?.name ?? 'Project'}
+            busy={w.busy}
+            canComment={!!project?.contribute}
+            comments={w.snapshot?.comments.filter((c) => !c.task_id) ?? []}
+            onSend={(body) =>
+              w.act(
+                () => api(`/projects/${w.projectId}/comments`, { taskId: null, body }),
+                'Project feedback shared',
+              )
+            }
+          />
+          <div className="board-fixture-label">
+            <span className="fixture-indicator" />
+            Local fixture <span>·</span> Simulated cloud & GitHub
+          </div>
+        </main>
+      </div>
+      {task && project && (
+        <TaskDetail
+          key={task.id}
+          task={task}
+          project={project}
+          userId={w.identity.user.id}
+          comments={w.snapshot!.comments.filter((c) => c.task_id === task.id)}
+          events={w.snapshot!.events.filter((e) => e.task_id === task.id)}
+          busy={w.busy}
+          error={w.error}
+          close={() => setSelectedId(null)}
+          onCommand={(input) =>
+            w.act(
+              () => api(`/projects/${w.projectId}/tasks/${task.id}/commands`, input),
+              'Task updated',
+            )
+          }
+          onPreview={preview}
+          onFeedback={(body) =>
+            w.act(
+              () => api(`/projects/${w.projectId}/comments`, { taskId: task.id, body }),
+              'Task feedback shared',
+            )
           }
         />
       )}
+      {creating && (
+        <NewTask
+          busy={w.busy}
+          error={w.error}
+          close={() => setCreating(false)}
+          save={(input) =>
+            w.act(async () => {
+              const created = await api<{ id: string }>(`/projects/${w.projectId}/tasks`, input);
+              setCreating(false);
+              setSelectedId(created.id);
+            }, 'Task created')
+          }
+        />
+      )}
+      {connections && (
+        <Modal
+          label="Project connections"
+          close={() => setConnections(false)}
+          className="connections-modal"
+        >
+          <div className="modal-topline">
+            <span className="modal-symbol">
+              <Icon name="link" size={25} />
+            </span>
+            <IconButton
+              name="close"
+              label="Close connections"
+              onClick={() => setConnections(false)}
+            />
+          </div>
+          <h2>A place for every connection.</h2>
+          <p className="modal-description">
+            Membership, repository access and AI access stay separate.
+          </p>
+          {[
+            ['people', 'Product sign-in', 'Local fixture participants'],
+            ['branch', 'Repository', 'Fixture repository · no GitHub writes'],
+            ['sparkles', 'AI connection', 'Codex adapter · simulated execution'],
+          ].map(([icon, title, description]) => (
+            <div className="connection-row" key={title}>
+              <Icon name={icon as 'people'} />
+              <div>
+                <strong>{title}</strong>
+                <span>{description}</span>
+              </div>
+              <span className="fixture-inline">Fixture</span>
+            </div>
+          ))}
+          <p className="subtle">
+            Live connections need approved accounts and a managed sandbox provider.
+          </p>
+        </Modal>
+      )}
+      {participants && (
+        <Modal
+          label="Project participants"
+          close={() => setParticipants(false)}
+          className="participants-modal"
+        >
+          <div className="modal-topline">
+            <h2>Making it happen, together.</h2>
+            <IconButton
+              name="close"
+              label="Close participants"
+              onClick={() => setParticipants(false)}
+            />
+          </div>
+          {w.snapshot?.participants.map((person, i) => (
+            <div className="person-row" key={person.id}>
+              <Avatar name={person.name} tone={i} />
+              <div>
+                <strong>{person.name}</strong>
+                <span>{person.review ? 'Project reviewer' : 'Project member'}</span>
+              </div>
+            </div>
+          ))}
+        </Modal>
+      )}
+      {w.error && !task && !creating && (
+        <div className="error-toast" role="alert">
+          <Icon name="info" size={19} />
+          <span>{w.error}</span>
+          <IconButton name="close" label="Dismiss error" onClick={() => w.setError('')} />
+        </div>
+      )}
       <div className="sr-only" role="status" aria-live="polite">
-        {notice}
+        {w.announcement}
       </div>
     </div>
-  );
-}
-function NewTask({
-  busy,
-  close,
-  save,
-}: {
-  busy: boolean;
-  close: () => void;
-  save: (input: unknown) => Promise<void>;
-}) {
-  const [title, setTitle] = useState(''),
-    [outcome, setOutcome] = useState(''),
-    [criteria, setCriteria] = useState(''),
-    [priority, setPriority] = useState('Medium');
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    dialog.current?.showModal();
-    return () => dialog.current?.close();
-  }, []);
-  return (
-    <dialog ref={dialog} className="new-task-modal" onCancel={close}>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void save({
-            title,
-            outcome,
-            criteria: criteria
-              .split('\n')
-              .map((s) => s.trim())
-              .filter(Boolean),
-            priority,
-          });
-        }}
-      >
-        <div className="modal-heading">
-          <span className="eyebrow">MAKE ROOM FOR AN OUTCOME</span>
-          <button type="button" className="icon-button" aria-label="Close new task" onClick={close}>
-            <X size={18} />
-          </button>
-        </div>
-        <h1>What would you like to improve?</h1>
-        <p>A clear outcome gives everyone a useful place to start.</p>
-        <label>
-          Task title
-          <input
-            autoFocus
-            required
-            minLength={3}
-            maxLength={160}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Make onboarding feel effortless"
-          />
-        </label>
-        <label>
-          Intended outcome
-          <textarea
-            required
-            minLength={3}
-            maxLength={8000}
-            value={outcome}
-            onChange={(e) => setOutcome(e.target.value)}
-            placeholder="Who is this for, and what should be better?"
-          />
-        </label>
-        <label>
-          Acceptance criteria <small>One per line</small>
-          <textarea
-            required
-            value={criteria}
-            onChange={(e) => setCriteria(e.target.value)}
-            placeholder={'Visitors understand the next step\nThe experience works on a phone'}
-          />
-        </label>
-        <label>
-          Priority
-          <select value={priority} onChange={(e) => setPriority(e.target.value)}>
-            {['High', 'Medium', 'Low'].map((x) => (
-              <option key={x}>{x}</option>
-            ))}
-          </select>
-        </label>
-        <div className="modal-actions">
-          <button type="button" onClick={close}>
-            Cancel
-          </button>
-          <button className="primary" disabled={busy}>
-            Create task
-            <Plus size={15} />
-          </button>
-        </div>
-      </form>
-    </dialog>
   );
 }

@@ -1,0 +1,69 @@
+:root {
+  --paper-50: #f8f7f4;
+  --paper-100: #f0efec;
+  --paper-300: #d9d7d2;
+  --paper-600: #686572;
+  --paper-900: #35333e;
+  --plum-50: #eeeaf6;
+  --plum-600: #75608f;
+  --plum-700: #634e7c;
+  --blue-50: #eef3fa;
+  --blue-700: #526886;
+  --apricot-50: #fbeee2;
+  --apricot-700: #8b6239;
+  --sage-50: #ecf3eb;
+  --sage-700: #52715b;
+  --red-50: #f9e7e6;
+  --red-700: #a34442;
+  --color-canvas: var(--paper-50);
+  --color-surface: #fff;
+  --color-surface-muted: var(--paper-100);
+  --color-text: var(--paper-900);
+  --color-text-secondary: var(--paper-600);
+  --color-border: var(--paper-300);
+  --color-accent: var(--plum-600);
+  --color-accent-hover: var(--plum-700);
+  --color-accent-soft: var(--plum-50);
+  --color-on-accent: #fff;
+  --color-focus: #67508a;
+  --color-todo: var(--blue-50);
+  --color-todo-ink: var(--blue-700);
+  --color-ongoing: var(--apricot-50);
+  --color-ongoing-ink: var(--apricot-700);
+  --color-completed: var(--sage-50);
+  --color-completed-ink: var(--sage-700);
+  --color-danger: var(--red-50);
+  --color-danger-ink: var(--red-700);
+  --font-ui:
+    'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --text-title: 1.875rem;
+  --text-heading: 1.125rem;
+  --text-body: 0.875rem;
+  --text-label: 0.8125rem;
+  --text-caption: 0.75rem;
+  --radius-control: 12px;
+  --radius-card: 14px;
+  --radius-panel: 24px;
+  --radius-pill: 999px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --shadow-card:
+    0 0 0 1px rgb(0 0 0/0.035), 0 2px 3px -1px rgb(0 0 0/0.025), 0 4px 10px rgb(0 0 0/0.025);
+  --shadow-hover: 0 0 0 1px rgb(0 0 0/0.07), 0 3px 8px rgb(0 0 0/0.055);
+  --shadow-modal: 0 20px 70px rgb(0 0 0/0.12), 0 0 0 1px rgb(0 0 0/0.04);
+  --shadow-button-primary:
+    inset 0 1px 0 rgb(255 255 255 / 0.32), inset 0 -2px 0 rgb(0 0 0 / 0.13),
+    0 1px 2px rgb(45 27 63 / 0.12), 0 3px 6px rgb(45 27 63 / 0.12);
+  --shadow-button-neutral:
+    inset 0 1px 0 #fff, inset 0 -2px 0 rgb(53 51 62 / 0.04), -2px -2px 5px rgb(255 255 255 / 0.8),
+    2px 3px 5px rgb(53 51 62 / 0.09);
+  --shadow-button-pressed:
+    inset 0 2px 3px rgb(0 0 0 / 0.15), inset 0 -1px 0 rgb(255 255 255 / 0.12),
+    0 1px 1px rgb(0 0 0 / 0.04);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --sidebar-width: 232px;
+}

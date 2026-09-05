@@ -85,7 +85,7 @@ try {
   await page.screenshot({ path: '.local/screenshots/workspace-setup.png' });
   await page.getByRole('button', { name: 'Create workspace', exact: true }).click();
   await page.getByRole('heading', { name: 'Our first website', exact: true }).waitFor();
-  await page.getByText('Live', { exact: true }).waitFor();
+  await page.locator('[data-connection="Live"]').waitFor();
   await page.getByRole('button', { name: 'New task', exact: true }).click();
   await page.getByLabel('Task title', { exact: true }).fill('Make the first step clear');
   await page.getByLabel('Intended outcome', { exact: true }).fill('Visitors know what to do next.');
@@ -106,7 +106,7 @@ try {
   await page.getByLabel('Project name', { exact: true }).fill('Customer portal');
   await page.getByRole('button', { name: 'Create project', exact: true }).click();
   await page.getByRole('heading', { name: 'Customer portal', exact: true }).waitFor();
-  await page.getByText('Live', { exact: true }).waitFor();
+  await page.locator('[data-connection="Live"]').waitFor();
   await page.getByRole('button', { name: 'Account options' }).click();
   await page.getByRole('menuitem', { name: 'Connections', exact: true }).waitFor();
   await audit('Account menu');

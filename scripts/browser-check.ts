@@ -82,7 +82,7 @@ try {
   await page.reload();
   await page.getByRole('button', { name: 'Website launch', exact: true }).click();
   await page.getByRole('heading', { name: /^Website launch/ }).waitFor();
-  await page.getByText('Live', { exact: true }).waitFor();
+  await page.locator('[data-connection="Live"]').waitFor();
   await page.getByRole('button', { name: /Make the first visit feel effortless/ }).click();
   await page.getByRole('button', { name: 'Start work', exact: true }).click();
   await page.getByText('Working toward your outcome').waitFor();

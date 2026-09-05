@@ -117,7 +117,10 @@ export function App() {
       />
     );
   return (
-    <div className={`workspace-shell ${sidebarOpen && !mobile ? 'with-sidebar' : ''}`}>
+    <div
+      className={`workspace-shell ${sidebarOpen && !mobile ? 'with-sidebar' : ''}`}
+      data-connection={w.connection}
+    >
       <a href="#main-content" className="skip-link">
         Skip to board
       </a>
@@ -153,10 +156,6 @@ export function App() {
             <span className="context-project">{context?.name}</span>
           </div>
           <div className="context-trailing">
-            <span className={`connection-state ${w.connection === 'Live' ? 'is-live' : ''}`}>
-              <i />
-              {w.connection}
-            </span>
             <button
               className="participant-stack"
               aria-label="View project participants"

@@ -35,7 +35,6 @@ export function AuthScreen({ enabled = true }: { enabled?: boolean }) {
           r2cloud.
         </span>
         <h1>A space for your next good idea.</h1>
-        <p>Sign in to create a workspace or join your team.</p>
         <div className="auth-form">
           {error && (
             <p className="inline-error" role="alert">

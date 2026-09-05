@@ -25,7 +25,7 @@ export function Composer({
       <form className="project-composer" onSubmit={submit}>
         <div className="composer-context">
           <span className="composer-mark">
-            <Icon name="sparkles" size={20} />
+            <Icon name="message" size={20} />
           </span>
           <label htmlFor="project-message">A thought, a question, a next step.</label>
           <span className="composer-scope">

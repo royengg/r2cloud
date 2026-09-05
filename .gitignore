@@ -4,7 +4,6 @@ dist/
 .env
 .env.*
 !.env.example
-!.env.broker.example
 *.log
 
 # User-requested upstream skills are installed locally; provenance lives in docs.

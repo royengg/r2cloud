@@ -46,7 +46,7 @@ In Connections, a project administrator authorizes the repository GitHub App, se
 
 ## GitHub configuration
 
-Product sign-in's OAuth app and the repository GitHub App are distinct registrations. Configure the repository App's callback as `<BETTER_AUTH_URL>/api/repository-callback`. Its client ID and slug belong in the normal project `.env` as `R2_GITHUB_APP_CLIENT_ID` and `R2_GITHUB_APP_SLUG`. Keep its client secret only in ignored `.env.broker`, using [the example](../.env.broker.example). Normal development starts the connection broker when this file exists. The App should have repository metadata and contents read access for discovery. Future publication permissions belong to the isolated publisher path.
+Product sign-in's OAuth app and the repository GitHub App are distinct registrations. Configure the repository App's callback as `<BETTER_AUTH_URL>/api/repository-callback`. Its client ID and slug belong in the normal project `.env` as `R2_GITHUB_APP_CLIENT_ID` and `R2_GITHUB_APP_SLUG`. Keep its client secret only in ignored `.env.broker`, using the local-only `.env.broker.example`. Normal development starts the connection broker when this file exists. The App should have repository metadata and contents read access for discovery. Future publication permissions belong to the isolated publisher path.
 
 The launcher disables child Bun automatic dotenv loading, strips the App secret from API/frontend environment variables, and loads `.env.broker` only for the connection broker. The standalone API fails startup if the App secret is present. Production deployment must assign separate credentials and least-privilege database roles per process; development shares a private database role and is not a claim of production process isolation.
 

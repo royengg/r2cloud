@@ -2,6 +2,7 @@ import type { Identity, Project } from '../lib/types';
 import { Icon } from './Icon';
 import { IconButton, Modal } from './ui';
 import { AccountMenu } from './AccountMenu';
+import { WorkspacePicker } from './WorkspacePicker';
 export function Sidebar({
   identity,
   project,
@@ -44,27 +45,14 @@ export function Sidebar({
           </span>
         </button>
       </div>
-      <div className="org-picker">
-        <span className="org-avatar">{project?.org_name?.[0] ?? 'N'}</span>
-        <div>
-          <span className="field-overline">Workspace</span>
-          <select
-            aria-label="Organisation"
-            value={project?.org_id ?? orgs[0]?.id}
-            onChange={(e) => {
-              const next = identity.projects.find((p) => p.org_id === e.target.value);
-              if (next) onProject(next.id);
-            }}
-          >
-            {orgs.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <Icon name="down" size={14} />
-      </div>
+      <WorkspacePicker
+        workspaces={orgs}
+        selectedId={project?.org_id}
+        onSelect={(orgId) => {
+          const next = identity.projects.find((p) => p.org_id === orgId);
+          if (next) onProject(next.id);
+        }}
+      />
       <nav className="sidebar-navigation" aria-label="Workspace navigation">
         <button
           className={!attention ? 'nav-item is-active' : 'nav-item'}

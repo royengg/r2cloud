@@ -224,6 +224,10 @@ button .icon {
   width: 32px;
   height: 36px;
 }
+.workspace-picker {
+  position: relative;
+  margin-block-end: 25px;
+}
 .org-picker {
   display: flex;
   align-items: center;
@@ -233,7 +237,8 @@ button .icon {
   border-radius: 14px;
   box-shadow: var(--shadow-card);
   position: relative;
-  margin-block-end: 25px;
+  width: 100%;
+  text-align: start;
 }
 .org-avatar {
   display: grid;
@@ -247,7 +252,7 @@ button .icon {
   font-weight: 600;
   flex-shrink: 0;
 }
-.org-picker > div {
+.workspace-picker-copy {
   flex: 1;
   min-width: 0;
 }
@@ -258,22 +263,86 @@ button .icon {
   color: var(--color-text-secondary);
   margin-block-end: 2px;
 }
-.org-picker select {
+.workspace-picker-copy strong {
   display: block;
   font-size: var(--text-caption);
-  width: 100%;
-  border: 0;
-  background: transparent;
-  appearance: none;
-  padding: 0 14px 0 0;
   font-weight: 650;
-  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.org-picker > .icon {
+.org-picker[aria-expanded='true'] {
+  box-shadow: var(--shadow-hover);
+}
+.org-picker[aria-expanded='true'] > .icon {
+  transform: rotate(180deg);
+}
+.workspace-menu {
   position: absolute;
-  inset-inline-end: 9px;
-  inset-block-start: 27px;
-  pointer-events: none;
+  z-index: 20;
+  inset-inline: 0;
+  inset-block-start: calc(100% + 8px);
+  padding: 6px;
+  border-radius: 18px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-modal);
+  transform-origin: top left;
+}
+.workspace-menu-heading {
+  padding: 8px 10px 10px;
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+}
+.workspace-menu-options {
+  max-height: min(320px, 45dvh);
+  overflow-y: auto;
+}
+.workspace-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px;
+  border-radius: 12px;
+  background: transparent;
+  text-align: start;
+  font-size: var(--text-caption);
+}
+.workspace-option-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.workspace-menu button[aria-checked='true'] {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-hover);
+  font-weight: 600;
+}
+.workspace-menu button:focus-visible {
+  outline-offset: -2px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .workspace-menu button:hover {
+    background: var(--color-surface-muted);
+  }
+  .org-picker:hover {
+    box-shadow: var(--shadow-hover);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  body:not([data-keyboard]) .org-picker > .icon {
+    transition: transform 150ms var(--ease-out);
+  }
+  body:not([data-keyboard]) .workspace-menu {
+    transition:
+      opacity 150ms ease,
+      transform 150ms var(--ease-out);
+    @starting-style {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+  }
 }
 .sidebar-navigation {
   display: grid;
@@ -2145,7 +2214,7 @@ button .icon {
     font-size: var(--text-caption);
     min-height: 44px;
   }
-  .sidebar-modal .org-picker select {
+  .sidebar-modal .workspace-picker-copy strong {
     font-size: var(--text-caption);
   }
   .sidebar-modal .profile-button strong {

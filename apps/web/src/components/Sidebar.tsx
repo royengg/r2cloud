@@ -105,13 +105,6 @@ export function Sidebar({
           <Icon name="link" />
           <span>Connections</span>
         </button>
-        <div className="fixture-note">
-          <span className="fixture-indicator" />
-          <div>
-            <strong>Local fixture</strong>
-            <span>Simulated agents & GitHub</span>
-          </div>
-        </div>
         <button
           className="profile-button"
           onClick={onSignOut}

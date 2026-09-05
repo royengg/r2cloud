@@ -223,7 +223,7 @@ export function App() {
             )}
           </section>
           <div className="board-control-row">
-            <div className="board-views">
+            <div className="board-views" role="group" aria-label="Task view">
               <button aria-pressed={!attention} onClick={() => setAttention(false)}>
                 <Icon name="board" size={17} />
                 Board<span>{tasks.length}</span>

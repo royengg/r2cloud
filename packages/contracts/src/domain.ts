@@ -40,6 +40,26 @@ export const commandInput = z.discriminatedUnion('action', [
     })
     .strict(),
 ]);
+export const batchInput = z
+  .object({
+    tasks: z
+      .array(
+        z
+          .object({ taskId: z.string().min(1).max(100), version: z.number().int().positive() })
+          .strict(),
+      )
+      .min(1)
+      .max(10),
+    minutesPerTask: z.number().int().min(1).max(60),
+    budgetCentsPerTask: z.number().int().min(1).max(5000),
+    maxTotalBudgetCents: z.number().int().min(1).max(50000),
+  })
+  .strict()
+  .refine(
+    (input) => new Set(input.tasks.map((t) => t.taskId)).size === input.tasks.length,
+    'Each task may appear only once.',
+  );
+export type BatchInput = z.infer<typeof batchInput>;
 export type Command = z.infer<typeof commandInput>;
 export type TaskInput = z.infer<typeof taskInput>;
 export type Actor = { id: string; kind: 'human' | 'agent' };

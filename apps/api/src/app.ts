@@ -5,7 +5,15 @@ import { ZodError } from 'zod';
 import { pool } from '@r2cloud/database';
 import { hash, id } from '@r2cloud/contracts/hash';
 import { Fault, requireThat, commandInput, taskInput, type Actor } from '@r2cloud/contracts/domain';
-import { access, addComment, command, createTask, projects, snapshot } from '@r2cloud/core/service';
+import {
+  access,
+  addComment,
+  command,
+  createTask,
+  startBatch,
+  projects,
+  snapshot,
+} from '@r2cloud/core/service';
 import { issuePreview } from '@r2cloud/core/preview';
 function sessionToken(cookie: string | undefined) {
   return (
@@ -107,6 +115,16 @@ export function createApp(options: { fixture: boolean }) {
   app.get('/api/projects/:projectId/snapshot', async (req, res) => {
     res.json(await snapshot(res.locals.actor, String(req.params.projectId)));
   });
+  app.post('/api/projects/:projectId/batches', async (req, res) => {
+    res.json(
+      await startBatch(
+        res.locals.actor,
+        String(req.params.projectId),
+        req.get('Idempotency-Key') ?? '',
+        req.body,
+      ),
+    );
+  });
   app.post('/api/projects/:projectId/tasks', async (req, res) => {
     res
       .status(201)
@@ -159,16 +177,14 @@ export function createApp(options: { fixture: boolean }) {
   app.use(express.static('dist/web', { index: 'index.html' }));
   app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     const status = err instanceof Fault ? err.status : err instanceof ZodError ? 400 : 500;
-    res
-      .status(status)
-      .json({
-        error:
-          status === 500
-            ? 'The request could not be completed.'
-            : err instanceof ZodError
-              ? 'Check the required fields and try again.'
-              : err.message,
-      });
+    res.status(status).json({
+      error:
+        status === 500
+          ? 'The request could not be completed.'
+          : err instanceof ZodError
+            ? 'Check the required fields and try again.'
+            : err.message,
+    });
     if (status === 500) console.error('API error:', err.message);
   });
   return app;

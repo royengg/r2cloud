@@ -10,7 +10,7 @@ delete process.env.DATABASE_URL;
 const schema = 'test_' + randomUUID().replaceAll('-', '');
 process.env.R2_TEST_SCHEMA = schema;
 const { pool, prisma } = await import('@r2cloud/database');
-const { command, createTask, snapshot, access } = await import('@r2cloud/core/service');
+const { command, createTask, snapshot, access, startBatch } = await import('@r2cloud/core/service');
 const { executeOne, publishOne } = await import('@r2cloud/core/workflow');
 const { issuePreview, readPreview } = await import('@r2cloud/core/preview');
 const { FixtureExecution, FixturePublisher } = await import('@r2cloud/adapters/fixture');
@@ -452,5 +452,95 @@ test('full fixture journey: create, start, review, correction, publication, sepa
   t = await task(tid);
   expect(t.state).toBe('completed');
   expect(t.completed_at).not.toBeNull();
+  expect(t.owner_id).toBe('maya');
   expect((await pool.query('SELECT * FROM claims WHERE released_at IS NULL')).rowCount).toBe(0);
+});
+
+const batch = {
+  tasks: [
+    { taskId: 'welcome', version: 1 },
+    { taskId: 'pricing', version: 1 },
+  ],
+  minutesPerTask: 15,
+  budgetCentsPerTask: 300,
+  maxTotalBudgetCents: 600,
+};
+test('explicit batches are atomic, budgeted and idempotent', async () => {
+  await pool.query("UPDATE repositories SET max_changes=2 WHERE id='website'");
+  const k = key();
+  const first = await startBatch(maya, 'launch', k, batch);
+  expect(first.tasks).toHaveLength(2);
+  expect(await startBatch(maya, 'launch', k, batch)).toEqual(first);
+  expect((await pool.query('SELECT * FROM runs')).rowCount).toBe(2);
+  expect((await pool.query('SELECT * FROM claims')).rowCount).toBe(2);
+  expect((await pool.query('SELECT * FROM jobs')).rowCount).toBe(2);
+  expect((await task('mobile')).state).toBe('todo');
+  await expect(startBatch(maya, 'launch', k, { ...batch, minutesPerTask: 20 })).rejects.toThrow(
+    'different content',
+  );
+});
+test('failed batch validation and concurrency leave no partial claims or jobs', async () => {
+  await expect(startBatch(maya, 'launch', key(), batch)).rejects.toThrow('repository');
+  await pool.query("UPDATE repositories SET max_changes=3 WHERE id='website'");
+  await expect(
+    startBatch(maya, 'launch', key(), { ...batch, maxTotalBudgetCents: 500 }),
+  ).rejects.toThrow('budget');
+  await expect(
+    startBatch(maya, 'launch', key(), {
+      ...batch,
+      tasks: [...batch.tasks, { taskId: 'mobile', version: 1 }],
+      maxTotalBudgetCents: 900,
+    }),
+  ).rejects.toThrow('concurrent run limit');
+  await expect(
+    startBatch(maya, 'launch', key(), {
+      ...batch,
+      tasks: [...batch.tasks, { taskId: 'private-task', version: 1 }],
+      maxTotalBudgetCents: 900,
+    }),
+  ).rejects.toThrow('does not belong');
+  await expect(startBatch(sam, 'launch', key(), batch)).rejects.toThrow('permission');
+  expect((await pool.query('SELECT * FROM claims')).rowCount).toBe(0);
+  expect((await pool.query('SELECT * FROM runs')).rowCount).toBe(0);
+  expect((await pool.query('SELECT * FROM jobs')).rowCount).toBe(0);
+  expect((await pool.query('SELECT * FROM receipts')).rowCount).toBe(0);
+});
+test('approval actor type comes from authoritative identity, not caller metadata', async () => {
+  await review();
+  await pool.query("UPDATE project_access SET review=true,merge=true WHERE user_id='agent'");
+  await expect(approve('publish', { id: 'agent', kind: 'human' })).rejects.toThrow('person');
+});
+test('uncertain execution retries stop at a bounded limit and preserve ownership', async () => {
+  await command(maya, 'launch', 'welcome', key(), start);
+  let observations = 0;
+  const provider = {
+    mode: 'fixture' as const,
+    observe: async () => {
+      observations++;
+      return { state: 'unknown' as const };
+    },
+    start: async () => {
+      throw Error('must never replace');
+    },
+  };
+  for (let i = 0; i < 7; i++) {
+    await retryJobs();
+    await executeOne(provider);
+  }
+  expect(observations).toBe(5);
+  expect((await pool.query('SELECT state FROM jobs')).rows[0].state).toBe('blocked');
+  expect((await pool.query('SELECT * FROM claims WHERE released_at IS NULL')).rowCount).toBe(1);
+  expect((await pool.query('SELECT * FROM runs WHERE stopped_at IS NULL')).rowCount).toBe(1);
+});
+
+test('a superseded generation failure cannot block or version the current task', async () => {
+  await command(maya, 'launch', 'welcome', key(), start);
+  await pool.query("UPDATE tasks SET generation=generation+1,version=version+1 WHERE id='welcome'");
+  const before = await task();
+  await executeOne(new FixtureExecution());
+  const after = await task();
+  expect(after.state).toBe(before.state);
+  expect(after.version).toBe(before.version);
+  expect((await pool.query('SELECT * FROM candidates')).rowCount).toBe(0);
+  expect((await pool.query('SELECT state FROM jobs')).rows[0].state).toBe('blocked');
 });

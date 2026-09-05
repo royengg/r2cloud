@@ -1,7 +1,7 @@
 import { pool, transaction, type DB } from './db';
 import { access, event, lockProject } from './service';
 import { digest, id } from '@r2cloud/contracts/hash';
-import { requireThat } from '@r2cloud/contracts/domain';
+import { Fault, requireThat } from '@r2cloud/contracts/domain';
 import {
   SetupRequired,
   Uncertain,
@@ -27,7 +27,12 @@ async function reserve(kinds: string[]) {
       "UPDATE jobs SET state='processing',attempts=attempts+1,lease_token=$2,lease_until=now()+interval '90 seconds' WHERE id=$1",
       [job.id, token],
     );
-    return { ...job, lease_token: token, recovery: job.state !== 'ready' };
+    return {
+      ...job,
+      lease_token: token,
+      recovery: job.state !== 'ready',
+      attempts: job.attempts + 1,
+    };
   });
 }
 async function assertJob(db: DB, job: any) {
@@ -310,6 +315,9 @@ async function finishPublication(
 }
 async function failure(job: any, error: unknown) {
   const setup = error instanceof SetupRequired;
+  const exhausted = job.attempts >= 5;
+  const policyFailure = error instanceof Fault;
+  const blocked = setup || exhausted || policyFailure;
   const message = error instanceof Error ? error.message : 'External outcome is uncertain.';
   await transaction(async (db) => {
     await lockProject(db, job.project_id);
@@ -324,8 +332,22 @@ async function failure(job: any, error: unknown) {
       return;
     await db.query(
       "UPDATE jobs SET state=$2,error=$3,available_at=now()+interval '10 seconds',lease_until=NULL WHERE id=$1",
-      [job.id, setup ? 'blocked' : 'uncertain', message.slice(0, 500)],
+      [job.id, blocked ? 'blocked' : 'uncertain', message.slice(0, 500)],
     );
+    // A stale worker may record its own failure, but cannot change a newer task generation.
+    const current = (
+      await db.query(
+        `SELECT 1 FROM tasks t WHERE t.id=$1 AND (
+        EXISTS(SELECT 1 FROM runs r WHERE r.id=$2 AND r.task_id=t.id AND r.generation=t.generation)
+        OR EXISTS(SELECT 1 FROM approvals a JOIN candidates c ON c.id=a.candidate_id WHERE a.id=$3 AND c.id=t.candidate_id AND c.generation=t.generation)
+      )`,
+        [job.task_id, job.run_id, job.approval_id],
+      )
+    ).rowCount;
+    if (!current) {
+      await db.query("UPDATE jobs SET state='blocked' WHERE id=$1", [job.id]);
+      return;
+    }
     if (job.run_id)
       await db.query("UPDATE runs SET state='unknown' WHERE id=$1 AND stopped_at IS NULL", [
         job.run_id,

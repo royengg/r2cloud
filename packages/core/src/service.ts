@@ -1,5 +1,14 @@
 import { type DB, pool, prisma, transaction } from './db';
-import { type Actor, type Command, type TaskInput, requireThat } from '@r2cloud/contracts/domain';
+import {
+  type Actor,
+  type Command,
+  type TaskInput,
+  type BatchInput,
+  taskInput,
+  commandInput,
+  batchInput,
+  requireThat,
+} from '@r2cloud/contracts/domain';
 import { digest, id } from '@r2cloud/contracts/hash';
 export async function access(
   db: DB,
@@ -9,7 +18,7 @@ export async function access(
 ) {
   const row = (
     await db.query(
-      'SELECT p.*,a.contribute,a.review,a.merge FROM projects p JOIN project_access a ON a.project_id=p.id AND a.org_id=p.org_id JOIN memberships m ON m.org_id=p.org_id AND m.user_id=a.user_id WHERE p.id=$1 AND a.user_id=$2',
+      'SELECT p.*,a.contribute,a.review,a.merge,u.kind actor_kind FROM projects p JOIN project_access a ON a.project_id=p.id AND a.org_id=p.org_id JOIN memberships m ON m.org_id=p.org_id AND m.user_id=a.user_id JOIN users u ON u.id=a.user_id WHERE p.id=$1 AND a.user_id=$2',
       [projectId, actor.id],
     )
   ).rows[0];
@@ -17,7 +26,7 @@ export async function access(
   if (capability)
     requireThat(row[capability], 403, `This action requires project ${capability} permission.`);
   if (capability === 'review' || capability === 'merge')
-    requireThat(actor.kind === 'human', 403, 'A person must authorise this action.');
+    requireThat(row.actor_kind === 'human', 403, 'A person must authorise this action.');
   return row;
 }
 export async function lockProject(db: DB, projectId: string) {
@@ -79,6 +88,7 @@ async function receipt<T>(
   });
 }
 export async function createTask(actor: Actor, projectId: string, key: string, input: TaskInput) {
+  input = taskInput.parse(input);
   return receipt(actor, projectId, key, { type: 'create', input }, async (db) => {
     const p = await access(db, actor, projectId, 'contribute');
     const tid = id();
@@ -173,6 +183,40 @@ async function queueRun(
   });
   return { id: t.id, runId, generation: gen };
 }
+async function startTask(
+  db: DB,
+  actor: Actor,
+  p: any,
+  t: any,
+  input: Extract<Command, { action: 'start' }>,
+) {
+  requireThat(t.state === 'todo', 409, 'This task already has an implementation owner.');
+  const deps = (
+    await db.query(
+      "SELECT t.title FROM dependencies d JOIN tasks t ON t.id=d.depends_on WHERE d.task_id=$1 AND t.state<>'completed'",
+      [t.id],
+    )
+  ).rows;
+  requireThat(!deps.length, 409, 'Complete the prerequisite tasks before starting this work.');
+  const repo = (await db.query('SELECT * FROM repositories WHERE id=$1 FOR UPDATE', [p.repo_id]))
+    .rows[0];
+  const occupied = (
+    await db.query('SELECT count(*)::int n FROM claims WHERE repo_id=$1 AND released_at IS NULL', [
+      p.repo_id,
+    ])
+  ).rows[0].n;
+  requireThat(
+    occupied < repo.max_changes,
+    409,
+    'Another change is awaiting completion in this repository. Its review or merge must finish first.',
+  );
+  const claimId = id();
+  await db.query(
+    'INSERT INTO claims(id,org_id,project_id,task_id,owner_id,repo_id) VALUES($1,$2,$3,$4,$5,$6)',
+    [claimId, p.org_id, p.id, t.id, actor.id, p.repo_id],
+  );
+  return queueRun(db, actor, p, t, claimId, input.minutes, input.budgetCents);
+}
 export async function command(
   actor: Actor,
   projectId: string,
@@ -180,6 +224,7 @@ export async function command(
   key: string,
   input: Command,
 ) {
+  input = commandInput.parse(input);
   return receipt(actor, projectId, key, { taskId, input }, async (db) => {
     const p = await access(
       db,
@@ -205,36 +250,7 @@ export async function command(
       409,
       'This task has changed. Refresh and review the latest version.',
     );
-    if (input.action === 'start') {
-      requireThat(t.state === 'todo', 409, 'This task already has an implementation owner.');
-      const deps = (
-        await db.query(
-          "SELECT t.title FROM dependencies d JOIN tasks t ON t.id=d.depends_on WHERE d.task_id=$1 AND t.state<>'completed'",
-          [taskId],
-        )
-      ).rows;
-      requireThat(!deps.length, 409, 'Complete the prerequisite tasks before starting this work.');
-      const repo = (
-        await db.query('SELECT * FROM repositories WHERE id=$1 FOR UPDATE', [p.repo_id])
-      ).rows[0];
-      const occupied = (
-        await db.query(
-          'SELECT count(*)::int n FROM claims WHERE repo_id=$1 AND released_at IS NULL',
-          [p.repo_id],
-        )
-      ).rows[0].n;
-      requireThat(
-        occupied < repo.max_changes,
-        409,
-        'Another change is awaiting completion in this repository. Its review or merge must finish first.',
-      );
-      const claimId = id();
-      await db.query(
-        'INSERT INTO claims(id,org_id,project_id,task_id,owner_id,repo_id) VALUES($1,$2,$3,$4,$5,$6)',
-        [claimId, p.org_id, projectId, taskId, actor.id, p.repo_id],
-      );
-      return queueRun(db, actor, p, t, claimId, input.minutes, input.budgetCents);
-    }
+    if (input.action === 'start') return startTask(db, actor, p, t, input);
     const claim = (
       await db.query('SELECT * FROM claims WHERE task_id=$1 AND released_at IS NULL', [taskId])
     ).rows[0];
@@ -379,7 +395,7 @@ export async function snapshot(actor: Actor, projectId: string) {
    (SELECT row_to_json(r) FROM runs r WHERE r.task_id=t.id ORDER BY generation DESC LIMIT 1) run,
    (SELECT row_to_json(k) FROM candidates k WHERE k.id=t.candidate_id) candidate,
    (SELECT row_to_json(p) FROM publications p WHERE p.candidate_id=t.candidate_id LIMIT 1) publication
-   FROM tasks t LEFT JOIN claims c ON c.task_id=t.id AND c.released_at IS NULL LEFT JOIN users u ON u.id=c.owner_id
+   FROM tasks t LEFT JOIN LATERAL (SELECT * FROM claims WHERE task_id=t.id ORDER BY created_at DESC LIMIT 1) c ON true LEFT JOIN users u ON u.id=c.owner_id
    WHERE t.project_id=$1 ORDER BY t.created_at,t.id`,
         [projectId],
       )
@@ -411,4 +427,46 @@ export async function projects(actor: Actor) {
     orderBy: { name: 'asc' },
   });
   return rows.map(({ organisations, ...p }) => ({ ...p, org_name: organisations.name }));
+}
+
+/** Explicit, all-or-nothing batches. No background selection or authority beyond named tasks. */
+export async function startBatch(actor: Actor, projectId: string, key: string, input: BatchInput) {
+  input = batchInput.parse(input);
+  requireThat(
+    input.tasks.length * input.budgetCentsPerTask <= input.maxTotalBudgetCents,
+    400,
+    'The batch exceeds its total authorised budget.',
+  );
+  return receipt(actor, projectId, key, { type: 'batch', input }, async (db) => {
+    const p = await access(db, actor, projectId, 'contribute');
+    const results = [];
+    for (const selected of [...input.tasks].sort((a, b) => a.taskId.localeCompare(b.taskId))) {
+      const t = (
+        await db.query('SELECT * FROM tasks WHERE id=$1 AND project_id=$2 FOR UPDATE', [
+          selected.taskId,
+          projectId,
+        ])
+      ).rows[0];
+      requireThat(t, 404, 'A selected task does not belong to this project.');
+      requireThat(
+        t.version === selected.version,
+        409,
+        'A selected task has changed. Review the batch again.',
+      );
+      results.push(
+        await startTask(db, actor, p, t, {
+          action: 'start',
+          version: t.version,
+          minutes: input.minutesPerTask,
+          budgetCents: input.budgetCentsPerTask,
+        }),
+      );
+    }
+    await event(db, projectId, null, actor.id, 'Bounded batch authorised', {
+      tasks: results.map((r) => r.id),
+      minutesPerTask: input.minutesPerTask,
+      maxTotalBudgetCents: input.maxTotalBudgetCents,
+    });
+    return { tasks: results };
+  });
 }

@@ -344,10 +344,6 @@ button .icon {
     }
   }
 }
-.sidebar-navigation {
-  display: grid;
-  gap: 6px;
-}
 .nav-item {
   display: flex;
   align-items: center;

@@ -6,8 +6,6 @@ import { WorkspacePicker } from './WorkspacePicker';
 export function Sidebar({
   identity,
   project,
-  attention,
-  attentionCount,
   onAttention,
   onProject,
   onClose,
@@ -18,8 +16,6 @@ export function Sidebar({
 }: {
   identity: Identity;
   project: Project | undefined;
-  attention: boolean;
-  attentionCount: number;
   onAttention: (value: boolean) => void;
   onProject: (id: string) => void;
   onClose: () => void;
@@ -53,23 +49,6 @@ export function Sidebar({
           if (next) onProject(next.id);
         }}
       />
-      <nav className="sidebar-navigation" aria-label="Workspace navigation">
-        <button
-          className={!attention ? 'nav-item is-active' : 'nav-item'}
-          onClick={() => onAttention(false)}
-        >
-          <Icon name="board" />
-          <span>Project board</span>
-        </button>
-        <button
-          className={attention ? 'nav-item is-active' : 'nav-item'}
-          onClick={() => onAttention(true)}
-        >
-          <Icon name="attention" />
-          <span>Needs my attention</span>
-          {attentionCount > 0 && <span className="nav-count">{attentionCount}</span>}
-        </button>
-      </nav>
       <div className="sidebar-projects">
         <div className="project-list-heading">
           <span className="section-label">Projects</span>

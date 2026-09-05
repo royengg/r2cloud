@@ -154,8 +154,6 @@ export function App() {
         <Sidebar
           identity={w.identity}
           project={context}
-          attention={attention}
-          attentionCount={attentionCount}
           onAttention={(value) => {
             setAttention(value);
             if (mobile) setSidebarOpen(false);

@@ -199,7 +199,7 @@ export function App() {
         <header className="context-bar">
           <div className="context-leading">
             <IconButton
-              name={sidebarOpen ? 'sidebar' : 'menu'}
+              name="sidebar"
               label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
               aria-expanded={sidebarOpen}
               onClick={() => setSidebarOpen(!sidebarOpen)}

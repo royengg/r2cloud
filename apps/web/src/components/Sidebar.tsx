@@ -1,6 +1,6 @@
 import type { Identity, Project } from '../lib/types';
 import { Icon } from './Icon';
-import { Avatar, IconButton, Modal } from './ui';
+import { Avatar, Modal } from './ui';
 export function Sidebar({
   identity,
   project,
@@ -40,7 +40,6 @@ export function Sidebar({
             r2cloud<span className="brand-period">.</span>
           </span>
         </button>
-        <IconButton name="sidebar" label="Hide sidebar" onClick={onClose} />
       </div>
       <div className="org-picker">
         <span className="org-avatar">{project?.org_name?.[0] ?? 'N'}</span>

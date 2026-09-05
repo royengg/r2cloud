@@ -2573,6 +2573,15 @@ body:has(dialog[open]) {
   border-radius: var(--radius-control);
   font-size: 16px;
 }
+.auth-form input:focus-visible {
+  outline: none;
+  border-color: var(--color-focus);
+}
+@media (forced-colors: active) {
+  .auth-form input:focus-visible {
+    border-color: Highlight;
+  }
+}
 .auth-options {
   display: flex;
   justify-content: center;

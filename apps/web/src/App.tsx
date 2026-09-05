@@ -185,18 +185,19 @@ export function App() {
                 Invitations ({w.identity.invitations.length})
               </Button>
             )}
-            <button
-              className="participant-stack"
-              aria-label="View project participants"
-              onClick={() => setParticipants(true)}
-            >
+            <div className="participant-stack">
               {w.snapshot?.participants.slice(0, 4).map((person, i) => (
                 <Avatar key={person.id} name={person.name} tone={i} />
               ))}
-              <span className="participant-plus">
+              <button
+                className="participant-plus"
+                aria-label="View project participants"
+                title="Project team"
+                onClick={() => setParticipants(true)}
+              >
                 <Icon name="people" size={16} />
-              </span>
-            </button>
+              </button>
+            </div>
           </div>
         </header>
         <main id="main-content" className="board-workspace">

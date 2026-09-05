@@ -546,10 +546,16 @@ button .icon {
   border-radius: 50%;
   background: var(--color-surface);
   color: var(--color-text-secondary);
-  width: 29px;
-  height: 29px;
+  width: 36px;
+  height: 36px;
   margin-inline-start: 8px;
   box-shadow: var(--shadow-card);
+}
+@media (pointer: coarse) {
+  .participant-plus {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 .board-workspace {
   padding: 24px 38px 18px;

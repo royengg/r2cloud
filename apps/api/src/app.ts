@@ -1,4 +1,5 @@
 import express from 'express';
+import type { ProductIdentity } from './auth';
 import { createServer } from 'node:http';
 import { Server as SocketServer } from 'socket.io';
 import { ZodError } from 'zod';
@@ -14,6 +15,7 @@ import {
   projects,
   snapshot,
 } from '@r2cloud/core/service';
+import { createWorkspace } from '@r2cloud/core/onboarding';
 import { issuePreview } from '@r2cloud/core/preview';
 function sessionToken(cookie: string | undefined) {
   return (
@@ -47,12 +49,26 @@ if (process.env.R2_MODE === 'fixture' && process.env.R2_DEV_ORIGIN) {
     throw new Error('R2_DEV_ORIGIN must be an HTTPS origin.');
   origins.add(origin.origin);
 }
-export function createApp(options: { fixture: boolean }) {
+type AppOptions = { fixture: boolean; identity?: ProductIdentity };
+function allowedOrigins(options: AppOptions) {
+  return options.identity ? new Set([options.identity.origin]) : origins;
+}
+function requestActor(options: AppOptions, headers: import('node:http').IncomingHttpHeaders) {
+  return options.identity ? options.identity.authenticate(headers) : authenticate(headers.cookie);
+}
+export function createApp(options: AppOptions) {
   const app = express();
   app.set('json replacer', (_key: string, value: unknown) =>
     typeof value === 'bigint' ? value.toString() : value,
   );
   app.disable('x-powered-by');
+  options.identity?.mount(app); // Better Auth must receive the unconsumed request stream.
+  app.get('/api/auth-config', (_req, res) =>
+    res.json({
+      mode: options.identity?.mode ?? 'fixture',
+      provider: options.identity?.provider ?? null,
+    }),
+  );
   app.use(express.json({ limit: '64kb' }));
   app.use((req, res, next) => {
     res.set({
@@ -62,14 +78,14 @@ export function createApp(options: { fixture: boolean }) {
       'Cross-Origin-Resource-Policy': 'same-origin',
     });
     if (req.method !== 'GET' && req.method !== 'HEAD') {
-      if (req.headers.origin && !origins.has(req.headers.origin))
+      if (req.headers.origin && !allowedOrigins(options).has(req.headers.origin))
         return next(new Fault(403, 'Request origin is not permitted.'));
       if (!req.is('application/json'))
         return next(new Fault(415, 'Use an application/json request.'));
     }
     next();
   });
-  if (options.fixture)
+  if (options.fixture && !options.identity)
     app.post('/api/local-session', async (req, res) => {
       requireThat(
         ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? ''),
@@ -97,7 +113,7 @@ export function createApp(options: { fixture: boolean }) {
     });
   app.use('/api', async (req, res, next) => {
     try {
-      res.locals.actor = await authenticate(req.headers.cookie);
+      res.locals.actor = await requestActor(options, req.headers);
       next();
     } catch (e) {
       next(e);
@@ -111,14 +127,21 @@ export function createApp(options: { fixture: boolean }) {
       user,
       projects: await projects(actor),
       mode: options.fixture ? 'fixture' : 'managed',
+      authMode: options.identity?.mode ?? 'fixture',
     });
   });
   app.post('/api/logout', async (req, res) => {
+    if (options.identity) return options.identity.signOut(req, res);
     await pool.query('DELETE FROM sessions WHERE token_hash=$1', [
       hash(sessionToken(req.headers.cookie)),
     ]);
     res.clearCookie('r2session');
     res.json({ ok: true });
+  });
+  app.post('/api/workspaces', async (req, res) => {
+    res
+      .status(201)
+      .json(await createWorkspace(res.locals.actor, req.get('Idempotency-Key') ?? '', req.body));
   });
   app.get('/api/projects/:projectId/snapshot', async (req, res) => {
     res.json(await snapshot(res.locals.actor, String(req.params.projectId)));
@@ -197,17 +220,18 @@ export function createApp(options: { fixture: boolean }) {
   });
   return app;
 }
-export function createHttpServer(options: { fixture: boolean }) {
+export function createHttpServer(options: AppOptions) {
   const server = createServer(createApp(options));
   const io = new SocketServer(server, {
     maxHttpBufferSize: 1024,
-    cors: { origin: [...origins], credentials: true },
-    allowRequest: (req, callback) => callback(null, origins.has(req.headers.origin ?? '')),
+    cors: { origin: [...allowedOrigins(options)], credentials: true },
+    allowRequest: (req, callback) =>
+      callback(null, allowedOrigins(options).has(req.headers.origin ?? '')),
   });
   io.use(async (socket, next) => {
     try {
       const projectId = String(socket.handshake.auth.projectId ?? '');
-      const actor = await authenticate(socket.request.headers.cookie);
+      const actor = await requestActor(options, socket.request.headers);
       await access(pool, actor, projectId);
       socket.data = { projectId, actor };
       next();
@@ -223,7 +247,7 @@ export function createHttpServer(options: { fixture: boolean }) {
       if (checking || !socket.connected) return;
       checking = true;
       try {
-        await authenticate(socket.request.headers.cookie);
+        await requestActor(options, socket.request.headers);
         await access(pool, actor, projectId);
         const latest = (
           await pool.query(

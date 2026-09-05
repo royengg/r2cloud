@@ -16,7 +16,7 @@ R2_MODE=fixture bun run db:setup
 bun run dev
 ```
 
-Open `http://127.0.0.1:5173`. Select a fixture participant: Maya can contribute/review/authorise merge, Alex can contribute, and Sam can view. This local participant selector is development authentication, not production sign-in.
+Open `http://127.0.0.1:5173`. Select a fixture participant: Maya can contribute/review/authorise merge, Alex can contribute, and Sam can view. This local participant selector is development authentication, not production sign-in. Optional GitHub-only Better Auth sign-in and first-workspace setup are implemented; see [authentication setup](docs/AUTHENTICATION.md).
 
 Postgres uses existing ARM64 binaries with project-private storage and a Unix socket only. No existing database service is used. API and previews bind loopback ports 4310 and 4311. Stop the app with Ctrl+C and the database with `bun run db:stop`.
 
@@ -48,6 +48,7 @@ Bun 1.4.2 is the runtime and package manager; `bun.lock` is the only project loc
 
 ## Documents
 
+- [GitHub authentication](docs/AUTHENTICATION.md)
 - [Design system](DESIGN.md)
 - [UI verification](docs/UI-VERIFICATION.md)
 - [Architecture](docs/ARCHITECTURE.md)

@@ -20,7 +20,7 @@ See [DESIGN.md](../DESIGN.md), [source provenance](DESIGN-SOURCES.md) and [UI ve
 
 ## Not yet production-ready
 
-Production identity onboarding/invitations and admin connection management, a chosen managed sandbox/provider credential broker, durable object storage, real GitHub App publisher/reconciliation, live browser evidence, preview gateway, explicit stopped-execution handoff/cancellation UI, and deployment hardening remain integration work. Managed startup fails closed. API/worker DB credentials are local development credentials; separate least-privilege database roles and tenant RLS remain a production gate. The batch API supports explicitly named tasks, expected versions, per-task time/budget and a total cap, atomically constrained by concurrency policy. Batch selection and richer dependency editing still need UI implementation.
+Live OAuth configuration, invitations and admin connection management, a chosen managed sandbox/provider credential broker, durable object storage, real GitHub App publisher/reconciliation, live browser evidence, preview gateway, explicit stopped-execution handoff/cancellation UI, and deployment hardening remain integration work. Managed startup fails closed. API/worker DB credentials are local development credentials; separate least-privilege database roles and tenant RLS remain a production gate. The batch API supports explicitly named tasks, expected versions, per-task time/budget and a total cap, atomically constrained by concurrency policy. Batch selection and richer dependency editing still need UI implementation.
 
 No real external end-to-end check has run. Fixture checks cannot establish cloud isolation, provider billing/entitlement, real PR creation, repository required-check enforcement, or real merge.
 
@@ -41,4 +41,11 @@ These are local application tests. External execution, application test evidence
 
 ## Temporary UI tunnel check
 
-An explicitly requested Cloudflare Quick Tunnel serves the local dev UI, with an exact HTTPS origin allowlist and a separate preview tunnel. The fixture preview process repeatedly hit a Bun 1.4.2 ARM64 native abort behind the tunnel; changing its HTTP renderer did not resolve the crash. The launcher now keeps the board running if this optional fixture preview exits. Remote fixture preview reliability remains unresolved. No runtime crash report or credentials were uploaded. Tunnel-related commits remain local pending the user's final push approval.
+An explicitly requested Cloudflare Quick Tunnel serves the local dev UI, with an exact HTTPS origin allowlist and a separate preview tunnel. The fixture preview process repeatedly hit a Bun 1.4.2 ARM64 native abort behind the tunnel; changing its HTTP renderer did not resolve the crash. The launcher now keeps the board running if this optional fixture preview exits. Remote fixture preview reliability remains unresolved. No runtime crash report or credentials were uploaded. Tunnel-related commits were subsequently pushed under explicit approval. The current authentication increment remains local.
+
+
+## GitHub identity increment
+
+Better Auth and its Prisma adapter now support GitHub-only product sign-in, database sessions, encrypted provider tokens, verified identity mapping, revocation over HTTP/Socket.IO, and atomic first-workspace creation. New projects start with no repository or AI access. Existing task/review permissions remain authoritative. See [authentication setup and boundaries](AUTHENTICATION.md).
+
+`bun test` passes all 38 tests (151 assertions), including eight new identity/onboarding tests with mocked GitHub endpoints and real Postgres/HTTP/Socket.IO. TypeScript and the production build pass. The new browser journey remains unverified because Chromium hit VPS thread-resource exhaustion; prior fixture browser results above predate this increment. The private Bun environment now disables its runtime transpiler cache after native aborts during test subprocess startup. This is a local workaround, not proof that all ARM64 runtime or preview crashes are resolved.

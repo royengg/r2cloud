@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AuthScreen, WorkspaceSetup } from './components/AuthScreen';
 import { Sidebar } from './components/Sidebar';
 import { Board } from './components/Board';
 import { Composer } from './components/Composer';
@@ -90,6 +91,28 @@ export function App() {
         </span>
         <span>Opening your workspace…</span>
       </div>
+    );
+  if (!w.authConfig)
+    return (
+      <main className="initial-loading">
+        <p role="alert">Sign-in settings could not be loaded.</p>
+        <Button onClick={() => location.reload()}>Try again</Button>
+      </main>
+    );
+  if (!w.identity && w.authConfig.mode === 'better-auth') return <AuthScreen />;
+  if (w.identity && w.identity.projects.length === 0)
+    return (
+      <WorkspaceSetup
+        busy={w.busy}
+        error={w.error}
+        onSignOut={() => void w.signOut()}
+        onCreate={(input) =>
+          w.act(async () => {
+            await api('/workspaces', input);
+            await w.loadIdentity();
+          }, 'Workspace created')
+        }
+      />
     );
   if (!w.identity)
     return (
@@ -378,9 +401,27 @@ export function App() {
             Membership, repository access and AI access stay separate.
           </p>
           {[
-            ['people', 'Product sign-in', 'Local fixture participants'],
-            ['branch', 'Repository', 'Fixture repository · no GitHub writes'],
-            ['sparkles', 'AI connection', 'Codex adapter · simulated execution'],
+            [
+              'people',
+              'Product sign-in',
+              w.identity.authMode === 'better-auth'
+                ? 'Verified Better Auth session'
+                : 'Local fixture participants',
+            ],
+            [
+              'branch',
+              'Repository',
+              project?.repo_id
+                ? 'Fixture repository · no GitHub writes'
+                : 'No repository connected',
+            ],
+            [
+              'sparkles',
+              'AI connection',
+              project?.provider_connected
+                ? 'Codex adapter · simulated execution'
+                : 'No AI account connected',
+            ],
           ].map(([icon, title, description]) => (
             <div className="connection-row" key={title}>
               <Icon name={icon as 'people'} />
@@ -388,7 +429,7 @@ export function App() {
                 <strong>{title}</strong>
                 <span>{description}</span>
               </div>
-              <span className="fixture-inline">Fixture</span>
+              {title !== 'Product sign-in' && <span className="fixture-inline">Fixture mode</span>}
             </div>
           ))}
           <p className="subtle">

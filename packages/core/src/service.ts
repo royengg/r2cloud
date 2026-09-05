@@ -190,6 +190,7 @@ async function startTask(
   t: any,
   input: Extract<Command, { action: 'start' }>,
 ) {
+  requireThat(p.repo_id, 409, 'Connect a repository before starting this task.');
   requireThat(t.state === 'todo', 409, 'This task already has an implementation owner.');
   const deps = (
     await db.query(
@@ -389,6 +390,12 @@ export async function snapshot(actor: Actor, projectId: string) {
   return transaction(async (db) => {
     await db.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
     const project = await access(db, actor, projectId);
+    project.provider_connected = (
+      await db.query(
+        'SELECT EXISTS(SELECT 1 FROM provider_connections WHERE project_id=$1 AND user_id=$2 AND enabled=true) connected',
+        [projectId, actor.id],
+      )
+    ).rows[0].connected;
     const tasks = (
       await db.query(
         `SELECT t.*,u.name owner_name,c.owner_id,COALESCE(u.kind,'human') owner_kind,

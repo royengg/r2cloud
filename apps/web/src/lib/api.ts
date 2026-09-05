@@ -12,6 +12,7 @@ export async function api<T = any>(path: string, body?: unknown): Promise<T> {
   });
   const data = await response.json();
   pending.delete(fingerprint);
-  if (!response.ok) throw new Error(data.error ?? 'Unable to load the workspace. Try again.');
+  if (!response.ok)
+    throw new Error(data.error ?? data.message ?? 'Unable to load the workspace. Try again.');
   return data;
 }

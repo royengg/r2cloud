@@ -1,6 +1,8 @@
 import type { CandidateManifest, Evidence } from '@r2cloud/contracts/domain';
 export type Person = { id: string; name: string; review?: boolean };
 export type Project = {
+  repo_id?: string | null;
+  provider_connected?: boolean;
   id: string;
   name: string;
   org_name?: string;
@@ -47,7 +49,12 @@ export type Snapshot = {
   events: Activity[];
   cursor: string;
 };
-export type Identity = { user: Person; projects: Project[]; mode: string };
+export type Identity = {
+  authMode?: string;
+  user: Person;
+  projects: Project[];
+  mode: string;
+};
 export const statuses: Record<string, string> = {
   todo: 'Ready to start',
   building: 'Building',

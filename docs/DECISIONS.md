@@ -6,6 +6,7 @@ Confirmed by the user on 5 September 2026. This record supersedes the preliminar
 | --- | --- |
 | Audience | Product teams and nontechnical founders/product managers. |
 | Execution | Managed cloud sandboxes at launch. A connected runner is a future extension. |
+| Product sign-in | GitHub only for now, through Better Auth. Repository GitHub App access and AI credentials remain separate. |
 | Agent | Codex first, with a provider adapter boundary. |
 | Permissions | Contributors start work. Designated project reviewers approve publication. Merge requires separate authorisation. Agents cannot approve either action. |
 | Autonomy | Individually started tasks and explicitly authorised bounded batches; no unrestricted continuous picking. |

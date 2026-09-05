@@ -1,3 +1,4 @@
+import { applyTestMigrations } from './migrations';
 import AxeBuilder from '@axe-core/playwright';
 import { chromium } from 'playwright-core';
 import pg from 'pg';
@@ -17,12 +18,7 @@ await admin.query(`CREATE SCHEMA "${schema}"`);
 const db = await admin.connect();
 try {
   await db.query(`SET search_path TO "${schema}"`);
-  await db.query(
-    await readFile(
-      'packages/database/prisma/migrations/202609050001_initial/migration.sql',
-      'utf8',
-    ),
-  );
+  await applyTestMigrations(db);
 } finally {
   db.release();
 }

@@ -1,3 +1,4 @@
+import { applyTestMigrations } from '../scripts/migrations';
 import { test, beforeAll, beforeEach, afterAll, expect } from 'bun:test';
 import pg from 'pg';
 import { readFile } from 'node:fs/promises';
@@ -15,6 +16,7 @@ const { executeOne, publishOne } = await import('@r2cloud/core/workflow');
 const { issuePreview, readPreview } = await import('@r2cloud/core/preview');
 const { FixtureExecution, FixturePublisher } = await import('@r2cloud/adapters/fixture');
 const { createApp, createHttpServer } = await import('../apps/api/src/app');
+const { createIdentity } = await import('../apps/api/src/auth');
 const { hash } = await import('@r2cloud/contracts/hash');
 const admin = new pg.Pool({ host: resolve('.local/pgsocket'), port: 55439, database: 'postgres' });
 const maya = { id: 'maya', kind: 'human' as const },
@@ -57,19 +59,14 @@ beforeAll(async () => {
   const c = await admin.connect();
   try {
     await c.query(`SET search_path TO "${schema}"`);
-    await c.query(
-      await readFile(
-        'packages/database/prisma/migrations/202609050001_initial/migration.sql',
-        'utf8',
-      ),
-    );
+    await applyTestMigrations(c);
   } finally {
     c.release();
   }
 });
 beforeEach(async () => {
   await pool.query(
-    'TRUNCATE organisations,users,sessions,fixture_external RESTART IDENTITY CASCADE',
+    'TRUNCATE organisations,users,sessions,fixture_external,auth_users,auth_rate_limits RESTART IDENTITY CASCADE',
   );
   const seed = Bun.spawn([process.execPath, 'scripts/setup.ts'], {
     env: { ...process.env, R2_MODE: 'fixture', R2_TEST_SCHEMA: schema },
@@ -543,4 +540,291 @@ test('a superseded generation failure cannot block or version the current task',
   expect(after.version).toBe(before.version);
   expect((await pool.query('SELECT * FROM candidates')).rowCount).toBe(0);
   expect((await pool.query('SELECT state FROM jobs')).rows[0].state).toBe('blocked');
+});
+
+const authOrigin = 'http://127.0.0.1:5173';
+const { mockGitHub } = await import('./github-provider');
+function identityApp() {
+  const { identity, auth } = createIdentity({
+    baseURL: authOrigin,
+    secret: 'test-only-' + key() + key(),
+    githubClientId: 'test-client',
+    githubClientSecret: 'test-client-secret',
+  });
+  return { identity, auth, app: createApp({ fixture: true, identity }) };
+}
+const cookies = (response: any) =>
+  (response.headers['set-cookie'] ?? []).map((c: string) => c.split(';')[0]).join('; ');
+async function githubAccount(
+  app: ReturnType<typeof createApp>,
+  provider: ReturnType<typeof mockGitHub>,
+  input: { verified?: boolean; id?: string; email?: string } = {},
+) {
+  const begin = await request(app)
+    .post('/api/auth/sign-in/social')
+    .set('Origin', authOrigin)
+    .send({ provider: 'github', callbackURL: authOrigin, disableRedirect: true })
+    .expect(200);
+  const authorization = new URL(begin.body.url);
+  expect(authorization.origin).toBe('https://github.com');
+  expect(new Set(authorization.searchParams.get('scope')!.split(' '))).toEqual(
+    new Set(['read:user', 'user:email']),
+  );
+  const state = authorization.searchParams.get('state');
+  const code = provider.issue(input);
+  const callback = await request(app)
+    .get(`/api/auth/callback/github?code=${code}&state=${state}`)
+    .set('Cookie', cookies(begin))
+    .expect(302);
+  const cookie = cookies(callback);
+  const session = await request(app).get('/api/auth/get-session').set('Cookie', cookie).expect(200);
+  return { cookie, user: session.body?.user, code, state, stateCookie: cookies(begin) };
+}
+test('GitHub OAuth maps a verified identity without implicit project or provider access', async () => {
+  const provider = mockGitHub();
+  try {
+    const { app } = identityApp();
+    const account = await githubAccount(app, provider);
+    const me = await request(app).get('/api/me').set('Cookie', account.cookie).expect(200);
+    expect(me.body.user.id).toBe('person:' + account.user.id);
+    expect(me.body.user.kind).toBe('human');
+    expect(me.body.projects).toEqual([]);
+    expect(me.body.authMode).toBe('better-auth');
+    await request(app)
+      .get('/api/projects/launch/snapshot')
+      .set('Cookie', account.cookie)
+      .expect(403);
+    const stored = await prisma.authAccount.findFirstOrThrow({
+      where: { userId: account.user.id },
+    });
+    expect(stored.providerId).toBe('github');
+    expect(stored.password).toBeNull();
+    expect(stored.accessToken).not.toContain('fixture-identity-token');
+    expect(
+      (await pool.query('SELECT * FROM provider_connections WHERE user_id=$1', [me.body.user.id]))
+        .rowCount,
+    ).toBe(0);
+    expect(provider.calls).toBe(3);
+  } finally {
+    provider.restore();
+  }
+});
+test('GitHub login cannot request repository scopes or accept foreign origins and fixture cookies', async () => {
+  const { app } = identityApp();
+  await request(app)
+    .post('/api/auth/sign-in/social')
+    .set('Origin', authOrigin)
+    .send({ provider: 'github', scopes: ['repo'] })
+    .expect(400);
+  await request(app)
+    .post('/api/auth/sign-in/social')
+    .set('Origin', 'https://attacker.test')
+    .send({ provider: 'github' })
+    .expect(403);
+  await request(app)
+    .post('/api/auth/sign-in/social')
+    .set('Origin', authOrigin)
+    .send({ provider: 'google' })
+    .expect(400);
+  await request(app)
+    .get('/api/me')
+    .set('Cookie', await sessionCookie())
+    .expect(401);
+  await request(app)
+    .post('/api/local-session')
+    .set('Origin', authOrigin)
+    .send({ userId: 'maya' })
+    .expect(401);
+  const email = await request(app).post('/api/auth/sign-up/email').set('Origin', authOrigin).send({
+    name: 'No email login',
+    email: 'blocked@example.test',
+    password: 'test-only-long-password',
+  });
+  expect(email.status).toBeGreaterThanOrEqual(400);
+});
+test('unverified GitHub email cannot enter the product or create a workspace', async () => {
+  const provider = mockGitHub();
+  try {
+    const { app } = identityApp();
+    const account = await githubAccount(app, provider, { verified: false });
+    await request(app).get('/api/me').set('Cookie', account.cookie).expect(401);
+    await request(app)
+      .post('/api/workspaces')
+      .set('Origin', authOrigin)
+      .set('Cookie', account.cookie)
+      .set('Idempotency-Key', key())
+      .send({ name: 'Blocked team', projectName: 'Blocked project' })
+      .expect(401);
+  } finally {
+    provider.restore();
+  }
+});
+test('OAuth state is browser-bound and one-use; invalid callbacks do not call GitHub', async () => {
+  const provider = mockGitHub();
+  try {
+    const { app } = identityApp();
+    const invalid = await request(app).get('/api/auth/callback/github?state=forged&code=forged');
+    expect([302, 400]).toContain(invalid.status);
+    expect(provider.calls).toBe(0);
+    const begin = await request(app)
+      .post('/api/auth/sign-in/social')
+      .set('Origin', authOrigin)
+      .send({ provider: 'github', callbackURL: authOrigin, disableRedirect: true })
+      .expect(200);
+    const state = new URL(begin.body.url).searchParams.get('state');
+    const unbound = await request(app).get(
+      `/api/auth/callback/github?state=${state}&code=${provider.issue()}`,
+    );
+    expect([302, 400]).toContain(unbound.status);
+    expect(provider.calls).toBe(0);
+    expect(await prisma.authSession.count()).toBe(0);
+    const account = await githubAccount(app, provider);
+    const replay = await request(app)
+      .get(`/api/auth/callback/github?state=${account.state}&code=${account.code}`)
+      .set('Cookie', account.stateCookie);
+    expect([302, 400]).toContain(replay.status);
+    expect(provider.calls).toBe(3);
+    expect(await prisma.authSession.count()).toBe(1);
+  } finally {
+    provider.restore();
+  }
+});
+test('sign-out revokes the database session immediately', async () => {
+  const provider = mockGitHub();
+  try {
+    const { app } = identityApp();
+    const account = await githubAccount(app, provider);
+    await request(app).get('/api/me').set('Cookie', account.cookie).expect(200);
+    await request(app)
+      .post('/api/logout')
+      .set('Origin', authOrigin)
+      .set('Cookie', account.cookie)
+      .send({})
+      .expect(200);
+    await request(app).get('/api/me').set('Cookie', account.cookie).expect(401);
+  } finally {
+    provider.restore();
+  }
+});
+test('first workspace setup is atomic and isolated, with no repository attached', async () => {
+  const provider = mockGitHub();
+  try {
+    const { app } = identityApp();
+    const account = await githubAccount(app, provider);
+    const k = key();
+    const create = () =>
+      request(app)
+        .post('/api/workspaces')
+        .set('Origin', authOrigin)
+        .set('Cookie', account.cookie)
+        .set('Idempotency-Key', k)
+        .send({ name: 'A new team', projectName: 'First product' });
+    const [one, two] = await Promise.all([create(), create()]);
+    expect(one.status).toBe(201);
+    expect(two.status).toBe(201);
+    expect(one.body).toEqual(two.body);
+    const me = await request(app).get('/api/me').set('Cookie', account.cookie).expect(200);
+    expect(me.body.projects).toHaveLength(1);
+    expect(me.body.projects[0].id).toBe(one.body.projectId);
+    const board = await request(app)
+      .get(`/api/projects/${one.body.projectId}/snapshot`)
+      .set('Cookie', account.cookie)
+      .expect(200);
+    expect(board.body.tasks).toHaveLength(0);
+    expect(board.body.project.review).toBe(true);
+    const created = await request(app)
+      .post(`/api/projects/${one.body.projectId}/tasks`)
+      .set('Origin', authOrigin)
+      .set('Cookie', account.cookie)
+      .set('Idempotency-Key', key())
+      .send({
+        title: 'A real outcome',
+        outcome: 'Visitors understand the product',
+        criteria: ['One clear next step'],
+        priority: 'High',
+      })
+      .expect(201);
+    const blocked = await request(app)
+      .post(`/api/projects/${one.body.projectId}/tasks/${created.body.id}/commands`)
+      .set('Origin', authOrigin)
+      .set('Cookie', account.cookie)
+      .set('Idempotency-Key', key())
+      .send(start)
+      .expect(409);
+    expect(blocked.body.error).toContain('Connect a repository');
+    const outsider = await githubAccount(app, provider);
+    await request(app)
+      .get(`/api/projects/${one.body.projectId}/snapshot`)
+      .set('Cookie', outsider.cookie)
+      .expect(403);
+  } finally {
+    provider.restore();
+  }
+});
+test('session revocation disconnects Socket.IO while task ownership survives', async () => {
+  const provider = mockGitHub();
+  let cleanup = async () => {};
+  try {
+    const { identity, app } = identityApp();
+    const account = await githubAccount(app, provider);
+    const actor = (await request(app).get('/api/me').set('Cookie', account.cookie)).body.user;
+    await pool.query("INSERT INTO memberships(org_id,user_id) VALUES('studio',$1)", [actor.id]);
+    await pool.query(
+      "INSERT INTO project_access(org_id,project_id,user_id,contribute,review,merge) VALUES('studio','launch',$1,true,false,false)",
+      [actor.id],
+    );
+    await command(maya, 'launch', 'welcome', key(), start);
+    const { server, io } = createHttpServer({ fixture: true, identity });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const socket = connectSocket(
+      `http://127.0.0.1:${(server.address() as { port: number }).port}`,
+      {
+        auth: { projectId: 'launch' },
+        transports: ['websocket'],
+        extraHeaders: { Cookie: account.cookie, Origin: authOrigin },
+        forceNew: true,
+        reconnection: false,
+      },
+    );
+    cleanup = async () => {
+      socket.disconnect();
+      await new Promise<void>((r) => io.close(() => r()));
+    };
+    await new Promise<void>((r, j) => {
+      socket.once('snapshot-required', () => r());
+      socket.once('connect_error', j);
+    });
+    const ended = new Promise<void>((r) => socket.once('access-ended', () => r()));
+    await prisma.authSession.deleteMany({ where: { userId: account.user.id } });
+    await ended;
+    expect((await task()).owner_id).toBe('maya');
+  } finally {
+    await cleanup();
+    provider.restore();
+  }
+});
+test('missing OAuth configuration fails closed and login attempts are rate limited in Postgres', async () => {
+  expect(() =>
+    createIdentity({
+      baseURL: authOrigin,
+      secret: key() + key(),
+      githubClientId: '',
+      githubClientSecret: '',
+    }),
+  ).toThrow('GitHub');
+  const { app } = identityApp();
+  const statuses = [];
+  for (let i = 0; i < 11; i++)
+    statuses.push(
+      (
+        await request(app)
+          .post('/api/auth/sign-in/social')
+          .set('Origin', authOrigin)
+          .set('X-Forwarded-For', `192.0.2.${i}`)
+          .set('X-R2-Client-IP', `192.0.2.${i}`)
+          .send({ provider: 'github', disableRedirect: true })
+      ).status,
+    );
+  expect(statuses.at(-1)).toBe(429);
+  expect(await prisma.authRateLimit.count()).toBeGreaterThan(0);
 });

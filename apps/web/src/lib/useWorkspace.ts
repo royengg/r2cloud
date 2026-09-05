@@ -7,12 +7,14 @@ export function useWorkspace() {
     [projectId, setProjectId] = useState(''),
     [snapshot, setSnapshot] = useState<Snapshot | null>(null),
     [ready, setReady] = useState(false),
+    [authConfig, setAuthConfig] = useState<{ mode: string; provider: string | null } | null>(null),
     [connection, setConnection] = useState('Connecting'),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [announcement, setAnnouncement] = useState('');
   const serial = useRef(0);
   const reload = useCallback(async () => {
+    if (!projectId) return;
     const current = ++serial.current;
     try {
       const next = await api<Snapshot>(`/projects/${projectId}/snapshot`);
@@ -29,8 +31,11 @@ export function useWorkspace() {
     );
   }
   useEffect(() => {
-    void loadIdentity()
-      .catch(() => {})
+    void Promise.all([
+      api<{ mode: string; provider: string | null }>('/auth-config').then(setAuthConfig),
+      loadIdentity().catch(() => {}),
+    ])
+      .catch((e) => setError((e as Error).message))
       .finally(() => setReady(true));
   }, []);
   useEffect(() => {
@@ -90,6 +95,8 @@ export function useWorkspace() {
   }
   return {
     identity,
+    authConfig,
+    loadIdentity,
     projectId,
     setProjectId,
     snapshot,

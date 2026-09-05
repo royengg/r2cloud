@@ -131,6 +131,7 @@ model jobs {
 }
 
 model memberships {
+  role                 String                 @default("member")
   org_id               String
   user_id              String
   organisations        organisations          @relation(fields: [org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -178,12 +179,12 @@ model projects {
   id                   String                 @id
   org_id               String
   name                 String
-  repo_id              String
+  repo_id              String?
   comments             comments[]
   events               events[]
   project_access       project_access[]
   organisations        organisations          @relation(fields: [org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  repositories         repositories           @relation(fields: [org_id, repo_id], references: [org_id, id], onDelete: NoAction, onUpdate: NoAction)
+  repositories         repositories?          @relation(fields: [org_id, repo_id], references: [org_id, id], onDelete: NoAction, onUpdate: NoAction)
   provider_connections provider_connections[]
   receipts             receipts[]
   skills               skills[]
@@ -321,15 +322,102 @@ model tasks {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model users {
-  id             String           @id
-  name           String
-  kind           String
-  approvals      approvals[]
-  claims         claims[]
-  comments       comments[]
-  events         events[]
-  memberships    memberships[]
-  preview_grants preview_grants[]
-  receipts       receipts[]
-  sessions       sessions[]
+  onboardingReceipts OnboardingReceipt[]
+  auth_user_id       String?             @unique
+  authUser           AuthUser?           @relation(fields: [auth_user_id], references: [id], onDelete: Restrict)
+  id                 String              @id
+  name               String
+  kind               String
+  approvals          approvals[]
+  claims             claims[]
+  comments           comments[]
+  events             events[]
+  memberships        memberships[]
+  preview_grants     preview_grants[]
+  receipts           receipts[]
+  sessions           sessions[]
+}
+
+model AuthUser {
+  id            String        @id
+  name          String
+  email         String        @unique
+  emailVerified Boolean       @default(false)
+  image         String?
+  createdAt     DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime      @updatedAt @db.Timestamptz(6)
+  sessions      AuthSession[]
+  accounts      AuthAccount[]
+  productUser   users?
+
+  @@map("auth_users")
+}
+
+model AuthSession {
+  id        String   @id
+  token     String   @unique
+  userId    String
+  expiresAt DateTime @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  ipAddress String?
+  userAgent String?
+  user      AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("auth_sessions")
+}
+
+model AuthAccount {
+  id                    String    @id
+  userId                String
+  issuer                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime? @db.Timestamptz(6)
+  refreshTokenExpiresAt DateTime? @db.Timestamptz(6)
+  scope                 String?
+  idToken               String?
+  password              String?
+  createdAt             DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(6)
+  user                  AuthUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([issuer, accountId])
+  @@index([userId])
+  @@map("auth_accounts")
+}
+
+model AuthVerification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([identifier])
+  @@map("auth_verifications")
+}
+
+model AuthRateLimit {
+  id          String @id
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+
+  @@map("auth_rate_limits")
+}
+
+model OnboardingReceipt {
+  userId String
+  key    String
+  digest String
+  result Json
+  user   users  @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([userId, key])
+  @@map("onboarding_receipts")
 }

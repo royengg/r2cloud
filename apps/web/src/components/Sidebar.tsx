@@ -112,11 +112,15 @@ export function Sidebar({
             <span>Simulated agents & GitHub</span>
           </div>
         </div>
-        <button className="profile-button" onClick={onSignOut} title="Switch fixture participant">
+        <button
+          className="profile-button"
+          onClick={onSignOut}
+          title={identity.authMode === 'better-auth' ? 'Sign out' : 'Switch fixture participant'}
+        >
           <Avatar name={identity.user.name} />
           <span>
             <strong>{identity.user.name}</strong>
-            <small>Switch participant</small>
+            <small>{identity.authMode === 'better-auth' ? 'Sign out' : 'Switch participant'}</small>
           </span>
           <Icon name="more" size={18} />
         </button>

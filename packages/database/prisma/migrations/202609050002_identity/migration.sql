@@ -1,0 +1,10 @@
+CREATE TABLE auth_users (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL UNIQUE, "emailVerified" boolean NOT NULL DEFAULT false, image text, "createdAt" timestamptz NOT NULL DEFAULT now(), "updatedAt" timestamptz NOT NULL);
+CREATE TABLE auth_sessions (id text PRIMARY KEY, token text NOT NULL UNIQUE, "userId" text NOT NULL REFERENCES auth_users ON DELETE CASCADE, "expiresAt" timestamptz NOT NULL, "createdAt" timestamptz NOT NULL DEFAULT now(), "updatedAt" timestamptz NOT NULL, "ipAddress" text, "userAgent" text);
+CREATE INDEX auth_sessions_user_idx ON auth_sessions("userId");
+CREATE TABLE auth_accounts (id text PRIMARY KEY, "userId" text NOT NULL REFERENCES auth_users ON DELETE CASCADE, issuer text NOT NULL, "accountId" text NOT NULL, "providerId" text NOT NULL, "accessToken" text, "refreshToken" text, "accessTokenExpiresAt" timestamptz, "refreshTokenExpiresAt" timestamptz, scope text, "idToken" text, password text, "createdAt" timestamptz NOT NULL DEFAULT now(), "updatedAt" timestamptz NOT NULL, UNIQUE(issuer,"accountId"));
+CREATE INDEX auth_accounts_user_idx ON auth_accounts("userId");
+CREATE TABLE auth_verifications (id text PRIMARY KEY, identifier text NOT NULL, value text NOT NULL, "expiresAt" timestamptz NOT NULL, "createdAt" timestamptz NOT NULL DEFAULT now(), "updatedAt" timestamptz NOT NULL);
+CREATE INDEX auth_verifications_identifier_idx ON auth_verifications(identifier);
+CREATE TABLE auth_rate_limits (id text PRIMARY KEY, key text NOT NULL UNIQUE, count int NOT NULL, "lastRequest" bigint NOT NULL);
+CREATE TABLE auth_mail_outbox (id text PRIMARY KEY, kind text NOT NULL, recipient text NOT NULL, payload jsonb NOT NULL, "expiresAt" timestamptz NOT NULL, "createdAt" timestamptz NOT NULL DEFAULT now());
+ALTER TABLE users ADD COLUMN auth_user_id text UNIQUE REFERENCES auth_users ON DELETE RESTRICT;

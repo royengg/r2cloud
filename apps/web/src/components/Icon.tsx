@@ -1,5 +1,6 @@
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
+  GithubIcon,
   Add01Icon,
   ArrowUp02Icon,
   ArrowUpRight01Icon,
@@ -35,6 +36,7 @@ import {
   Loading03Icon,
 } from '@hugeicons/core-free-icons';
 const icons = {
+  github: GithubIcon,
   add: Add01Icon,
   up: ArrowUp02Icon,
   external: ArrowUpRight01Icon,

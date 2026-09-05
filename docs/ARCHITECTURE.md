@@ -326,3 +326,19 @@ Set organisation and run budgets, maximum concurrent sandboxes, wall-time/tool-c
 Back up Postgres, exercise restoration, retain immutable approved artifacts, and reconcile active claims/runs/publications on service startup. Use retention and garbage collection that checks active references before deleting a sandbox snapshot. An abandoned preview should stop consuming compute without discarding unreviewed work.
 
 Open feasibility work: sandbox provider and residency choice; supported repository stacks and services; final hosted provider credential/billing arrangement; whether human editing is needed at launch; permission for delegated personal credentials; initial user/concurrency budget; and production hosting. Coding completion is confirmed as verified PR merge; deployment remains separate. No timeline or hosting-cost quote is justified before these are resolved and the Stage 0 spike is measured.
+
+## API source layout
+
+```text
+apps/api/src/
+  app.ts              Express middleware and route composition
+  server.ts           HTTP server and Socket.IO attachment
+  auth/               Better Auth identity and session resolution
+  config/             Server options and allowed origins
+  middleware/         Authentication, request policy and errors
+  routes/             Account, workspace, task, team and connection endpoints
+  realtime/           Authorized Socket.IO subscriptions and updates
+  processes/          API, workflow, publisher, connection broker and fixture preview entry points
+```
+
+Routes translate HTTP requests into checked services in `packages/core`; database access, ownership and workflow policy remain there. `packages/adapters` owns external integration protocols. `app.ts` and `server.ts` create instances without starting listeners, while `processes/` owns startup. Better Auth mounts before JSON parsing, and protected routes mount after authentication. The preview entry point serves fixed local test content only.

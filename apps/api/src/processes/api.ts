@@ -2,7 +2,7 @@ if (process.env.R2_GITHUB_APP_CLIENT_SECRET)
   throw new Error(
     'Keep the GitHub App client secret in the broker environment, not the API environment.',
   );
-import { createHttpServer } from './app';
+import { createHttpServer } from '../server';
 const fixture = process.env.R2_MODE === 'fixture';
 if (process.env.R2_MODE && !['fixture', 'product'].includes(process.env.R2_MODE))
   throw new Error('Unknown R2_MODE.');
@@ -13,7 +13,7 @@ const configured = Boolean(
   process.env.BETTER_AUTH_URL,
 );
 const identity = configured
-  ? (await import('./auth')).createIdentity({
+  ? (await import('../auth/identity')).createIdentity({
       baseURL: process.env.BETTER_AUTH_URL!,
       secret: process.env.BETTER_AUTH_SECRET!,
       githubClientId: process.env.GITHUB_CLIENT_ID!,

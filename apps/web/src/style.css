@@ -1005,6 +1005,9 @@ button .icon {
   line-height: 1.6;
   resize: none;
 }
+.project-composer textarea:focus-visible {
+  outline: none;
+}
 .project-composer textarea::placeholder {
   color: var(--color-text-secondary);
 }

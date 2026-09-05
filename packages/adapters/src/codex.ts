@@ -46,6 +46,39 @@ export class CodexHarness extends EventEmitter {
       { refreshToken: false },
     );
   }
+  /** The owning credential broker calls this in a fresh, isolated Codex home.
+   * No OAuth token is returned to the product API or browser. */
+  async subscriptionLogin(key: string) {
+    const result = await this.transport.requestOnce<{
+      type: string;
+      loginId: string;
+      verificationUrl: string;
+      userCode: string;
+    }>(key, 'account/login/start', { type: 'chatgptDeviceCode' });
+    if (
+      result.type !== 'chatgptDeviceCode' ||
+      typeof result.loginId !== 'string' ||
+      !result.loginId ||
+      result.verificationUrl !== 'https://auth.openai.com/codex/device' ||
+      typeof result.userCode !== 'string' ||
+      !/^[A-Z0-9-]{4,32}$/.test(result.userCode)
+    )
+      throw new Error('Codex did not return a supported device login.');
+    return {
+      loginId: result.loginId,
+      verificationUrl: result.verificationUrl,
+      userCode: result.userCode,
+    };
+  }
+  cancelSubscriptionLogin(key: string, loginId: string) {
+    return this.transport.requestOnce(key, 'account/login/cancel', { loginId });
+  }
+  logout(key: string) {
+    return this.transport.requestOnce(key, 'account/logout', {});
+  }
+  rateLimits(key: string) {
+    return this.transport.requestOnce(key, 'account/rateLimits/read', {});
+  }
   async start(key: string, cwd: string) {
     return this.transport.requestOnce<{ thread: { id: string } }>(key, 'thread/start', {
       cwd,

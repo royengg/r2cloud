@@ -1301,3 +1301,74 @@ test('repository discovery failures require fresh authorization and never manufa
     provider.restore();
   }
 });
+
+test('execution setup checks administrator access, versions, idempotency and scoped readiness', async () => {
+  const { saveExecutionSetup, readExecutionSetup } = await import('@r2cloud/core/execution-setup');
+  await pool.query(
+    "UPDATE memberships SET role='admin' WHERE user_id='maya' AND org_id=(SELECT org_id FROM projects WHERE id='launch')",
+  );
+  const config = {
+    directory: '.',
+    install: { cmd: 'bun', args: ['install', '--frozen-lockfile'] },
+    dev: { cmd: 'bun', args: ['run', 'dev'] },
+    tests: [{ cmd: 'bun', args: ['test'] }],
+    port: 3000,
+    healthPath: '/',
+    maxMinutes: 20,
+    maxBudgetCents: 500,
+    vcpus: 2,
+  };
+  const k = key();
+  await expect(saveExecutionSetup(alex, 'launch', key(), { version: 0, config })).rejects.toThrow();
+  expect(await saveExecutionSetup(maya, 'launch', k, { version: 0, config })).toEqual({
+    version: 1,
+  });
+  expect(await saveExecutionSetup(maya, 'launch', k, { version: 0, config })).toEqual({
+    version: 1,
+  });
+  await expect(
+    saveExecutionSetup(maya, 'launch', k, { version: 0, config: { ...config, port: 4000 } }),
+  ).rejects.toThrow('different content');
+  await expect(saveExecutionSetup(maya, 'launch', key(), { version: 0, config })).rejects.toThrow(
+    'changed',
+  );
+  await expect(
+    saveExecutionSetup(maya, 'launch', key(), {
+      version: 1,
+      config: { ...config, directory: '../other' },
+    }),
+  ).rejects.toThrow();
+  const setup = await readExecutionSetup(maya, 'launch');
+  expect(setup.ready).toBe(false);
+  expect(setup.profile.version).toBe(1);
+  await expect(readExecutionSetup({ id: 'outsider', kind: 'human' }, 'launch')).rejects.toThrow();
+});
+test('managed run limits are checked before creating any claim or execution', async () => {
+  const { saveExecutionSetup } = await import('@r2cloud/core/execution-setup');
+  await pool.query(
+    "UPDATE memberships SET role='admin' WHERE user_id='maya' AND org_id=(SELECT org_id FROM projects WHERE id='launch')",
+  );
+  await pool.query(
+    "UPDATE provider_connections SET mode='byok-proposed' WHERE project_id='launch' AND user_id='maya'",
+  );
+  await expect(command(maya, 'launch', 'welcome', key(), start)).rejects.toThrow(
+    'Configure repository setup',
+  );
+  await saveExecutionSetup(maya, 'launch', key(), {
+    version: 0,
+    config: {
+      directory: '.',
+      install: { cmd: 'bun', args: ['install'] },
+      dev: { cmd: 'bun', args: ['run', 'dev'] },
+      tests: [{ cmd: 'bun', args: ['test'] }],
+      port: 3000,
+      healthPath: '/',
+      maxMinutes: 5,
+      maxBudgetCents: 100,
+      vcpus: 2,
+    },
+  });
+  await expect(command(maya, 'launch', 'welcome', key(), start)).rejects.toThrow('exceeds');
+  expect((await pool.query('SELECT * FROM claims')).rows).toHaveLength(0);
+  expect((await pool.query('SELECT * FROM runs')).rows).toHaveLength(0);
+});

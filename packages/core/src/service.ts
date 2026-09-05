@@ -1,3 +1,4 @@
+import { pinExecutionSetup } from './execution-setup';
 import { type DB, pool, prisma, transaction } from './db';
 import {
   type Actor,
@@ -145,7 +146,10 @@ async function queueRun(
   const repo = (await db.query('SELECT * FROM repositories WHERE id=$1', [p.repo_id])).rows[0];
   const runId = id(),
     gen = t.generation + 1;
+  const executionSetup =
+    connection.mode === 'fixture' ? null : await pinExecutionSetup(db, p.id, minutes, budgetCents);
   const manifest = {
+    executionSetup,
     provider: 'codex',
     connectionId: connection.id,
     mode: connection.mode,
@@ -156,8 +160,9 @@ async function queueRun(
     budgetCents,
     skills,
     environment: {
-      architecture: 'arm64',
-      checkout: '/workspace/repository',
+      architecture: connection.mode === 'fixture' ? 'arm64' : 'provider-image',
+      checkout:
+        connection.mode === 'fixture' ? '/workspace/repository' : '/vercel/sandbox/repository',
       browserState: 'per-run',
       writeCredentials: false,
     },

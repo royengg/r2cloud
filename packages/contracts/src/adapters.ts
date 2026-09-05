@@ -1,3 +1,4 @@
+import type { PinnedExecutionProfile } from './execution';
 import type { CandidateManifest, Evidence } from './domain';
 export type RunGrant = {
   operationId: string;
@@ -10,6 +11,7 @@ export type RunGrant = {
   criteria: string[];
   feedback: string[];
   config: {
+    executionSetup?: PinnedExecutionProfile | null;
     repository: string;
     baseSha: string;
     targetRef: string;

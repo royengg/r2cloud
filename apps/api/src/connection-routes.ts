@@ -1,3 +1,4 @@
+import { readExecutionSetup, saveExecutionSetup } from '@r2cloud/core/execution-setup';
 import { Router } from 'express';
 import {
   attachRepository,
@@ -8,6 +9,19 @@ import {
 } from '@r2cloud/core/repository-connections';
 export function connectionRoutes(config?: ConnectionConfig) {
   const router = Router();
+  router.get('/projects/:projectId/execution-setup', async (req, res) =>
+    res.json(await readExecutionSetup(res.locals.actor, String(req.params.projectId))),
+  );
+  router.post('/projects/:projectId/execution-setup', async (req, res) =>
+    res.json(
+      await saveExecutionSetup(
+        res.locals.actor,
+        String(req.params.projectId),
+        req.get('Idempotency-Key') ?? '',
+        req.body,
+      ),
+    ),
+  );
   router.get('/projects/:projectId/connections', async (req, res) =>
     res.json(await connectionStatus(res.locals.actor, String(req.params.projectId), config)),
   );

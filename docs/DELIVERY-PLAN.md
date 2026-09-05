@@ -21,10 +21,14 @@ Project permission updates use expected versions. Removing project access retain
 
 ## External gates
 
-Actual GitHub OAuth/App credentials, scoped Codex credentials, Vercel project/team access, approved spending/region, object storage and a separate preview domain remain absent. Test doubles are restricted to test tooling. Provider selection alone does not enable live resource creation. Missing integrations must leave truthful setup/blocked states, with planning still usable.
+GitHub product OAuth is configured. Repository App credentials, scoped Codex credentials, Vercel project/team access, approved spending/region, object storage and a separate preview domain remain absent. Test doubles are restricted to test tooling. Provider selection alone does not enable live resource creation. Missing integrations must leave truthful setup/blocked states, with planning still usable.
 
 ## Implemented in this increment
 
 Team invitations/inbox, permission editing and revocation, last-reviewer protection and ownership preservation are implemented. Repository App authorization uses PKCE and a separate discovery broker; verified selection and project attachment are implemented. Both flows are wired into the product UI. Discovery performs reads only; it is not the publisher.
 
 Live Codex credential scope is awaiting the user's choice (project keys, organization key, or investigation of hosted subscription auth). This affects the next account-connection and broker increment. No credential entitlement or paid sandbox use is assumed. See [setup details](TEAM-AND-REPOSITORY-SETUP.md).
+
+## Execution setup increment
+
+Versioned repository execution profiles, checked read/write APIs, immutable per-run profile pinning and Codex device-login protocol methods are implemented. [Execution connection details](EXECUTION-CONNECTIONS.md) distinguish these from the pending live credential broker and Vercel supervisor. No live subscription link or sandbox run has been completed.

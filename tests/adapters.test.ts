@@ -1,3 +1,4 @@
+import { digest } from '@r2cloud/contracts/hash';
 import { test, expect } from 'bun:test';
 import { CodexHarness, type CodexTransport } from '@r2cloud/adapters/codex';
 import { ManagedCodexExecution, type ManagedSandboxProvider } from '@r2cloud/adapters/managed';
@@ -98,6 +99,18 @@ test('managed path requires isolated environment and independent check/snapshot/
       mode: 'byok-proposed',
     },
   };
+  const config = {
+    directory: '.',
+    install: { cmd: 'bun', args: ['install'] },
+    dev: { cmd: 'bun', args: ['run', 'dev'] },
+    tests: [{ cmd: 'bun', args: ['test'] }],
+    port: 3000,
+    healthPath: '/',
+    maxMinutes: 20,
+    maxBudgetCents: 500,
+    vcpus: 2 as const,
+  };
+  grant.config.executionSetup = { version: 1, digest: digest(config), config };
   const provider: ManagedSandboxProvider = {
     observe: async () => ({ state: 'absent' }),
     ensure: async (_op, s) => {
@@ -120,4 +133,61 @@ test('managed path requires isolated environment and independent check/snapshot/
   expect(spec.inheritProviderConfig).toBe(false);
   expect(spec.isolatedBrowser).toBe(true);
   expect(spec.skills).toEqual(grant.config.skills);
+  expect(spec.executionSetup).toEqual(grant.config.executionSetup);
+  grant.config.executionSetup.digest = 'tampered';
+  await expect(new ManagedCodexExecution(provider).start(grant)).rejects.toThrow(
+    'identity or limits',
+  );
+});
+
+test('Codex subscription login uses the managed device flow and returns only browser ceremony data', async () => {
+  const calls: any[] = [];
+  const t: CodexTransport = {
+    requestOnce: async <T>(key: string, method: string, params: unknown) => {
+      calls.push({ key, method, params });
+      return {
+        type: 'chatgptDeviceCode',
+        loginId: 'login-1',
+        verificationUrl: 'https://auth.openai.com/codex/device',
+        userCode: 'ABCD-1234',
+        accessToken: 'must-not-leave-adapter',
+      } as T;
+    },
+    notify: async () => {},
+    reply: async () => {},
+    onMessage: () => () => {},
+  };
+  const harness = new CodexHarness(t);
+  expect(await harness.subscriptionLogin('attempt-1')).toEqual({
+    loginId: 'login-1',
+    verificationUrl: 'https://auth.openai.com/codex/device',
+    userCode: 'ABCD-1234',
+  });
+  expect(calls[0].params).toEqual({ type: 'chatgptDeviceCode' });
+  await harness.cancelSubscriptionLogin('cancel-1', 'login-1');
+  await harness.logout('logout-1');
+  await harness.rateLimits('limits-1');
+  expect(calls.map((c) => c.method)).toEqual([
+    'account/login/start',
+    'account/login/cancel',
+    'account/logout',
+    'account/rateLimits/read',
+  ]);
+});
+test('Codex subscription login rejects an untrusted verification destination', async () => {
+  const t: CodexTransport = {
+    requestOnce: async <T>() =>
+      ({
+        type: 'chatgptDeviceCode',
+        loginId: 'id',
+        verificationUrl: 'https://example.com/phish',
+        userCode: 'ABCD-1234',
+      }) as T,
+    notify: async () => {},
+    reply: async () => {},
+    onMessage: () => () => {},
+  };
+  await expect(new CodexHarness(t).subscriptionLogin('attempt')).rejects.toThrow(
+    'supported device login',
+  );
 });

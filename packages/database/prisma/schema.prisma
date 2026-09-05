@@ -177,6 +177,7 @@ model project_access {
 }
 
 model projects {
+  executionProfiles     execution_profiles[]
   repositoryConnections RepositoryConnection[]
   invitations           ProjectInvitation[]
   id                    String                 @id
@@ -328,6 +329,7 @@ model tasks {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model users {
+  executionProfiles     execution_profiles[]
   repositoryConnections RepositoryConnection[]
   sentInvitations       ProjectInvitation[]    @relation("InvitationSender")
   acceptedInvitations   ProjectInvitation[]    @relation("InvitationRecipient")
@@ -497,4 +499,15 @@ model RepositoryConnection {
   actor        users     @relation(fields: [actorId], references: [id])
 
   @@map("repository_connections")
+}
+
+model execution_profiles {
+  project_id String   @id
+  org_id     String
+  version    Int
+  config     Json
+  updated_by String
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  projects   projects @relation(fields: [org_id, project_id], references: [org_id, id], onDelete: NoAction, onUpdate: NoAction)
+  users      users    @relation(fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }

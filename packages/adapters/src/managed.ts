@@ -1,3 +1,5 @@
+import { executionProfile, type PinnedExecutionProfile } from '@r2cloud/contracts/execution';
+import { digest } from '@r2cloud/contracts/hash';
 import { CodexHarness, type CodexTransport } from './codex';
 import {
   SetupRequired,
@@ -7,6 +9,7 @@ import {
   type RunResult,
 } from '@r2cloud/contracts/adapters';
 export type SandboxSpec = {
+  executionSetup: PinnedExecutionProfile;
   identity: string;
   generation: number;
   architecture: 'provider-image';
@@ -44,13 +47,24 @@ export class ManagedCodexExecution implements ExecutionBackend {
     return this.provider.observe(operationId);
   }
   async start(g: RunGrant): Promise<RunResult> {
+    const pinned = g.config.executionSetup;
+    if (!pinned || !Number.isInteger(pinned.version) || pinned.version < 1)
+      throw new SetupRequired('A pinned execution setup is required.');
+    const setup = executionProfile.parse(pinned.config);
+    if (
+      digest(setup) !== pinned.digest ||
+      g.config.minutes > setup.maxMinutes ||
+      g.config.budgetCents > setup.maxBudgetCents
+    )
+      throw new SetupRequired('Execution setup identity or limits are invalid.');
     const sandbox = await this.provider.ensure(g.operationId, {
+      executionSetup: pinned,
       identity: g.runId,
       generation: g.generation,
       architecture: 'provider-image',
       repository: g.config.repository,
       baseSha: g.config.baseSha,
-      checkout: '/workspace/repository',
+      checkout: '/vercel/sandbox/repository',
       minutes: g.config.minutes,
       budgetCents: g.config.budgetCents,
       skills: g.config.skills,
@@ -71,7 +85,9 @@ export class ManagedCodexExecution implements ExecutionBackend {
     const health = await codex.health(`${g.operationId}:auth`);
     if (!health.account)
       throw new SetupRequired('The scoped Codex connection needs authentication.');
-    const { thread } = await codex.start(`${g.operationId}:thread`, '/workspace/repository');
+    const cwd =
+      '/vercel/sandbox/repository' + (setup.directory === '.' ? '' : '/' + setup.directory);
+    const { thread } = await codex.start(`${g.operationId}:thread`, cwd);
     const { turn } = await codex.input(
       `${g.operationId}:turn`,
       thread.id,

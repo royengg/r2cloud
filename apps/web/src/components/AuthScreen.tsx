@@ -52,10 +52,6 @@ export function AuthScreen({ enabled = true }: { enabled?: boolean }) {
             Continue with GitHub
           </Button>
         </div>
-        {!enabled && (
-          <p role="status">GitHub sign-in is being connected. Please check back shortly.</p>
-        )}
-        <p>Profile and email access only. You choose repositories separately.</p>
       </section>
     </main>
   );

@@ -1927,6 +1927,7 @@ button .icon {
   }
   .composer-send:hover:not(:disabled) {
     background: var(--color-accent);
+    border-color: var(--color-accent);
     color: var(--color-on-accent);
   }
   .add-card:hover {
@@ -1940,7 +1941,7 @@ button .icon {
 }
 .composer-send {
   border: 1px solid color-mix(in srgb, var(--color-accent) 25%, var(--color-accent-soft));
-  box-shadow: var(--shadow-button-neutral);
+  box-shadow: var(--shadow-button-primary);
 }
 @media (prefers-reduced-motion: no-preference) {
   body:not([data-keyboard]) .button,

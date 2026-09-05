@@ -16,7 +16,7 @@ export function NewProject({
 }) {
   const [name, setName] = useState('');
   return (
-    <Modal label="New project" close={close}>
+    <Modal label="New project" close={close} className="task-form-modal">
       <div className="modal-topline">
         <span className="modal-symbol">
           <Icon name="folder" size={25} />

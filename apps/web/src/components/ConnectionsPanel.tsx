@@ -1,0 +1,214 @@
+import { useEffect, useState } from 'react';
+import { api } from '../lib/api';
+import { Button, IconButton, Modal } from './ui';
+import { Icon } from './Icon';
+import type { DiscoveredRepository } from '@r2cloud/adapters/github-discovery';
+type State = {
+  repository: { full_name: string; target_ref: string } | null;
+  manage: boolean;
+  githubAvailable: boolean;
+  installationURL: string | null;
+  pending: {
+    id: string;
+    status: string;
+    repositories: DiscoveredRepository[] | null;
+    error: string | null;
+    expires_at: string;
+  } | null;
+};
+export function ConnectionsPanel({
+  projectId,
+  providerConnected,
+  close,
+  onConnected,
+}: {
+  projectId: string;
+  providerConnected: boolean;
+  close: () => void;
+  onConnected: () => Promise<void>;
+}) {
+  const [state, setState] = useState<State | null>(null),
+    [error, setError] = useState(
+      new URLSearchParams(location.search).has('connection_error')
+        ? 'GitHub authorization could not be verified. Try connecting again.'
+        : '',
+    ),
+    [busy, setBusy] = useState(false),
+    [selected, setSelected] = useState('');
+  useEffect(() => {
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const load = async () => {
+      try {
+        const next = await api<State>(`/projects/${projectId}/connections`);
+        if (disposed) return;
+        setState(next);
+        if (['queued', 'checking'].includes(next.pending?.status ?? ''))
+          timer = setTimeout(() => void load(), 2000);
+      } catch (e) {
+        if (!disposed) setError((e as Error).message);
+      }
+    };
+    void load();
+    return () => {
+      disposed = true;
+      clearTimeout(timer);
+    };
+  }, [projectId]);
+  async function authorize() {
+    setBusy(true);
+    setError('');
+    try {
+      const { url } = await api<{ url: string }>(
+        `/projects/${projectId}/repository-authorization`,
+        {},
+      );
+      if (new URL(url).origin !== 'https://github.com')
+        throw new Error('Unexpected connection destination.');
+      location.assign(url);
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
+  }
+  async function attach() {
+    setBusy(true);
+    setError('');
+    try {
+      await api(`/projects/${projectId}/repository`, {
+        connectionId: state!.pending!.id,
+        repositoryId: Number(selected),
+      });
+      setState(await api(`/projects/${projectId}/connections`));
+      await onConnected();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const finishClose = () => {
+    history.replaceState(null, '', location.pathname);
+    close();
+  };
+  return (
+    <Modal label="Project connections" close={finishClose} className="connections-modal">
+      <div className="modal-topline">
+        <span className="modal-symbol">
+          <Icon name="link" size={25} />
+        </span>
+        <IconButton name="close" label="Close connections" onClick={finishClose} />
+      </div>
+      <h2>Connect your project</h2>
+      <p className="modal-description">
+        Choose a repository, then connect the AI account that can work on it.
+      </p>
+      {error && (
+        <p className="inline-error" role="alert">
+          {error}
+        </p>
+      )}
+      {!state && !error && <p role="status">Loading connections…</p>}
+      {state && (
+        <>
+          <div className="connection-row">
+            <Icon name="github" />
+            <div>
+              <strong>GitHub repository</strong>
+              <span>{state.repository?.full_name ?? 'No repository connected'}</span>
+            </div>
+          </div>
+          {!state.repository && state.manage && (
+            <div className="connection-setup">
+              {state.pending?.status === 'ready' &&
+              new Date(state.pending.expires_at) > new Date() &&
+              !!state.pending.repositories?.length ? (
+                <form
+                  className="auth-form"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void attach();
+                  }}
+                >
+                  <label htmlFor="connected-repository">Repository</label>
+                  <select
+                    id="connected-repository"
+                    required
+                    value={selected}
+                    onChange={(e) => setSelected(e.target.value)}
+                  >
+                    <option value="">Choose a repository</option>
+                    {state.pending.repositories.map((repo) => (
+                      <option key={`${repo.installationId}:${repo.id}`} value={repo.id}>
+                        {repo.fullName}
+                      </option>
+                    ))}
+                  </select>
+                  <Button variant="primary" busy={busy}>
+                    Connect repository
+                  </Button>
+                </form>
+              ) : (
+                <>
+                  {['queued', 'checking'].includes(state.pending?.status ?? '') ? (
+                    <p role="status">Checking your GitHub repositories…</p>
+                  ) : (
+                    <>
+                      <p className="subtle">
+                        {state.pending?.error ??
+                          (state.githubAvailable
+                            ? 'Use your GitHub account to choose repositories you administer.'
+                            : 'Repository connections are being configured.')}
+                      </p>
+                      {state.githubAvailable && (
+                        <Button
+                          variant="primary"
+                          icon="github"
+                          busy={busy}
+                          onClick={() => void authorize()}
+                        >
+                          Choose GitHub repositories
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+              {state.installationURL && (
+                <p className="subtle">
+                  Missing a repository?{' '}
+                  <a href={state.installationURL} target="_blank" rel="noopener noreferrer">
+                    Manage the GitHub App installation
+                  </a>
+                  , then reconnect to refresh the list.
+                </p>
+              )}
+            </div>
+          )}
+          {!state.repository && !state.manage && (
+            <p className="subtle">Ask a workspace administrator to connect a repository.</p>
+          )}
+          <div className="connection-row">
+            <Icon name="sparkles" />
+            <div>
+              <strong>Codex</strong>
+              <span>
+                {providerConnected ? 'AI connection configured' : 'No AI account connected'}
+              </span>
+            </div>
+          </div>
+          <div className="connection-row">
+            <Icon name="cloud" />
+            <div>
+              <strong>Vercel Sandbox</strong>
+              <span>Execution setup pending</span>
+            </div>
+          </div>
+          <p className="subtle">
+            Repository access and AI credentials are separate from project membership.
+          </p>
+        </>
+      )}
+    </Modal>
+  );
+}

@@ -1,9 +1,13 @@
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 // Development processes only. Never provision services or bind a public interface.
 const fixture = process.env.R2_MODE === 'fixture';
 const commands = [
   ['apps/api/src/main.ts'],
   ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1'],
+  ...(process.env.R2_GITHUB_APP_CLIENT_SECRET || existsSync('.env.broker')
+    ? [['apps/api/src/connection-worker-main.ts']]
+    : []),
   ...(fixture
     ? [
         ['apps/api/src/worker-main.ts'],
@@ -12,12 +16,18 @@ const commands = [
       ]
     : []),
 ];
-const children = commands.map((args) =>
-  spawn(process.execPath, args, {
+const children = commands.map((args) => {
+  const env: NodeJS.ProcessEnv = { ...process.env, R2_MODE: fixture ? 'fixture' : 'product' };
+  if (args[0] !== 'apps/api/src/connection-worker-main.ts') delete env.R2_GITHUB_APP_CLIENT_SECRET;
+  const brokerFile =
+    args[0] === 'apps/api/src/connection-worker-main.ts' && existsSync('.env.broker')
+      ? ['--env-file=.env.broker']
+      : [];
+  return spawn(process.execPath, ['--no-env-file', ...brokerFile, ...args], {
     stdio: 'inherit',
-    env: { ...process.env, R2_MODE: fixture ? 'fixture' : 'product' },
-  }),
-);
+    env,
+  });
+});
 let closing = false;
 function stop() {
   if (closing) return;

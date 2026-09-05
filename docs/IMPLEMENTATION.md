@@ -20,7 +20,7 @@ See [DESIGN.md](../DESIGN.md), [source provenance](DESIGN-SOURCES.md) and [UI ve
 
 ## Not yet production-ready
 
-Live OAuth configuration, invitations and admin connection management, the Vercel Codex supervisor/provider credential broker, durable object storage, real GitHub App publisher/reconciliation, live browser evidence, preview gateway, explicit stopped-execution handoff/cancellation UI, and deployment hardening remain integration work. Managed startup fails closed. API/worker DB credentials are local development credentials; separate least-privilege database roles and tenant RLS remain a production gate. The batch API supports explicitly named tasks, expected versions, per-task time/budget and a total cap, atomically constrained by concurrency policy. Batch selection and richer dependency editing still need UI implementation.
+Live OAuth/App configuration, repository setup profiles and revocation handling, the Vercel Codex supervisor/provider credential broker, durable object storage, real GitHub App publisher/reconciliation, live browser evidence, preview gateway, explicit stopped-execution handoff/cancellation UI, and deployment hardening remain integration work. Managed startup fails closed. API/worker DB credentials are local development credentials; separate least-privilege database roles and tenant RLS remain a production gate. The batch API supports explicitly named tasks, expected versions, per-task time/budget and a total cap, atomically constrained by concurrency policy. Batch selection and richer dependency editing still need UI implementation.
 
 No real external end-to-end check has run. Fixture checks cannot establish cloud isolation, provider billing/entitlement, real PR creation, repository required-check enforcement, or real merge.
 
@@ -60,3 +60,12 @@ The bottom-left three-dot menu supports Connections and Sign out, outside-click 
 Vercel SDK 3.2.1 handles restricted allocation, non-resuming commands, snapshot/stop and uncertain outcomes through a Postgres journal. This is the cloud control plane, **not yet the complete live coding integration**. See [remaining plan](IMPLEMENTATION-PLAN.md) and [Vercel boundaries](VERCEL-SANDBOX.md).
 
 Verification: 43 tests pass (188 assertions), including real Postgres journal and HTTP policy checks with mocked Vercel/GitHub responses. The real-auth browser journey passes with four axe audits; the fixture task-to-verified-merge browser journey passes with seven axe audits. TypeScript and the React/Vite production build pass. Browser checks succeeded after stopping excess project development processes; no service limits were changed. All external GitHub/Vercel/Codex actions in these checks are simulated. Live sign-in, execution, publication and merge remain unverified.
+
+
+## Team and repository onboarding increment
+
+The current delivery sequence and acceptance gates are recorded in [the delivery plan](DELIVERY-PLAN.md). Project administrators can invite teammates, edit independent contribution/review/merge permissions, revoke pending invitations and remove project access. Verified recipients explicitly accept invitations. Last-reviewer protection and ownership preservation are enforced by the checked service.
+
+Connections now offers a separate GitHub App authorization flow with PKCE, broker-verified repository choices and project attachment. The broker holds the App client secret separately from API/frontend processes; it performs discovery reads only. Uncertain authorization exchanges require reconnecting. See [setup and boundaries](TEAM-AND-REPOSITORY-SETUP.md).
+
+Current verification: 51 tests pass (245 assertions), using private Postgres and mocked external protocols. TypeScript and the production build pass. The expanded authentication browser journey passes eight axe audits, including mobile team settings, repository selection and invitation acceptance. The existing fixture task-to-verified-merge browser journey also passes with seven axe audits. Screenshots were inspected and checkbox layout/modal padding corrected. Earlier verification counts above describe previous increments. No live GitHub authorization, cloud execution or repository publication was performed.

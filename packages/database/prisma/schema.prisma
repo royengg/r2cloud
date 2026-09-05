@@ -163,6 +163,7 @@ model preview_grants {
 }
 
 model project_access {
+  version     Int         @default(1)
   org_id      String
   project_id  String
   user_id     String
@@ -176,19 +177,21 @@ model project_access {
 }
 
 model projects {
-  id                   String                 @id
-  org_id               String
-  name                 String
-  repo_id              String?
-  comments             comments[]
-  events               events[]
-  project_access       project_access[]
-  organisations        organisations          @relation(fields: [org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  repositories         repositories?          @relation(fields: [org_id, repo_id], references: [org_id, id], onDelete: NoAction, onUpdate: NoAction)
-  provider_connections provider_connections[]
-  receipts             receipts[]
-  skills               skills[]
-  tasks                tasks[]
+  repositoryConnections RepositoryConnection[]
+  invitations           ProjectInvitation[]
+  id                    String                 @id
+  org_id                String
+  name                  String
+  repo_id               String?
+  comments              comments[]
+  events                events[]
+  project_access        project_access[]
+  organisations         organisations          @relation(fields: [org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  repositories          repositories?          @relation(fields: [org_id, repo_id], references: [org_id, id], onDelete: NoAction, onUpdate: NoAction)
+  provider_connections  provider_connections[]
+  receipts              receipts[]
+  skills                skills[]
+  tasks                 tasks[]
 
   @@unique([org_id, id])
 }
@@ -236,15 +239,17 @@ model receipts {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model repositories {
-  id            String        @id
-  org_id        String
-  full_name     String
-  target_ref    String        @default("main")
-  base_sha      String
-  max_changes   Int           @default(1)
-  claims        claims[]
-  projects      projects[]
-  organisations organisations @relation(fields: [org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  github_id       BigInt?
+  installation_id BigInt?
+  id              String        @id
+  org_id          String
+  full_name       String
+  target_ref      String        @default("main")
+  base_sha        String
+  max_changes     Int           @default(1)
+  claims          claims[]
+  projects        projects[]
+  organisations   organisations @relation(fields: [org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([org_id, id])
 }
@@ -323,20 +328,23 @@ model tasks {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model users {
-  onboardingReceipts OnboardingReceipt[]
-  auth_user_id       String?             @unique
-  authUser           AuthUser?           @relation(fields: [auth_user_id], references: [id], onDelete: Restrict)
-  id                 String              @id
-  name               String
-  kind               String
-  approvals          approvals[]
-  claims             claims[]
-  comments           comments[]
-  events             events[]
-  memberships        memberships[]
-  preview_grants     preview_grants[]
-  receipts           receipts[]
-  sessions           sessions[]
+  repositoryConnections RepositoryConnection[]
+  sentInvitations       ProjectInvitation[]    @relation("InvitationSender")
+  acceptedInvitations   ProjectInvitation[]    @relation("InvitationRecipient")
+  onboardingReceipts    OnboardingReceipt[]
+  auth_user_id          String?                @unique
+  authUser              AuthUser?              @relation(fields: [auth_user_id], references: [id], onDelete: Restrict)
+  id                    String                 @id
+  name                  String
+  kind                  String
+  approvals             approvals[]
+  claims                claims[]
+  comments              comments[]
+  events                events[]
+  memberships           memberships[]
+  preview_grants        preview_grants[]
+  receipts              receipts[]
+  sessions              sessions[]
 }
 
 model AuthUser {
@@ -448,4 +456,45 @@ model SandboxStep {
 
   @@id([operationId, key])
   @@map("sandbox_steps")
+}
+
+model ProjectInvitation {
+  id         String    @id
+  orgId      String    @map("org_id")
+  projectId  String    @map("project_id")
+  inviterId  String    @map("inviter_id")
+  email      String
+  contribute Boolean
+  review     Boolean
+  merge      Boolean
+  expiresAt  DateTime  @default(dbgenerated("now() + interval '7 days'")) @map("expires_at") @db.Timestamptz(6)
+  acceptedBy String?   @map("accepted_by")
+  acceptedAt DateTime? @map("accepted_at") @db.Timestamptz(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  project    projects  @relation(fields: [orgId, projectId], references: [org_id, id])
+  inviter    users     @relation("InvitationSender", fields: [inviterId], references: [id])
+  recipient  users?    @relation("InvitationRecipient", fields: [acceptedBy], references: [id])
+
+  @@map("project_invitations")
+}
+
+model RepositoryConnection {
+  id           String    @id
+  orgId        String    @map("org_id")
+  projectId    String    @map("project_id")
+  actorId      String    @map("actor_id")
+  stateHash    String    @unique @map("state_hash")
+  verifier     String?
+  code         String?
+  status       String
+  repositories Json?
+  error        String?
+  expiresAt    DateTime  @default(dbgenerated("now() + interval '10 minutes'")) @map("expires_at") @db.Timestamptz(6)
+  leaseUntil   DateTime? @map("lease_until") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  project      projects  @relation(fields: [orgId, projectId], references: [org_id, id])
+  actor        users     @relation(fields: [actorId], references: [id])
+
+  @@map("repository_connections")
 }

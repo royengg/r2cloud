@@ -1,3 +1,7 @@
+if (process.env.R2_GITHUB_APP_CLIENT_SECRET)
+  throw new Error(
+    'Keep the GitHub App client secret in the broker environment, not the API environment.',
+  );
 import { createHttpServer } from './app';
 const fixture = process.env.R2_MODE === 'fixture';
 if (process.env.R2_MODE && !['fixture', 'product'].includes(process.env.R2_MODE))
@@ -25,7 +29,17 @@ if (
   ].some(Boolean)
 )
   throw new Error('GitHub authentication configuration is incomplete.');
-const { server } = createHttpServer({ fixture, identity });
+const repositoryConnection =
+  identity && process.env.R2_GITHUB_APP_CLIENT_ID && process.env.R2_GITHUB_APP_SLUG
+    ? {
+        clientId: process.env.R2_GITHUB_APP_CLIENT_ID,
+        appSlug: process.env.R2_GITHUB_APP_SLUG,
+        callbackURL: identity.origin + '/api/repository-callback',
+      }
+    : undefined;
+if (repositoryConnection && !/^[a-z0-9-]+$/.test(repositoryConnection.appSlug))
+  throw new Error('Invalid GitHub App slug.');
+const { server } = createHttpServer({ fixture, identity, repositoryConnection });
 server.listen(4310, '127.0.0.1', () =>
   console.log(`R2Cloud API · ${fixture ? 'test fixtures' : 'product'} · http://127.0.0.1:4310`),
 );

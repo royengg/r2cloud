@@ -31,7 +31,11 @@ export function useWorkspace() {
     const next = await api<Identity>('/me');
     setIdentity(next);
     setProjectId(
-      next.projects.find((p) => p.id === preferredProject)?.id ?? next.projects[0]?.id ?? '',
+      next.projects.find(
+        (p) => p.id === (preferredProject ?? new URLSearchParams(location.search).get('project')),
+      )?.id ??
+        next.projects[0]?.id ??
+        '',
     );
   }
   useEffect(() => {

@@ -1,4 +1,8 @@
 import express from 'express';
+import { connectionRoutes } from './connection-routes';
+import type { ConnectionConfig } from '@r2cloud/core/repository-connections';
+import { teamRoutes } from './team-routes';
+import { invitationInbox } from '@r2cloud/core/team';
 import type { ProductIdentity } from './auth';
 import { createServer } from 'node:http';
 import { Server as SocketServer } from 'socket.io';
@@ -50,7 +54,11 @@ if (process.env.R2_DEV_ORIGIN) {
     throw new Error('R2_DEV_ORIGIN must be an HTTPS origin.');
   origins.add(origin.origin);
 }
-export type AppOptions = { fixture: boolean; identity?: ProductIdentity };
+export type AppOptions = {
+  fixture: boolean;
+  identity?: ProductIdentity;
+  repositoryConnection?: ConnectionConfig;
+};
 function allowedOrigins(options: AppOptions) {
   return options.identity ? new Set([options.identity.origin]) : origins;
 }
@@ -120,15 +128,22 @@ export function createApp(options: AppOptions) {
       res.locals.actor = await requestActor(options, req.headers);
       next();
     } catch (e) {
+      if (req.path === '/repository-callback') {
+        res.redirect(303, '/?error=repository_session');
+        return;
+      }
       next(e);
     }
   });
+  app.use('/api', teamRoutes());
+  app.use('/api', connectionRoutes(options.repositoryConnection));
   app.get('/api/me', async (req, res) => {
     const actor = res.locals.actor;
     const user = (await pool.query('SELECT id,name,kind FROM users WHERE id=$1', [actor.id]))
       .rows[0];
     res.json({
       user,
+      invitations: await invitationInbox(actor),
       projects: await projects(actor),
       mode: options.fixture ? 'fixture' : 'managed',
       authMode: options.identity?.mode ?? 'fixture',

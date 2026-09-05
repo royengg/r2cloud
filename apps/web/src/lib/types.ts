@@ -53,7 +53,18 @@ export type Snapshot = {
   events: Activity[];
   cursor: string;
 };
+export type Invitation = {
+  id: string;
+  project_name: string;
+  workspace_name: string;
+  inviter_name: string;
+  contribute: boolean;
+  review: boolean;
+  merge: boolean;
+  expires_at: string;
+};
 export type Identity = {
+  invitations?: Invitation[];
   authMode?: string;
   user: Person;
   projects: Project[];

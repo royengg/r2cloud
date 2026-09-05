@@ -48,7 +48,8 @@ Bun 1.4.2 is the runtime and package manager; `bun.lock` is the only project loc
 
 ## Documents
 
-- [Remaining implementation plan](docs/IMPLEMENTATION-PLAN.md)
+- [Remaining delivery plan](docs/DELIVERY-PLAN.md)
+- [Team and repository setup](docs/TEAM-AND-REPOSITORY-SETUP.md)
 - [Vercel Sandbox](docs/VERCEL-SANDBOX.md)
 - [GitHub authentication](docs/AUTHENTICATION.md)
 - [Design system](DESIGN.md)

@@ -4,6 +4,9 @@ import { Sidebar } from './components/Sidebar';
 import { Board } from './components/Board';
 import { Composer } from './components/Composer';
 import { TaskDetail } from './components/TaskDetail';
+import { ConnectionsPanel } from './components/ConnectionsPanel';
+import { TeamPanel } from './components/TeamPanel';
+import { InvitationInbox } from './components/InvitationInbox';
 import { NewProject } from './components/NewProject';
 import { NewTask } from './components/NewTask';
 import { Icon } from './components/Icon';
@@ -21,8 +24,14 @@ export function App() {
     [selectedId, setSelectedId] = useState<string | null>(null),
     [creating, setCreating] = useState(false),
     [newProject, setNewProject] = useState(false),
-    [connections, setConnections] = useState(false),
-    [participants, setParticipants] = useState(false);
+    [connections, setConnections] = useState(
+      () => new URLSearchParams(location.search).get('connections') === '1',
+    ),
+    [participants, setParticipants] = useState(false),
+    [inboxDismissed, setInboxDismissed] = useState(false);
+  useEffect(() => {
+    setInboxDismissed(false);
+  }, [w.identity?.user.id]);
   useEffect(() => {
     const media = matchMedia('(max-width: 899px)');
     const change = () => {
@@ -102,9 +111,26 @@ export function App() {
       </main>
     );
   if (!w.identity) return <AuthScreen enabled={w.authConfig.enabled} />;
+  if (w.identity && (w.identity.invitations?.length ?? 0) > 0 && !inboxDismissed)
+    return (
+      <InvitationInbox
+        invitations={w.identity.invitations!}
+        busy={w.busy}
+        error={w.error}
+        close={() => setInboxDismissed(true)}
+        accept={(id) =>
+          void w.act(async () => {
+            const result = await api<{ projectId: string }>(`/invitations/${id}/accept`, {});
+            await w.loadIdentity(result.projectId);
+          }, 'Invitation accepted')
+        }
+      />
+    );
   if (w.identity && w.identity.projects.length === 0)
     return (
       <WorkspaceSetup
+        invitationCount={w.identity.invitations?.length ?? 0}
+        onInvitations={() => setInboxDismissed(false)}
         busy={w.busy}
         error={w.error}
         onSignOut={() => void w.signOut()}
@@ -156,6 +182,11 @@ export function App() {
             <span className="context-project">{context?.name}</span>
           </div>
           <div className="context-trailing">
+            {!!w.identity.invitations?.length && (
+              <Button variant="ghost" icon="people" onClick={() => setInboxDismissed(false)}>
+                Invitations ({w.identity.invitations.length})
+              </Button>
+            )}
             <button
               className="participant-stack"
               aria-label="View project participants"
@@ -338,55 +369,18 @@ export function App() {
         />
       )}
       {connections && (
-        <Modal
-          label="Project connections"
+        <ConnectionsPanel
+          key={w.projectId}
+          projectId={w.projectId}
+          providerConnected={!!project?.provider_connected}
           close={() => setConnections(false)}
-          className="connections-modal"
-        >
-          <div className="modal-topline">
-            <span className="modal-symbol">
-              <Icon name="link" size={25} />
-            </span>
-            <IconButton
-              name="close"
-              label="Close connections"
-              onClick={() => setConnections(false)}
-            />
-          </div>
-          <h2>A place for every connection.</h2>
-          <p className="modal-description">
-            Membership, repository access and AI access stay separate.
-          </p>
-          {[
-            ['people', 'Product sign-in', 'Signed in with GitHub'],
-            [
-              'branch',
-              'Repository',
-              project?.repo_id ? 'Repository connected' : 'No repository connected',
-            ],
-            [
-              'sparkles',
-              'AI connection',
-              project?.provider_connected
-                ? 'Codex connection configured'
-                : 'No AI account connected',
-            ],
-          ].map(([icon, title, description]) => (
-            <div className="connection-row" key={title}>
-              <Icon name={icon as 'people'} />
-              <div>
-                <strong>{title}</strong>
-                <span>{description}</span>
-              </div>
-            </div>
-          ))}
-          <p className="subtle">
-            Vercel Sandbox runs your tasks in isolated environments. Repository and AI connections
-            are required before work can start.
-          </p>
-        </Modal>
+          onConnected={() => w.loadIdentity(w.projectId)}
+        />
       )}
-      {participants && (
+      {participants && ['owner', 'admin'].includes(context?.workspace_role ?? '') && (
+        <TeamPanel key={w.projectId} projectId={w.projectId} close={() => setParticipants(false)} />
+      )}
+      {participants && !['owner', 'admin'].includes(context?.workspace_role ?? '') && (
         <Modal
           label="Project participants"
           close={() => setParticipants(false)}

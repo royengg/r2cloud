@@ -12,7 +12,7 @@ Partial credentials fail startup. With no credentials, the product displays an u
 
 A verified GitHub identity maps by stable identity ID to one human product user, never by matching a fixture user's email. A session grants no existing organisation, repository or AI access. New users can create a workspace and first project; its creator becomes owner and initial reviewer. Creation is atomic and idempotent. The project initially has no repository or provider connection, so starting code work is blocked.
 
-Existing checked domain services remain the authority for membership and contributor/reviewer/merge permissions. Better Auth's organisation plugin is deliberately not enabled, avoiding a second membership authority. Invitations and membership administration are still pending. Publication and merge still require separate checked approval actions.
+Existing checked domain services remain the authority for membership and contributor/reviewer/merge permissions. Better Auth's organisation plugin is deliberately not enabled, avoiding a second membership authority. Project invitations, recipient acceptance and versioned permission administration use that same authority; see [team and repository setup](TEAM-AND-REPOSITORY-SETUP.md). Publication and merge still require separate checked approval actions.
 
 A GitHub OAuth sign-in app is separate from the repository GitHub App. Board membership does not share an AI account. OAuth tokens are encrypted at rest using the authentication secret; secret management and rotation require deployment configuration.
 
@@ -26,7 +26,7 @@ Rate limits are stored in Postgres. The API overwrites its internal client-addre
 
 HTTP/Postgres tests exercise the actual Better Auth implementation with mocked GitHub token/profile/email endpoints: callback state, verified identity, scope restrictions, encrypted token storage, session revocation, socket revocation, rate limits and isolated workspace creation. These tests never contact GitHub. The browser script intercepts the external authorization page and is also a fixture, not a live OAuth test.
 
-The browser journey now passes after reducing concurrent development processes, with four axe accessibility audits. GitHub exchanges are mocked; product sessions, workspace/project creation, task creation and sign-out use the real application. Live GitHub callback/cookie behavior, approved deployment proxy settings, invitations, real repository connections and production hardening remain unverified.
+The browser journey now passes after reducing concurrent development processes, with eight axe accessibility audits, including mobile team settings, repository selection and invitation acceptance. GitHub exchanges are mocked; product sessions, workspace/project creation, task creation and sign-out use the real application. Live GitHub callback/cookie behavior, approved deployment proxy settings, live repository connections and production hardening remain unverified.
 
 ## References
 

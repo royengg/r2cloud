@@ -1036,3 +1036,268 @@ test('a lost Vercel command response is not replayed; stop can be reconciled aft
   expect(await cloud.stop(identity)).toHaveLength(64);
   expect(stops).toBe(2);
 });
+
+test('project invitations require an administrator and do not grant access before acceptance', async () => {
+  const { invite, team } = await import('@r2cloud/core/team');
+  await pool.query("UPDATE memberships SET role='owner' WHERE org_id='studio' AND user_id='maya'");
+  const input = { email: ' Teammate@Example.com ', contribute: true, review: false, merge: false };
+  const commandKey = key();
+  const invitations = await Promise.all([
+    invite(maya, 'launch', commandKey, input),
+    invite(maya, 'launch', commandKey, input),
+  ]);
+  expect(invitations[0]).toEqual(invitations[1]);
+  expect((await team(maya, 'launch')).invitations[0].email).toBe('teammate@example.com');
+  expect(
+    (await pool.query("SELECT count(*)::int count FROM project_access WHERE project_id='launch'"))
+      .rows[0].count,
+  ).toBe(4);
+  await expect(invite(alex, 'launch', key(), input)).rejects.toThrow('administrator');
+  await expect(invite(maya, 'private', key(), input)).rejects.toThrow('access');
+  await expect(invite(maya, 'launch', commandKey, { ...input, review: true })).rejects.toThrow(
+    'different',
+  );
+  await expect(invite(maya, 'launch', key(), input)).rejects.toThrow('already pending');
+  const event = (
+    await pool.query("SELECT detail FROM events WHERE kind='Project invitation created'")
+  ).rows[0];
+  expect(JSON.stringify(event.detail)).not.toContain('example.com');
+});
+test('verified recipients explicitly accept an invitation once without inheriting provider credentials', async () => {
+  const { invite, acceptInvitation, invitationInbox } = await import('@r2cloud/core/team');
+  const provider = mockGitHub();
+  try {
+    await pool.query(
+      "UPDATE memberships SET role='owner' WHERE org_id='studio' AND user_id='maya'",
+    );
+    const { app } = identityApp();
+    const account = await githubAccount(app, provider, { email: 'recipient@example.com' });
+    const me = (await request(app).get('/api/me').set('Cookie', account.cookie).expect(200)).body;
+    const recipient = { id: me.user.id, kind: 'human' as const };
+    const invitation = await invite(maya, 'launch', key(), {
+      email: 'recipient@example.com',
+      contribute: true,
+      review: true,
+      merge: false,
+    });
+    expect((await invitationInbox(recipient)).map((i) => i.id)).toEqual([invitation.id]);
+    await expect(access(pool, recipient, 'launch')).rejects.toThrow('access');
+    await expect(acceptInvitation(alex, invitation.id)).rejects.toThrow('GitHub account');
+    const accepted = await Promise.all([
+      acceptInvitation(recipient, invitation.id),
+      acceptInvitation(recipient, invitation.id),
+    ]);
+    expect(accepted[0]).toEqual(accepted[1]);
+    const project = await access(pool, recipient, 'launch');
+    expect(project.review).toBe(true);
+    expect(project.merge).toBe(false);
+    expect(await invitationInbox(recipient)).toHaveLength(0);
+    expect(
+      (await pool.query('SELECT * FROM provider_connections WHERE user_id=$1', [recipient.id]))
+        .rowCount,
+    ).toBe(0);
+    expect(
+      (await pool.query('SELECT role FROM memberships WHERE user_id=$1', [recipient.id])).rows[0]
+        .role,
+    ).toBe('member');
+  } finally {
+    provider.restore();
+  }
+});
+test('expired or revoked invitations and revoked inviter authority cannot be accepted', async () => {
+  const { invite, acceptInvitation, revokeInvitation } = await import('@r2cloud/core/team');
+  const provider = mockGitHub();
+  try {
+    await pool.query(
+      "UPDATE memberships SET role='owner' WHERE org_id='studio' AND user_id='maya'",
+    );
+    const { app } = identityApp();
+    const account = await githubAccount(app, provider, { email: 'recipient@example.com' });
+    const me = (await request(app).get('/api/me').set('Cookie', account.cookie)).body;
+    const recipient = { id: me.user.id, kind: 'human' as const },
+      input = { email: 'recipient@example.com', contribute: true, review: false, merge: false };
+    const first = await invite(maya, 'launch', key(), input);
+    await revokeInvitation(maya, 'launch', key(), first.id);
+    await expect(acceptInvitation(recipient, first.id)).rejects.toThrow('no longer');
+    const second = await invite(maya, 'launch', key(), input);
+    await pool.query(
+      "UPDATE project_invitations SET expires_at=now()-interval '1 second' WHERE id=$1",
+      [second.id],
+    );
+    await expect(acceptInvitation(recipient, second.id)).rejects.toThrow('no longer');
+    const third = await invite(maya, 'launch', key(), input);
+    await pool.query(
+      "UPDATE memberships SET role='member' WHERE org_id='studio' AND user_id='maya'",
+    );
+    await expect(acceptInvitation(recipient, third.id)).rejects.toThrow('administrator');
+    expect(
+      (await pool.query('SELECT * FROM project_access WHERE user_id=$1', [recipient.id])).rowCount,
+    ).toBe(0);
+  } finally {
+    provider.restore();
+  }
+});
+test('versioned project access rejects lost updates, protects the last reviewer and retains claims', async () => {
+  const { updateMember } = await import('@r2cloud/core/team');
+  await pool.query("UPDATE memberships SET role='owner' WHERE org_id='studio' AND user_id='maya'");
+  await command(alex, 'launch', 'welcome', key(), start);
+  await updateMember(maya, 'launch', key(), 'alex', {
+    version: 1,
+    contribute: false,
+    review: false,
+    merge: false,
+    remove: true,
+  });
+  expect((await task()).owner_id).toBe('alex');
+  expect(
+    (await pool.query("SELECT * FROM runs WHERE task_id='welcome' AND stopped_at IS NULL"))
+      .rowCount,
+  ).toBe(1);
+  await expect(access(pool, alex, 'launch')).rejects.toThrow('access');
+  await expect(
+    updateMember(maya, 'launch', key(), 'maya', {
+      version: 1,
+      contribute: true,
+      review: false,
+      merge: true,
+    }),
+  ).rejects.toThrow('at least one');
+  await updateMember(maya, 'launch', key(), 'sam', {
+    version: 1,
+    contribute: true,
+    review: false,
+    merge: false,
+  });
+  await expect(
+    updateMember(maya, 'launch', key(), 'sam', {
+      version: 1,
+      contribute: false,
+      review: false,
+      merge: false,
+    }),
+  ).rejects.toThrow('changed');
+  await expect(
+    updateMember(maya, 'launch', key(), 'agent', {
+      version: 1,
+      contribute: true,
+      review: true,
+      merge: false,
+    }),
+  ).rejects.toThrow('Agents');
+});
+
+test('repository OAuth binds the actor and one-use state, then attaches only broker-verified choices', async () => {
+  const {
+    beginRepositoryConnection,
+    queueRepositoryCallback,
+    discoverOne,
+    attachRepository,
+    connectionStatus,
+  } = await import('@r2cloud/core/repository-connections');
+  const { createWorkspace } = await import('@r2cloud/core/onboarding');
+  const provider = mockGitHub();
+  try {
+    const { app } = identityApp();
+    const account = await githubAccount(app, provider, {
+      id: 'repo-owner',
+      email: 'repo@example.com',
+    });
+    const me = (await request(app).get('/api/me').set('Cookie', account.cookie)).body;
+    const owner = { id: me.user.id, kind: 'human' as const };
+    const { projectId } = await createWorkspace(owner, key(), {
+      name: 'Repository team',
+      projectName: 'Website',
+    });
+    const config = {
+      clientId: 'app-client',
+      appSlug: 'r2cloud',
+      callbackURL: 'https://product.example/api/repository-callback',
+    };
+    const authorization = await beginRepositoryConnection(owner, projectId, key(), config);
+    const url = new URL(authorization.url);
+    expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+    const state = url.searchParams.get('state')!;
+    await expect(queueRepositoryCallback(alex, state, 'code')).rejects.toThrow('another session');
+    await queueRepositoryCallback(owner, state, 'code');
+    await expect(queueRepositoryCallback(owner, state, 'code')).rejects.toThrow('already used');
+    await discoverOne({
+      discover: async (input) => {
+        expect(input.githubUserId).toBe('repo-owner');
+        expect(input.verifier.length).toBeGreaterThanOrEqual(43);
+        return [
+          {
+            id: 42,
+            installationId: 9,
+            fullName: 'team/site',
+            defaultBranch: 'main',
+            baseSha: 'a'.repeat(40),
+          },
+        ];
+      },
+    });
+    const status = await connectionStatus(owner, projectId, config);
+    expect(status.pending.status).toBe('ready');
+    const row = (
+      await pool.query('SELECT code,verifier FROM repository_connections WHERE id=$1', [
+        status.pending.id,
+      ])
+    ).rows[0];
+    expect(row).toEqual({ code: null, verifier: null });
+    await expect(
+      attachRepository(owner, projectId, { connectionId: status.pending.id, repositoryId: 999 }),
+    ).rejects.toThrow('verified');
+    await attachRepository(owner, projectId, { connectionId: status.pending.id, repositoryId: 42 });
+    await attachRepository(owner, projectId, { connectionId: status.pending.id, repositoryId: 42 });
+    expect((await connectionStatus(owner, projectId, config)).repository.full_name).toBe(
+      'team/site',
+    );
+    expect(
+      (await pool.query('SELECT * FROM provider_connections WHERE user_id=$1', [owner.id]))
+        .rowCount,
+    ).toBe(0);
+  } finally {
+    provider.restore();
+  }
+});
+test('repository discovery failures require fresh authorization and never manufacture choices', async () => {
+  const { beginRepositoryConnection, queueRepositoryCallback, discoverOne, connectionStatus } =
+    await import('@r2cloud/core/repository-connections');
+  const { createWorkspace } = await import('@r2cloud/core/onboarding');
+  const provider = mockGitHub();
+  try {
+    const { app } = identityApp();
+    const account = await githubAccount(app, provider, { email: 'repo@example.com' });
+    const owner = (await request(app).get('/api/me').set('Cookie', account.cookie)).body.user;
+    const { projectId } = await createWorkspace(owner, key(), {
+      name: 'Repository team',
+      projectName: 'Website',
+    });
+    const config = {
+      clientId: 'app-client',
+      appSlug: 'r2cloud',
+      callbackURL: 'https://product.example/api/repository-callback',
+    };
+    const { url } = await beginRepositoryConnection(owner, projectId, key(), config);
+    await queueRepositoryCallback(owner, new URL(url).searchParams.get('state')!, 'code');
+    let attempts = 0;
+    await discoverOne({
+      discover: async () => {
+        attempts++;
+        throw new Error('Lost exchange response');
+      },
+    });
+    await discoverOne({
+      discover: async () => {
+        attempts++;
+        return [];
+      },
+    });
+    expect(attempts).toBe(1);
+    const state = await connectionStatus(owner, projectId, config);
+    expect(state.pending.status).toBe('failed');
+    expect(state.pending.repositories).toBeNull();
+    expect(state.repository).toBeNull();
+  } finally {
+    provider.restore();
+  }
+});

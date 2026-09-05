@@ -13,6 +13,7 @@ process.env.R2_TEST_SCHEMA = schema;
 const { pool } = await import('@r2cloud/database');
 const { createIdentity } = await import('../apps/api/src/auth');
 const { createHttpServer } = await import('../apps/api/src/app');
+const { discoverOne } = await import('@r2cloud/core/repository-connections');
 const admin = new pg.Pool({ host: resolve('.local/pgsocket'), port: 55439, database: 'postgres' });
 await admin.query(`CREATE SCHEMA "${schema}"`);
 const db = await admin.connect();
@@ -29,7 +30,15 @@ const { identity } = createIdentity({
   githubClientId: 'test-client',
   githubClientSecret: 'test-secret',
 });
-const { server, io } = createHttpServer({ fixture: true, identity });
+const { server, io } = createHttpServer({
+  fixture: true,
+  identity,
+  repositoryConnection: {
+    clientId: 'app-client',
+    appSlug: 'r2cloud-test',
+    callbackURL: origin + '/api/repository-callback',
+  },
+});
 await new Promise<void>((r) => server.listen(4312, '127.0.0.1', r));
 const github = mockGitHub();
 let browser: Browser | undefined;
@@ -50,14 +59,27 @@ try {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   // Only this test intercepts the external authorization screen. No real GitHub request is sent.
+  let loginNumber = 0;
   await page.route('https://github.com/login/oauth/authorize**', async (route) => {
     const url = new URL(route.request().url());
+    if (url.searchParams.get('client_id') === 'app-client') {
+      await route.fulfill({
+        status: 302,
+        headers: {
+          location:
+            origin +
+            '/api/repository-callback?code=app-code&state=' +
+            encodeURIComponent(url.searchParams.get('state')!),
+        },
+      });
+      return;
+    }
     await route.fulfill({
       status: 302,
       headers: {
         location:
           origin +
-          `/api/auth/callback/github?code=${github.issue()}&state=${encodeURIComponent(url.searchParams.get('state')!)}`,
+          `/api/auth/callback/github?code=${github.issue(loginNumber++ === 0 ? {} : { id: 'teammate', email: 'teammate@example.com' })}&state=${encodeURIComponent(url.searchParams.get('state')!)}`,
       },
     });
   });
@@ -118,6 +140,38 @@ try {
       .evaluate((e) => e === document.activeElement),
     true,
   );
+  await page.getByRole('button', { name: 'Connections', exact: true }).click();
+  await page.getByRole('button', { name: 'Choose GitHub repositories', exact: true }).click();
+  await page.getByText('Checking your GitHub repositories…', { exact: true }).waitFor();
+  await discoverOne({
+    discover: async () => [
+      {
+        id: 42,
+        installationId: 9,
+        fullName: 'bright-studio/portal',
+        defaultBranch: 'main',
+        baseSha: 'a'.repeat(40),
+      },
+    ],
+  });
+  await page.getByLabel('Repository', { exact: true }).selectOption('42');
+  await audit('Repository choice');
+  await page.getByRole('button', { name: 'Connect repository', exact: true }).click();
+  await page.getByText('bright-studio/portal', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Close connections', exact: true }).click();
+  await page.getByRole('button', { name: 'View project participants' }).click();
+  await page.getByLabel('GitHub email', { exact: true }).fill('teammate@example.com');
+  await page.getByLabel('Approve publication', { exact: true }).first().check();
+  await page.getByRole('button', { name: 'Create invitation', exact: true }).click();
+  await page.getByText('Invitation ready.', { exact: false }).waitFor();
+  await audit('Team invitation');
+  await page.screenshot({ path: '.local/screenshots/team-settings.png' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await audit('Mobile team settings');
+  await page.screenshot({ path: '.local/screenshots/team-settings-mobile.png' });
+  await page.setViewportSize({ width: 1200, height: 900 });
+  await page.getByRole('button', { name: 'Close team settings' }).click();
   await page.getByRole('button', { name: 'Account options' }).click();
   await page.getByRole('menuitem', { name: 'Sign out', exact: true }).click();
   await page.getByRole('button', { name: 'Continue with GitHub', exact: true }).waitFor();
@@ -126,9 +180,20 @@ try {
   await page.setViewportSize({ width: 320, height: 720 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await audit('Mobile sign-in');
+  await page.setViewportSize({ width: 1200, height: 900 });
+  await page.getByRole('button', { name: 'Continue with GitHub', exact: true }).click();
+  await page.getByRole('heading', { name: 'Your team is here.' }).waitFor();
+  await page.getByRole('button', { name: 'Not now', exact: true }).click();
+  await page.getByRole('button', { name: 'View invitations (1)', exact: true }).click();
+  await audit('Invitation acceptance');
+  await page.screenshot({ path: '.local/screenshots/invitation-inbox.png' });
+  await page.getByRole('button', { name: 'Join Customer portal', exact: true }).click();
+  await page.getByRole('heading', { name: 'Customer portal', exact: true }).waitFor();
+  await page.locator('[data-connection="Live"]').waitFor();
+  assert.equal(await page.getByRole('button', { name: 'New project', exact: true }).count(), 0);
   assert.deepEqual(errors, []);
   console.log(
-    'GitHub auth browser journey passed: mocked OAuth exchange, real session, workspace setup, task creation, missing-connection gate and sign-out. Four axe audits passed.',
+    'GitHub auth browser journey passed: mocked OAuth exchange, real session, workspace setup, task creation, missing-connection gate and sign-out. Eight axe audits passed, including mobile team settings, repository selection, team invitation and recipient acceptance.',
   );
 } finally {
   await browser?.close();

@@ -65,11 +65,15 @@ export function WorkspaceSetup({
   error,
   onCreate,
   onSignOut,
+  onInvitations,
+  invitationCount = 0,
 }: {
   busy: boolean;
   error: string;
   onCreate: (input: unknown) => Promise<boolean>;
   onSignOut: () => void;
+  onInvitations?: () => void;
+  invitationCount?: number;
 }) {
   const [name, setName] = useState(''),
     [projectName, setProjectName] = useState('');
@@ -120,6 +124,11 @@ export function WorkspaceSetup({
             Create workspace
           </Button>
         </form>
+        {invitationCount > 0 && (
+          <Button variant="ghost" onClick={onInvitations}>
+            View invitations ({invitationCount})
+          </Button>
+        )}
         <Button variant="ghost" onClick={onSignOut}>
           Sign out
         </Button>

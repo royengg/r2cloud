@@ -1,6 +1,6 @@
 # System architecture proposal
 
-Status: architecture foundation updated with confirmed decisions, 2026-09-05. See DECISIONS.md for authority and IMPLEMENTATION.md for what is actually built. Decisions here describe the intended product; they are not claims about implemented functionality. Reference findings and official documentation are linked in [RESEARCH.md](RESEARCH.md).
+Status: intended architecture. See [decisions](DECISIONS.md) for product constraints and [implementation status](STATUS.md) for what is built. Historical source-review notes are archived locally.
 
 ## 1. Product direction and feasibility
 
@@ -49,18 +49,18 @@ The additions to the sketch are the workflow worker, durable job processing, exe
 
 ## 3. Proposed stack and deployment
 
-| Component | Initial choice | Reason and boundary |
-| --- | --- | --- |
-| Website | React, TypeScript, Vite | A board-centric application with rich client interaction; no need to couple agent execution to rendering. |
-| HTTP backend | Express, TypeScript, schema validation | Fits the sketch. Keep routes thin and domain transactions explicit. |
-| Realtime | Socket.IO over WebSockets; HTTP for durable commands | Board updates, agent progress, presence; terminal transport later if needed. |
-| Database | Prisma ORM on Postgres; Neon selected for managed hosting | Transactions, constraints, relational permissions, row security, durable jobs. |
-| Workflow | Persisted state machine and Postgres jobs/outbox | Restart recovery and retries without an additional queue service initially. |
-| Execution | Managed sandbox provider behind an adapter | Avoid building a VM fleet before proving the product. Vendor selection remains open. |
-| Preview automation | Playwright inside each execution environment | Browser checks, screenshots, traces, console/network evidence. |
-| Artifacts | Private S3-compatible object storage | Large logs and snapshots should not inflate transactional tables. |
-| Repository integration | GitHub App plus verified webhooks | Selected repository access and server-side publication. |
-| Initial agent | Codex adapter; one additional provider after the workflow passes | A working provider seam is more useful than many superficial integrations. |
+| Component              | Initial choice                                                   | Reason and boundary                                                                                       |
+| ---------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Website                | React, TypeScript, Vite                                          | A board-centric application with rich client interaction; no need to couple agent execution to rendering. |
+| HTTP backend           | Express, TypeScript, schema validation                           | Fits the sketch. Keep routes thin and domain transactions explicit.                                       |
+| Realtime               | Socket.IO over WebSockets; HTTP for durable commands             | Board updates, agent progress, presence; terminal transport later if needed.                              |
+| Database               | Prisma ORM on Postgres; Neon selected for managed hosting        | Transactions, constraints, relational permissions, row security, durable jobs.                            |
+| Workflow               | Persisted state machine and Postgres jobs/outbox                 | Restart recovery and retries without an additional queue service initially.                               |
+| Execution              | Managed sandbox provider behind an adapter                       | Avoid building a VM fleet before proving the product. Vendor selection remains open.                      |
+| Preview automation     | Playwright inside each execution environment                     | Browser checks, screenshots, traces, console/network evidence.                                            |
+| Artifacts              | Private S3-compatible object storage                             | Large logs and snapshots should not inflate transactional tables.                                         |
+| Repository integration | GitHub App plus verified webhooks                                | Selected repository access and server-side publication.                                                   |
+| Initial agent          | Codex adapter; one additional provider after the workflow passes | A working provider seam is more useful than many superficial integrations.                                |
 
 The API and worker require a hosting arrangement that supports their connection and lifetime needs. An ordinary short-lived HTTP function must not own an hours-long agent process. Keep API/worker and Postgres in one region initially. Set transaction-local tenant context on pooled connections; never rely on a session-level lock or tenant setting surviving a pool checkout.
 
@@ -90,16 +90,16 @@ erDiagram
 
 Use **Organisation → Project → Tasks** initially. A team grants membership or project access; a board is a saved view of tasks, so showing one task on two boards never creates two execution identities. Add portfolios or initiatives later as task/project groupings. In the UI, “workspace” means the shared organisation area. Internally call the disposable execution environment a sandbox to avoid confusing the two meanings.
 
-| Entity | Important data |
-| --- | --- |
-| Task | Organisation/project, type, title, outcome, acceptance criteria, priority, lifecycle, version, accountable owner, dependencies. |
-| Task claim | Task, claimant, responsible user, acquired/released times, ownership generation. |
-| Run | Task/claim, provider connection, runner, execution generation, pinned base commit, environment/skill versions, lifecycle, budget, heartbeat. |
-| Change set | Task, immutable snapshot/hash, repo/branch, base and head commits, tests, preview evidence, publication state. |
-| Approval | Change set, exact action and payload hash, approver, role/policy version, expiration, revocation and consumption state. |
-| Provider connection | Provider, auth mode, owning user/org, secret reference, allowed projects/users, health. |
-| Repository | Stable GitHub repository ID and installation link; project mappings must not duplicate coordination scope. |
-| Event/job | Tenant, entity version/sequence, deduplication key, attempt count, lease, next attempt, persisted payload. |
+| Entity              | Important data                                                                                                                               |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Task                | Organisation/project, type, title, outcome, acceptance criteria, priority, lifecycle, version, accountable owner, dependencies.              |
+| Task claim          | Task, claimant, responsible user, acquired/released times, ownership generation.                                                             |
+| Run                 | Task/claim, provider connection, runner, execution generation, pinned base commit, environment/skill versions, lifecycle, budget, heartbeat. |
+| Change set          | Task, immutable snapshot/hash, repo/branch, base and head commits, tests, preview evidence, publication state.                               |
+| Approval            | Change set, exact action and payload hash, approver, role/policy version, expiration, revocation and consumption state.                      |
+| Provider connection | Provider, auth mode, owning user/org, secret reference, allowed projects/users, health.                                                      |
+| Repository          | Stable GitHub repository ID and installation link; project mappings must not duplicate coordination scope.                                   |
+| Event/job           | Tenant, entity version/sequence, deduplication key, attempt count, lease, next attempt, persisted payload.                                   |
 
 Each task has one accountable human owner and one active implementation claim. An agent acts on behalf of a named person or an explicitly authorised organisation automation identity. Provider credentials are separately scoped: sharing a board never silently shares someone's personal AI account.
 
@@ -200,14 +200,14 @@ Persist ordered domain/run events; batch noisy token output separately. WebSocke
 
 “Never push without permission” is enforced by credential placement and a trusted publication boundary, backed by repository rules. Agent prompts and intercepted shell command strings are insufficient because a process could use another executable or GitHub's HTTP API.
 
-| Operation | Proposed authorisation |
-| --- | --- |
-| Read approved repo/task context | Project membership plus connection scope. |
+| Operation                                                               | Proposed authorisation                                                          |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Read approved repo/task context                                         | Project membership plus connection scope.                                       |
 | Start execution, install project dependencies, edit and test in sandbox | Explicit task execution grant; allowlisted environment/network/resource policy. |
-| Create local branch/commit and preview | Covered by the task execution grant. |
-| Push branch and open/update PR | Human approval bound to exact change and described GitHub actions. |
-| Merge PR | Separate human authorisation plus required GitHub checks/reviews. |
-| Deploy to production | Separate release policy; out of initial product scope. |
+| Create local branch/commit and preview                                  | Covered by the task execution grant.                                            |
+| Push branch and open/update PR                                          | Human approval bound to exact change and described GitHub actions.              |
+| Merge PR                                                                | Separate human authorisation plus required GitHub checks/reviews.               |
+| Deploy to production                                                    | Separate release policy; out of initial product scope.                          |
 
 The reviewer sees a product summary, acceptance results, preview, known limitations, and a diff disclosure before publication. A button can explicitly approve “Publish these changes and open a pull request” as one understandable bundle. It must disclose that repository workflows may run when the push/PR occurs.
 
@@ -271,16 +271,16 @@ Suggested skills: turn a request into acceptance criteria; prepare a product bri
 
 Preserve the simple visual structure: navigation menu at top left, project context, participant avatars at top right, three columns, and a broad composer anchored below the board. Keep high-contrast readable typography and modest card density; the user's latest direction is a soft light palette, rounded surfaces, Hugeicons, raised neumorphic action buttons and restrained motion. The root DESIGN.md records the current visual system.
 
-| Area | Behaviour |
-| --- | --- |
-| Navigation | Organisation/project switcher, boards, review inbox, integrations and settings. |
-| Todo | Clear outcomes ready for planning or execution; missing criteria get a readiness badge. |
-| Ongoing | One owner plus plain-language progress: Planning, Building, Checking, Needs your review, In code review, Blocked. |
-| Completed | Accepted result and date; coding tasks require verified merge under the initial policy. |
-| Card | Outcome title, priority, owner, human/agent indicator, progress, dependency/blocker, latest meaningful update. |
-| Participants | Presence and membership; never an indication that a task is claimable. |
-| Composer | Visible scope: project or selected task. A command preview explains which tasks will start/change when scope is broad. |
-| Task drawer | Outcome and acceptance checklist, conversation, preview/evidence, review actions, activity; code/logs under an advanced disclosure. |
+| Area         | Behaviour                                                                                                                           |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Navigation   | Organisation/project switcher, boards, review inbox, integrations and settings.                                                     |
+| Todo         | Clear outcomes ready for planning or execution; missing criteria get a readiness badge.                                             |
+| Ongoing      | One owner plus plain-language progress: Planning, Building, Checking, Needs your review, In code review, Blocked.                   |
+| Completed    | Accepted result and date; coding tasks require verified merge under the initial policy.                                             |
+| Card         | Outcome title, priority, owner, human/agent indicator, progress, dependency/blocker, latest meaningful update.                      |
+| Participants | Presence and membership; never an indication that a task is claimable.                                                              |
+| Composer     | Visible scope: project or selected task. A command preview explains which tasks will start/change when scope is broad.              |
+| Task drawer  | Outcome and acceptance checklist, conversation, preview/evidence, review actions, activity; code/logs under an advanced disclosure. |
 
 Preserve three columns by placing review and blocked badges inside Ongoing. Add a “Needs my attention” filter and review inbox immediately; a fourth Review column can be a later board preference. Status transitions remain domain commands even if users customise display columns.
 
@@ -290,13 +290,13 @@ Comments and feedback are shared; feedback on an active task goes to its current
 
 ## 13. Delivery stages and acceptance gates
 
-| Stage | Deliverable | Gate before moving on |
-| --- | --- | --- |
-| 0 — Feasibility spike | One chosen provider in one disposable sandbox, one repository template, private preview, immutable artifact, publisher path. | Confirm auth/protocol support, cancellation, test execution, isolation boundaries and candidate publication on a dedicated test repo. |
-| 1 — Collaborative foundation | Login, organisations/projects/roles, shared tasks/comments, atomic claims, audit log, reconnecting board. | Concurrent claims and tenant-isolation tests pass; lost sockets cannot duplicate ownership. |
-| 2 — First complete product loop | Codex cloud execution with explicitly scoped credentials, pinned skills, tests/preview, reviewer inbox, approved branch/PR publication, verified completion. | Real task goes Todo → preview → feedback → approved PR → verified merge; crash recovery retains ownership. |
-| 3 — Portability and hardening | A second provider and paired runner, budgets, failure recovery, environment templates, operational dashboards. | Both adapters satisfy the same lifecycle contract; disconnected runners cannot duplicate active execution. |
-| 4 — Broader coordination | Optional parallel repo changes, dependency planning, portfolios, richer skill catalogue, additional integrations. | Integration checks, conflict reporting and cost controls remain understandable and reliable. |
+| Stage                           | Deliverable                                                                                                                                                  | Gate before moving on                                                                                                                 |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 0 — Feasibility spike           | One chosen provider in one disposable sandbox, one repository template, private preview, immutable artifact, publisher path.                                 | Confirm auth/protocol support, cancellation, test execution, isolation boundaries and candidate publication on a dedicated test repo. |
+| 1 — Collaborative foundation    | Login, organisations/projects/roles, shared tasks/comments, atomic claims, audit log, reconnecting board.                                                    | Concurrent claims and tenant-isolation tests pass; lost sockets cannot duplicate ownership.                                           |
+| 2 — First complete product loop | Codex cloud execution with explicitly scoped credentials, pinned skills, tests/preview, reviewer inbox, approved branch/PR publication, verified completion. | Real task goes Todo → preview → feedback → approved PR → verified merge; crash recovery retains ownership.                            |
+| 3 — Portability and hardening   | A second provider and paired runner, budgets, failure recovery, environment templates, operational dashboards.                                               | Both adapters satisfy the same lifecycle contract; disconnected runners cannot duplicate active execution.                            |
+| 4 — Broader coordination        | Optional parallel repo changes, dependency planning, portfolios, richer skill catalogue, additional integrations.                                            | Integration checks, conflict reporting and cost controls remain understandable and reliable.                                          |
 
 The launch scope is managed cloud execution with Codex, bounded explicit task/batch authorisation, reviewer-approved publication and separately authorised verified merge. Connected runners and additional providers are future work.
 

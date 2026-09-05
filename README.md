@@ -2,7 +2,7 @@
 
 A shared product board where people describe outcomes, start coding work, review evidence, and approve changes. A Bun workspace monorepo: React/Vite, Express, Socket.IO, Prisma, and Neon-compatible Postgres.
 
-**Development slice, not a deployed service.** The local app uses visibly labelled fixtures for cloud execution, preview content, and GitHub operations. It does not call a model, clone repositories, push code, or merge real PRs. Managed integrations fail closed until configured.
+**Development slice, not a deployed service.** External cloud execution and publication are currently tested with local fixtures; the product does not run simulated agents. It does not call a model, clone repositories, push code, or merge real PRs. Managed integrations fail closed until configured.
 
 ## Local development
 
@@ -18,7 +18,7 @@ bun run db:setup
 bun run dev
 ```
 
-Open `http://127.0.0.1:5173`. The product opens with GitHub sign-in. Configure this project's OAuth app using [authentication setup](docs/AUTHENTICATION.md); without configuration, sign-in is visibly unavailable and legacy demo cookies are rejected. New accounts create their workspace and first project, then land on an empty board. No seed data or simulated worker is started by normal development.
+Open `http://127.0.0.1:5173`. The product opens with GitHub sign-in. Configure this project's OAuth app using [authentication setup](docs/SETUP.md); without configuration, sign-in is visibly unavailable and legacy demo cookies are rejected. New accounts create their workspace and first project, then land on an empty board. No seed data or simulated worker is started by normal development.
 
 Postgres uses existing ARM64 binaries with project-private storage and a Unix socket only. No existing database service is used. The API binds loopback port 4310; the fixture-only preview test uses 4311. Stop the app with Ctrl+C and the database with `bun run db:stop`.
 
@@ -51,15 +51,9 @@ Bun 1.4.2 is the runtime and package manager; `bun.lock` is the only project loc
 
 ## Documents
 
-- [Remaining delivery plan](docs/DELIVERY-PLAN.md)
-- [Team and repository setup](docs/TEAM-AND-REPOSITORY-SETUP.md)
-- [Vercel Sandbox](docs/VERCEL-SANDBOX.md)
-- [GitHub authentication](docs/AUTHENTICATION.md)
-- [Design system](DESIGN.md)
-- [UI verification](docs/UI-VERIFICATION.md)
+- [Implementation status and remaining work](docs/STATUS.md)
 - [Architecture](docs/ARCHITECTURE.md)
-- [Confirmed decisions](docs/DECISIONS.md)
-- [Inherited source review](docs/RESEARCH.md)
-- [Implementation and validation](docs/IMPLEMENTATION.md)
-
-The recovered architecture is a target design, not a claim that every boundary has shipped. Publication requires approval for an exact immutable candidate; merge is a separate action. A finished agent turn or an open PR never completes a task.
+- [Product decisions](docs/DECISIONS.md)
+- [Account and repository setup](docs/SETUP.md)
+- [Execution and sandbox integration](docs/EXECUTION-CONNECTIONS.md)
+- [Design system](DESIGN.md) and [asset sources](docs/DESIGN-SOURCES.md)

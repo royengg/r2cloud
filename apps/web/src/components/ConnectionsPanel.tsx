@@ -1,3 +1,4 @@
+import { CodexLogo } from './CodexLogo';
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { Button, IconButton, Modal } from './ui';
@@ -189,7 +190,7 @@ export function ConnectionsPanel({
             <p className="subtle">Ask a workspace administrator to connect a repository.</p>
           )}
           <div className="connection-row">
-            <Icon name="sparkles" />
+            <CodexLogo />
             <div>
               <strong>Codex</strong>
               <span>

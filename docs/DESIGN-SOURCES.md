@@ -12,3 +12,7 @@ The requested skills were installed into the project's ignored `.agents/skills` 
 The first user attachment supplies the board/composer layout. The second supplies a sidebar hierarchy example only. The light visual system is an original implementation of the user's soft, colorful, rounded brief.
 
 The user later requested motion and neumorphic buttons, supplying [this Figma community file](https://www.figma.com/community/file/1112677564637285301/neumorphism-ui-buttons) and a raised blue button screenshot. Figma blocked automated access, so the file contents were not inspected. The attached screenshot informed the inset highlight, lower lip and pressed state; the project retains its plum accent.
+
+## Codex connection mark
+
+Codex SVG sourced from [LobeHub Icons](https://github.com/lobehub/lobe-icons/blob/master/packages/static-svg/icons/codex.svg), under the [MIT license](LICENSE-LOBE-ICONS.txt). Brand geometry is preserved; `currentColor` and a 20px size match the connection rows. This is a third-party vector rendition, not an asset retrieved from OpenAI’s brand kit.

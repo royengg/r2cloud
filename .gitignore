@@ -9,3 +9,9 @@ dist/
 
 # User-requested upstream skills are installed locally; provenance lives in docs.
 .agents/skills/
+
+/tests/
+/scripts/
+**/__tests__/
+**/*.test.*
+**/*.spec.*

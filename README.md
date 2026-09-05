@@ -8,6 +8,8 @@ A shared product board where people describe outcomes, start coding work, review
 
 Workspace: `/home/paseo-agent/workspace/r2cloud`.
 
+`tests/` and `scripts/` are intentionally local-only and ignored by Git. The helper commands below apply to this existing workspace; a fresh clone does not include the dev/database launchers or test suites. `bun run typecheck` and `bun run build` remain available from tracked source.
+
 ```bash
 source scripts/env.sh  # this VPS: load its private ARM64 toolchain and project-local Bun
 bun install --frozen-lockfile
@@ -41,7 +43,8 @@ packages/core        Checked task commands and durable workflow
 packages/database    Prisma schema, SQL migrations and client
 packages/adapters    Codex and managed-provider seams; labelled fixtures
 packages/contracts   Shared domain schemas and integration contracts
-tests                Postgres invariants and adapter contracts
+tests                Local-only Postgres invariants and adapter contracts
+scripts              Local-only development and verification helpers
 ```
 
 Bun 1.4.2 is the runtime and package manager; `bun.lock` is the only project lockfile. There is no Turborepo. Prisma is pinned to stable 7.10.0 across CLI/client/adapter. Use the pooled Neon `DATABASE_URL` for application connections and `DIRECT_URL` for Prisma migrations. No Neon database has been provisioned or connected. Never use `prisma db push` to replace the checked SQL migrations: they preserve ownership constraints and the immutable-candidate trigger.

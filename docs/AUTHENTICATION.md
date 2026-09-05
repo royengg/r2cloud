@@ -4,9 +4,9 @@ Better Auth 1.7.2 runs inside Express, using the Prisma adapter and Postgres ses
 
 ## Local setup
 
-Create a dedicated GitHub OAuth app when ready to enable live sign-in. Set its homepage to the exact frontend origin and callback to `<origin>/api/auth/callback/github`. Put `R2_AUTH_MODE=better-auth`, `BETTER_AUTH_URL`, a dedicated random `BETTER_AUTH_SECRET` of at least 32 characters, `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` in the ignored project `.env`. See [the configuration example](../.env.example). Run migrations and restart `bun run dev`. For the existing Vite setup, the origin is `http://127.0.0.1:5173`; an approved tunnel needs the exact HTTPS URL in both `BETTER_AUTH_URL` and `R2_DEV_ORIGIN`. A changing Quick Tunnel URL requires updating the OAuth app callback too.
+Create a dedicated GitHub OAuth app when ready to enable live sign-in. Set its homepage to the exact frontend origin and callback to `<origin>/api/auth/callback/github`. Put `BETTER_AUTH_URL`, a dedicated random `BETTER_AUTH_SECRET` of at least 32 characters, `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` in the ignored project `.env`. See [the configuration example](../.env.example). Run migrations and restart `bun run dev`. For the existing Vite setup, the origin is `http://127.0.0.1:5173`; an approved tunnel needs the exact HTTPS URL in both `BETTER_AUTH_URL` and `R2_DEV_ORIGIN`. A changing Quick Tunnel URL requires updating the OAuth app callback too.
 
-Missing credentials fail startup when Better Auth mode is selected. Without that selection, explicit fixture development still uses the labelled participant selector. Real authentication does not turn fixture execution/publication into live integrations. No real OAuth credentials have been configured or tested.
+Partial credentials fail startup. With no credentials, the product displays an unavailable GitHub sign-in screen and rejects legacy fixture sessions. Fixture authentication is only available to explicitly configured test servers; the product has no participant-picker screen. No real OAuth credentials have been configured or tested.
 
 ## Identity and permissions
 
@@ -26,7 +26,7 @@ Rate limits are stored in Postgres. The API overwrites its internal client-addre
 
 HTTP/Postgres tests exercise the actual Better Auth implementation with mocked GitHub token/profile/email endpoints: callback state, verified identity, scope restrictions, encrypted token storage, session revocation, socket revocation, rate limits and isolated workspace creation. These tests never contact GitHub. The browser script intercepts the external authorization page and is also a fixture, not a live OAuth test.
 
-The new browser journey currently cannot complete on this VPS: Chromium reports `pthread_create: Resource temporarily unavailable`. It must be rerun when browser resources are available. Live GitHub callback/cookie behavior, approved deployment proxy settings, invitations, real repository connections and production hardening remain unverified.
+The browser journey now passes after reducing concurrent development processes, with four axe accessibility audits. GitHub exchanges are mocked; product sessions, workspace/project creation, task creation and sign-out use the real application. Live GitHub callback/cookie behavior, approved deployment proxy settings, invitations, real repository connections and production hardening remain unverified.
 
 ## References
 

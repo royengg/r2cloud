@@ -7,7 +7,11 @@ export function useWorkspace() {
     [projectId, setProjectId] = useState(''),
     [snapshot, setSnapshot] = useState<Snapshot | null>(null),
     [ready, setReady] = useState(false),
-    [authConfig, setAuthConfig] = useState<{ mode: string; provider: string | null } | null>(null),
+    [authConfig, setAuthConfig] = useState<{
+      mode: string;
+      provider: string | null;
+      enabled: boolean;
+    } | null>(null),
     [connection, setConnection] = useState('Connecting'),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
@@ -23,16 +27,18 @@ export function useWorkspace() {
       if (current === serial.current) setError((e as Error).message);
     }
   }, [projectId]);
-  async function loadIdentity() {
+  async function loadIdentity(preferredProject?: string) {
     const next = await api<Identity>('/me');
     setIdentity(next);
     setProjectId(
-      next.projects.some((p) => p.id === 'launch') ? 'launch' : (next.projects[0]?.id ?? ''),
+      next.projects.find((p) => p.id === preferredProject)?.id ?? next.projects[0]?.id ?? '',
     );
   }
   useEffect(() => {
     void Promise.all([
-      api<{ mode: string; provider: string | null }>('/auth-config').then(setAuthConfig),
+      api<{ mode: string; provider: string | null; enabled: boolean }>('/auth-config').then(
+        setAuthConfig,
+      ),
       loadIdentity().catch(() => {}),
     ])
       .catch((e) => setError((e as Error).message))
@@ -76,22 +82,19 @@ export function useWorkspace() {
       setBusy(false);
     }
   }
-  async function signIn(userId: string) {
+  async function signOut() {
     setBusy(true);
     setError('');
     try {
-      await api('/local-session', { userId });
-      await loadIdentity();
+      await api('/logout', {});
+      setIdentity(null);
+      setSnapshot(null);
+      setProjectId('');
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
     }
-  }
-  async function signOut() {
-    await api('/logout', {});
-    setIdentity(null);
-    setSnapshot(null);
   }
   return {
     identity,
@@ -107,7 +110,6 @@ export function useWorkspace() {
     busy,
     announcement,
     act,
-    signIn,
     signOut,
   };
 }

@@ -430,10 +430,21 @@ export async function snapshot(actor: Actor, projectId: string) {
 export async function projects(actor: Actor) {
   const rows = await prisma.projects.findMany({
     where: { project_access: { some: { user_id: actor.id, memberships: { user_id: actor.id } } } },
-    include: { organisations: { select: { name: true } } },
+    include: {
+      organisations: {
+        select: {
+          name: true,
+          memberships: { where: { user_id: actor.id }, select: { role: true } },
+        },
+      },
+    },
     orderBy: { name: 'asc' },
   });
-  return rows.map(({ organisations, ...p }) => ({ ...p, org_name: organisations.name }));
+  return rows.map(({ organisations, ...p }) => ({
+    ...p,
+    org_name: organisations.name,
+    workspace_role: organisations.memberships[0]?.role,
+  }));
 }
 
 /** Explicit, all-or-nothing batches. No background selection or authority beyond named tasks. */

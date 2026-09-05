@@ -251,20 +251,21 @@ model repositories {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model runs {
-  id           String       @id
-  org_id       String
-  project_id   String
-  task_id      String
-  claim_id     String
-  generation   Int
-  state        String
-  stopped_at   DateTime?    @db.Timestamptz(6)
-  stop_proof   String?
-  heartbeat_at DateTime?    @db.Timestamptz(6)
-  manifest     Json
-  created_at   DateTime     @default(now()) @db.Timestamptz(6)
-  candidates   candidates[]
-  claims       claims       @relation(fields: [org_id, project_id, task_id, claim_id], references: [org_id, project_id, task_id, id], onDelete: NoAction, onUpdate: NoAction)
+  sandboxAllocation SandboxAllocation?
+  id                String             @id
+  org_id            String
+  project_id        String
+  task_id           String
+  claim_id          String
+  generation        Int
+  state             String
+  stopped_at        DateTime?          @db.Timestamptz(6)
+  stop_proof        String?
+  heartbeat_at      DateTime?          @db.Timestamptz(6)
+  manifest          Json
+  created_at        DateTime           @default(now()) @db.Timestamptz(6)
+  candidates        candidates[]
+  claims            claims             @relation(fields: [org_id, project_id, task_id, claim_id], references: [org_id, project_id, task_id, id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([org_id, project_id, task_id, id])
 }
@@ -420,4 +421,31 @@ model OnboardingReceipt {
 
   @@id([userId, key])
   @@map("onboarding_receipts")
+}
+
+model SandboxAllocation {
+  operationId String        @id @map("operation_id")
+  runId       String        @unique @map("run_id")
+  generation  Int
+  name        String        @unique
+  configHash  String        @map("config_hash")
+  state       String
+  stopProof   String?       @map("stop_proof")
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  run         runs          @relation(fields: [runId], references: [id])
+  steps       SandboxStep[]
+
+  @@map("sandbox_allocations")
+}
+
+model SandboxStep {
+  operationId String            @map("operation_id")
+  key         String
+  payloadHash String            @map("payload_hash")
+  state       String
+  result      Json?
+  allocation  SandboxAllocation @relation(fields: [operationId], references: [operationId])
+
+  @@id([operationId, key])
+  @@map("sandbox_steps")
 }

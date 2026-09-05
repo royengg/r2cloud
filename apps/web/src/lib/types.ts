@@ -6,6 +6,7 @@ export type Project = {
   id: string;
   name: string;
   org_name?: string;
+  workspace_role?: string;
   org_id: string;
   contribute?: boolean;
   review?: boolean;
@@ -22,7 +23,10 @@ export type Task = {
   generation: number;
   owner_name: string | null;
   owner_id: string | null;
-  run: { state: string; manifest: { skills: { id: string; version: string }[] } } | null;
+  run: {
+    state: string;
+    manifest: { mode?: string; skills: { id: string; version: string }[] };
+  } | null;
   candidate: { id: string; digest: string; manifest: CandidateManifest; evidence: Evidence } | null;
   publication: { pr_number: number; url: string } | null;
   completed_at: string | null;

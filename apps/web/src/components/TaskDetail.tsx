@@ -64,7 +64,10 @@ export function TaskDetail({
           {task.run && (
             <span>
               <Icon name="sparkles" size={15} />
-              Codex <span className="fixture-inline">fixture</span>
+              Codex{' '}
+              {task.run.manifest.mode === 'fixture' && (
+                <span className="fixture-inline">fixture</span>
+              )}
             </span>
           )}
         </div>
@@ -147,39 +150,25 @@ export function TaskDetail({
             {candidate && (
               <>
                 <section className="candidate-preview">
-                  <div className="preview-illustration" aria-hidden="true">
-                    <div className="mini-browser">
-                      <div className="mini-browser-bar">
-                        <i />
-                        <i />
-                        <i />
-                        <span />
-                      </div>
-                      <div className="mini-browser-content">
-                        <span className="mini-browser-shape" />
-                        <div>
-                          <i />
-                          <i />
-                          <b />
-                        </div>
-                      </div>
-                      <div className="mini-browser-tiles">
-                        <i />
-                        <i />
-                        <i />
-                      </div>
-                    </div>
-                    <span className="preview-decoration decoration-one" />
-                    <span className="preview-decoration decoration-two" />
-                  </div>
                   <div className="preview-caption">
                     <div>
-                      <h3>See it for yourself</h3>
+                      <h3>
+                        {candidate.evidence.preview.available
+                          ? 'See it for yourself'
+                          : 'Preview unavailable'}
+                      </h3>
                       <span>
-                        Private candidate preview <span className="fixture-inline">fixture</span>
+                        Private candidate preview{' '}
+                        {candidate.manifest.fixture && (
+                          <span className="fixture-inline">fixture</span>
+                        )}
                       </span>
                     </div>
-                    <Button icon="external" onClick={() => void onPreview()}>
+                    <Button
+                      icon="external"
+                      disabled={!candidate.evidence.preview.available}
+                      onClick={() => void onPreview()}
+                    >
                       Try the preview
                     </Button>
                   </div>
@@ -190,7 +179,10 @@ export function TaskDetail({
                   <details className="evidence-disclosure">
                     <summary>
                       <Icon name="complete" size={18} />
-                      Acceptance evidence <span className="fixture-inline">fixture</span>
+                      Acceptance evidence{' '}
+                      {candidate.manifest.fixture && (
+                        <span className="fixture-inline">fixture</span>
+                      )}
                       <Icon name="down" size={16} />
                     </summary>
                     <div>
@@ -236,7 +228,7 @@ export function TaskDetail({
               <div className="state-notice notice-success">
                 <Icon name="complete" />
                 <div>
-                  <strong>Merge verified · fixture</strong>
+                  <strong>Merge verified{candidate?.manifest.fixture ? ' · fixture' : ''}</strong>
                   <p>Production deployment is tracked separately.</p>
                 </div>
               </div>
@@ -482,10 +474,12 @@ export function TaskDetail({
             <dt>Permission expires</dt>
             <dd>30 minutes</dd>
           </dl>
-          <p className="fixture-caption">
-            <Icon name="info" size={15} />
-            Fixture mode. No real GitHub operation.
-          </p>
+          {candidate.manifest.fixture && (
+            <p className="fixture-caption">
+              <Icon name="info" size={15} />
+              Fixture mode. No real GitHub operation.
+            </p>
+          )}
           {error && (
             <p className="inline-error" role="alert">
               {error}

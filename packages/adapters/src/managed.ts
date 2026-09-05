@@ -9,7 +9,7 @@ import {
 export type SandboxSpec = {
   identity: string;
   generation: number;
-  architecture: 'arm64';
+  architecture: 'provider-image';
   repository: string;
   baseSha: string;
   checkout: string;
@@ -47,7 +47,7 @@ export class ManagedCodexExecution implements ExecutionBackend {
     const sandbox = await this.provider.ensure(g.operationId, {
       identity: g.runId,
       generation: g.generation,
-      architecture: 'arm64',
+      architecture: 'provider-image',
       repository: g.config.repository,
       baseSha: g.config.baseSha,
       checkout: '/workspace/repository',

@@ -15,6 +15,7 @@ import {
   projects,
   snapshot,
 } from '@r2cloud/core/service';
+import { createProject } from '@r2cloud/core/projects';
 import { createWorkspace } from '@r2cloud/core/onboarding';
 import { issuePreview } from '@r2cloud/core/preview';
 function sessionToken(cookie: string | undefined) {
@@ -43,18 +44,20 @@ const origins = new Set([
   'http://localhost:4310',
 ]);
 // An explicit temporary fixture origin; never accept arbitrary tunnel subdomains.
-if (process.env.R2_MODE === 'fixture' && process.env.R2_DEV_ORIGIN) {
+if (process.env.R2_DEV_ORIGIN) {
   const origin = new URL(process.env.R2_DEV_ORIGIN);
   if (origin.protocol !== 'https:' || origin.username || origin.password)
     throw new Error('R2_DEV_ORIGIN must be an HTTPS origin.');
   origins.add(origin.origin);
 }
-type AppOptions = { fixture: boolean; identity?: ProductIdentity };
+export type AppOptions = { fixture: boolean; identity?: ProductIdentity };
 function allowedOrigins(options: AppOptions) {
   return options.identity ? new Set([options.identity.origin]) : origins;
 }
 function requestActor(options: AppOptions, headers: import('node:http').IncomingHttpHeaders) {
-  return options.identity ? options.identity.authenticate(headers) : authenticate(headers.cookie);
+  if (options.identity) return options.identity.authenticate(headers);
+  requireThat(options.fixture, 401, 'Sign in with GitHub to continue.');
+  return authenticate(headers.cookie);
 }
 export function createApp(options: AppOptions) {
   const app = express();
@@ -65,8 +68,9 @@ export function createApp(options: AppOptions) {
   options.identity?.mount(app); // Better Auth must receive the unconsumed request stream.
   app.get('/api/auth-config', (_req, res) =>
     res.json({
-      mode: options.identity?.mode ?? 'fixture',
-      provider: options.identity?.provider ?? null,
+      mode: options.identity?.mode ?? (options.fixture ? 'fixture' : 'unconfigured'),
+      provider: 'github',
+      enabled: Boolean(options.identity),
     }),
   );
   app.use(express.json({ limit: '64kb' }));
@@ -142,6 +146,18 @@ export function createApp(options: AppOptions) {
     res
       .status(201)
       .json(await createWorkspace(res.locals.actor, req.get('Idempotency-Key') ?? '', req.body));
+  });
+  app.post('/api/workspaces/:orgId/projects', async (req, res) => {
+    res
+      .status(201)
+      .json(
+        await createProject(
+          res.locals.actor,
+          String(req.params.orgId),
+          req.get('Idempotency-Key') ?? '',
+          req.body,
+        ),
+      );
   });
   app.get('/api/projects/:projectId/snapshot', async (req, res) => {
     res.json(await snapshot(res.locals.actor, String(req.params.projectId)));

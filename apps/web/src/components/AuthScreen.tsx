@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api } from '../lib/api';
 import { Button } from './ui';
 import { Icon } from './Icon';
-export function AuthScreen() {
+export function AuthScreen({ enabled = true }: { enabled?: boolean }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(
       new URLSearchParams(location.search).has('error')
@@ -42,10 +42,19 @@ export function AuthScreen() {
               {error}
             </p>
           )}
-          <Button variant="primary" icon="github" busy={busy} onClick={() => void signIn()}>
+          <Button
+            variant="primary"
+            icon="github"
+            busy={busy}
+            disabled={!enabled}
+            onClick={() => void signIn()}
+          >
             Continue with GitHub
           </Button>
         </div>
+        {!enabled && (
+          <p role="status">GitHub sign-in is being connected. Please check back shortly.</p>
+        )}
         <p>Profile and email access only. You choose repositories separately.</p>
       </section>
     </main>

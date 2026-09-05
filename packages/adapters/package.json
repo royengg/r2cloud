@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@r2cloud/contracts": "workspace:*",
     "@r2cloud/database": "workspace:*",
-    "@r2cloud/contracts": "workspace:*"
+    "@vercel/sandbox": "3.2.1"
   },
   "exports": {
     "./*": "./src/*.ts"

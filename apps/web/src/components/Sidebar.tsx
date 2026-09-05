@@ -1,6 +1,7 @@
 import type { Identity, Project } from '../lib/types';
 import { Icon } from './Icon';
-import { Avatar, Modal } from './ui';
+import { IconButton, Modal } from './ui';
+import { AccountMenu } from './AccountMenu';
 export function Sidebar({
   identity,
   project,
@@ -10,6 +11,7 @@ export function Sidebar({
   onProject,
   onClose,
   onConnections,
+  onNewProject,
   onSignOut,
   mobile,
 }: {
@@ -21,6 +23,7 @@ export function Sidebar({
   onProject: (id: string) => void;
   onClose: () => void;
   onConnections: () => void;
+  onNewProject: () => void;
   onSignOut: () => void;
   mobile: boolean;
 }) {
@@ -80,7 +83,12 @@ export function Sidebar({
         </button>
       </nav>
       <div className="sidebar-projects">
-        <span className="section-label">Projects</span>
+        <div className="project-list-heading">
+          <span className="section-label">Projects</span>
+          {['owner', 'admin'].includes(project?.workspace_role ?? '') && (
+            <IconButton name="add" label="New project" onClick={onNewProject} />
+          )}
+        </div>
         <nav aria-label="Projects">
           {identity.projects
             .filter((p) => p.org_id === project?.org_id)
@@ -104,18 +112,11 @@ export function Sidebar({
           <Icon name="link" />
           <span>Connections</span>
         </button>
-        <button
-          className="profile-button"
-          onClick={onSignOut}
-          title={identity.authMode === 'better-auth' ? 'Sign out' : 'Switch fixture participant'}
-        >
-          <Avatar name={identity.user.name} />
-          <span>
-            <strong>{identity.user.name}</strong>
-            <small>{identity.authMode === 'better-auth' ? 'Sign out' : 'Switch participant'}</small>
-          </span>
-          <Icon name="more" size={18} />
-        </button>
+        <AccountMenu
+          name={identity.user.name}
+          onSignOut={onSignOut}
+          onConnections={onConnections}
+        />
       </div>
     </>
   );

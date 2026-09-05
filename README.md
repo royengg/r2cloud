@@ -12,13 +12,13 @@ Workspace: `/home/paseo-agent/workspace/r2cloud`.
 source scripts/env.sh  # this VPS: load its private ARM64 toolchain and project-local Bun
 bun install --frozen-lockfile
 bun run db:start
-R2_MODE=fixture bun run db:setup
+bun run db:setup
 bun run dev
 ```
 
-Open `http://127.0.0.1:5173`. Select a fixture participant: Maya can contribute/review/authorise merge, Alex can contribute, and Sam can view. This local participant selector is development authentication, not production sign-in. Optional GitHub-only Better Auth sign-in and first-workspace setup are implemented; see [authentication setup](docs/AUTHENTICATION.md).
+Open `http://127.0.0.1:5173`. The product opens with GitHub sign-in. Configure this project's OAuth app using [authentication setup](docs/AUTHENTICATION.md); without configuration, sign-in is visibly unavailable and legacy demo cookies are rejected. New accounts create their workspace and first project, then land on an empty board. No seed data or simulated worker is started by normal development.
 
-Postgres uses existing ARM64 binaries with project-private storage and a Unix socket only. No existing database service is used. API and previews bind loopback ports 4310 and 4311. Stop the app with Ctrl+C and the database with `bun run db:stop`.
+Postgres uses existing ARM64 binaries with project-private storage and a Unix socket only. No existing database service is used. The API binds loopback port 4310; the fixture-only preview test uses 4311. Stop the app with Ctrl+C and the database with `bun run db:stop`.
 
 ```bash
 bun run typecheck
@@ -30,7 +30,7 @@ bun run test:browser
 
 Tests require the private database to be running and create/drop only their own randomly named schema. Browser checks use `R2_BROWSER_PATH` or this VPS’s existing ARM64 Chromium. On this VPS, run `python3 scripts/prepare-browser.py` once to prepare a project-private copy with compatible existing libraries; no browser download or system modification is needed.
 
-For an explicitly authorised temporary UI tunnel, set `R2_DEV_ORIGIN` to its exact HTTPS origin and `R2_PREVIEW_ORIGIN` to a different HTTPS tunnel forwarding the fixture preview on port 4311. The app origin forwards Vite on port 5173. No wildcard tunnel origins are accepted. This exposes the fixture participant selector and simulated data to anyone with the link; it is not production authentication. Vite blocks project-private toolchain/data directories. Stop the tunnel processes when review ends.
+For an explicitly authorised temporary UI tunnel, set `R2_DEV_ORIGIN` to its exact HTTPS origin and `R2_PREVIEW_ORIGIN` to a different HTTPS tunnel forwarding the fixture preview on port 4311. The app origin forwards Vite on port 5173. No wildcard tunnel origins are accepted. The tunnel shows the product sign-in screen. Live OAuth requires matching the callback and trusted origin to that exact URL. Vite blocks project-private toolchain/data directories. Stop the tunnel processes when review ends.
 
 ## Structure
 
@@ -48,6 +48,8 @@ Bun 1.4.2 is the runtime and package manager; `bun.lock` is the only project loc
 
 ## Documents
 
+- [Remaining implementation plan](docs/IMPLEMENTATION-PLAN.md)
+- [Vercel Sandbox](docs/VERCEL-SANDBOX.md)
 - [GitHub authentication](docs/AUTHENTICATION.md)
 - [Design system](DESIGN.md)
 - [UI verification](docs/UI-VERIFICATION.md)

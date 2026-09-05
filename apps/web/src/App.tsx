@@ -4,6 +4,7 @@ import { Sidebar } from './components/Sidebar';
 import { Board } from './components/Board';
 import { Composer } from './components/Composer';
 import { TaskDetail } from './components/TaskDetail';
+import { NewProject } from './components/NewProject';
 import { NewTask } from './components/NewTask';
 import { Icon } from './components/Icon';
 import { Avatar, Button, IconButton, Modal } from './components/ui';
@@ -19,6 +20,7 @@ export function App() {
     [showFilters, setShowFilters] = useState(false),
     [selectedId, setSelectedId] = useState<string | null>(null),
     [creating, setCreating] = useState(false),
+    [newProject, setNewProject] = useState(false),
     [connections, setConnections] = useState(false),
     [participants, setParticipants] = useState(false);
   useEffect(() => {
@@ -99,7 +101,7 @@ export function App() {
         <Button onClick={() => location.reload()}>Try again</Button>
       </main>
     );
-  if (!w.identity && w.authConfig.mode === 'better-auth') return <AuthScreen />;
+  if (!w.identity) return <AuthScreen enabled={w.authConfig.enabled} />;
   if (w.identity && w.identity.projects.length === 0)
     return (
       <WorkspaceSetup
@@ -113,65 +115,6 @@ export function App() {
           }, 'Workspace created')
         }
       />
-    );
-  if (!w.identity)
-    return (
-      <div className="sign-in-page">
-        <div className="sign-in-art" aria-hidden="true">
-          <span className="sign-in-cloud">
-            <Icon name="cloud" size={58} />
-          </span>
-          <span className="floating-note note-blue">
-            <Icon name="flag" />
-            <i />
-            <i />
-          </span>
-          <span className="floating-note note-sage">
-            <Icon name="complete" />
-            <i />
-            <i />
-          </span>
-          <span className="art-small-dot" />
-        </div>
-        <div className="sign-in-card">
-          <span className="brand sign-in-brand">
-            <Icon name="cloud" size={26} />
-            r2cloud.
-          </span>
-          <h1>A space for your next good idea.</h1>
-          <p>Make progress together. Review every change.</p>
-          <div className="sign-in-divider">
-            <span>Explore the local fixture</span>
-          </div>
-          {[
-            ['maya', 'Maya Chen', 'Contributor & reviewer'],
-            ['alex', 'Alex Morgan', 'Contributor'],
-            ['sam', 'Sam Rivera', 'Viewer'],
-          ].map(([id, name, role], index) => (
-            <button
-              className="participant-choice"
-              key={id}
-              disabled={w.busy}
-              onClick={() => void w.signIn(id)}
-            >
-              <Avatar name={name} tone={index} />
-              <span>
-                <strong>{name}</strong>
-                <small>{role}</small>
-              </span>
-              <Icon name="right" size={19} />
-            </button>
-          ))}
-          <small className="sign-in-fixture">
-            Cloud runs, previews and GitHub actions are simulated.
-          </small>
-          {w.error && (
-            <p className="inline-error" role="alert">
-              {w.error}
-            </p>
-          )}
-        </div>
-      </div>
     );
   return (
     <div className={`workspace-shell ${sidebarOpen && !mobile ? 'with-sidebar' : ''}`}>
@@ -189,6 +132,7 @@ export function App() {
             if (mobile) setSidebarOpen(false);
           }}
           onProject={selectProject}
+          onNewProject={() => setNewProject(true)}
           onClose={() => setSidebarOpen(false)}
           onConnections={() => setConnections(true)}
           onSignOut={() => void w.signOut()}
@@ -362,6 +306,24 @@ export function App() {
           }
         />
       )}
+      {newProject && context && (
+        <NewProject
+          workspace={context.org_name ?? 'your workspace'}
+          busy={w.busy}
+          error={w.error}
+          close={() => setNewProject(false)}
+          save={(name) =>
+            w.act(async () => {
+              const result = await api<{ projectId: string }>(
+                `/workspaces/${context.org_id}/projects`,
+                { name },
+              );
+              await w.loadIdentity(result.projectId);
+              setNewProject(false);
+            }, 'Project created')
+          }
+        />
+      )}
       {creating && (
         <NewTask
           busy={w.busy}
@@ -397,25 +359,17 @@ export function App() {
             Membership, repository access and AI access stay separate.
           </p>
           {[
-            [
-              'people',
-              'Product sign-in',
-              w.identity.authMode === 'better-auth'
-                ? 'Verified Better Auth session'
-                : 'Local fixture participants',
-            ],
+            ['people', 'Product sign-in', 'Signed in with GitHub'],
             [
               'branch',
               'Repository',
-              project?.repo_id
-                ? 'Fixture repository · no GitHub writes'
-                : 'No repository connected',
+              project?.repo_id ? 'Repository connected' : 'No repository connected',
             ],
             [
               'sparkles',
               'AI connection',
               project?.provider_connected
-                ? 'Codex adapter · simulated execution'
+                ? 'Codex connection configured'
                 : 'No AI account connected',
             ],
           ].map(([icon, title, description]) => (
@@ -425,11 +379,11 @@ export function App() {
                 <strong>{title}</strong>
                 <span>{description}</span>
               </div>
-              {title !== 'Product sign-in' && <span className="fixture-inline">Fixture mode</span>}
             </div>
           ))}
           <p className="subtle">
-            Live connections need approved accounts and a managed sandbox provider.
+            Vercel Sandbox runs your tasks in isolated environments. Repository and AI connections
+            are required before work can start.
           </p>
         </Modal>
       )}

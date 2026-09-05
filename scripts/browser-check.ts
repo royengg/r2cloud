@@ -78,7 +78,9 @@ try {
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('http://127.0.0.1:4310');
   await audit('sign-in');
-  await page.getByRole('button', { name: /Maya Chen/ }).click();
+  await page.request.post('http://127.0.0.1:4310/api/local-session', { data: { userId: 'maya' } });
+  await page.reload();
+  await page.getByRole('button', { name: 'Website launch', exact: true }).click();
   await page.getByRole('heading', { name: /^Website launch/ }).waitFor();
   await page.getByText('Live', { exact: true }).waitFor();
   await page.getByRole('button', { name: /Make the first visit feel effortless/ }).click();

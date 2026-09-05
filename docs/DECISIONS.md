@@ -5,7 +5,7 @@ Confirmed by the user on 5 September 2026. This record supersedes the preliminar
 | Area | Confirmed decision |
 | --- | --- |
 | Audience | Product teams and nontechnical founders/product managers. |
-| Execution | Managed cloud sandboxes at launch. A connected runner is a future extension. |
+| Execution | Vercel Sandbox for managed cloud execution at launch. A connected runner is a future extension. |
 | Product sign-in | GitHub only for now, through Better Auth. Repository GitHub App access and AI credentials remain separate. |
 | Agent | Codex first, with a provider adapter boundary. |
 | Permissions | Contributors start work. Designated project reviewers approve publication. Merge requires separate authorisation. Agents cannot approve either action. |
@@ -21,7 +21,7 @@ One unresolved change per repository is a configurable pilot policy (`repositori
 
 Cloud BYOK remains a proposed authentication default. Managed cloud and Codex do not establish permission to share personal accounts, hosted-subscription entitlement, or a final billing arrangement. Product identity, repository installation, and provider delegation remain separate.
 
-Open choices: sandbox vendor, infrastructure budget, expected concurrency, region/residency, production hosting, provider credential/billing arrangement, supported web stacks, and whether direct human code editing belongs in the launch scope.
+Open choices: infrastructure budget, expected concurrency, region/residency, production hosting, provider credential/billing arrangement, supported web stacks, and whether direct human code editing belongs in the launch scope.
 
 ## Recovery and implementation record
 

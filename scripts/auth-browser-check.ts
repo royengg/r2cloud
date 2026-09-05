@@ -102,7 +102,24 @@ try {
   await page.getByText('No repository connected', { exact: true }).waitFor();
   await page.getByText('No AI account connected', { exact: true }).waitFor();
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: /New founder.*Sign out/ }).click();
+  await page.getByRole('button', { name: 'New project', exact: true }).click();
+  await page.getByLabel('Project name', { exact: true }).fill('Customer portal');
+  await page.getByRole('button', { name: 'Create project', exact: true }).click();
+  await page.getByRole('heading', { name: 'Customer portal', exact: true }).waitFor();
+  await page.getByText('Live', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Account options' }).click();
+  await page.getByRole('menuitem', { name: 'Connections', exact: true }).waitFor();
+  await audit('Account menu');
+  await page.screenshot({ path: '.local/screenshots/account-menu.png' });
+  await page.keyboard.press('Escape');
+  assert.equal(
+    await page
+      .getByRole('button', { name: 'Account options' })
+      .evaluate((e) => e === document.activeElement),
+    true,
+  );
+  await page.getByRole('button', { name: 'Account options' }).click();
+  await page.getByRole('menuitem', { name: 'Sign out', exact: true }).click();
   await page.getByRole('button', { name: 'Continue with GitHub', exact: true }).waitFor();
   await page.reload();
   await page.getByRole('button', { name: 'Continue with GitHub', exact: true }).waitFor();
@@ -111,7 +128,7 @@ try {
   await audit('Mobile sign-in');
   assert.deepEqual(errors, []);
   console.log(
-    'GitHub auth browser journey passed: mocked OAuth exchange, real session, workspace setup, task creation, missing-connection gate and sign-out. Three axe audits passed.',
+    'GitHub auth browser journey passed: mocked OAuth exchange, real session, workspace setup, task creation, missing-connection gate and sign-out. Four axe audits passed.',
   );
 } finally {
   await browser?.close();

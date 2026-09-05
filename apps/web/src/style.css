@@ -2585,3 +2585,98 @@ body:has(dialog[open]) {
   color: var(--color-todo-ink);
   font-size: var(--text-label);
 }
+
+.account-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 8px 0;
+  border-top: 1px solid var(--color-border);
+}
+.account-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+.account-identity > span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.account-identity strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.account-identity small {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.account-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  padding: 6px;
+  z-index: 20;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+  box-shadow: 0 12px 32px #29243a18;
+  transform-origin: bottom right;
+  animation: account-enter 150ms var(--ease-out);
+}
+.account-menu-heading {
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.account-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 10px;
+  border: 0;
+  background: transparent;
+  border-radius: 10px;
+  color: inherit;
+  cursor: pointer;
+}
+.account-menu button:focus-visible,
+.account-menu button:hover {
+  background: var(--surface-hover, #eeebf3);
+}
+@keyframes account-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .account-menu {
+    animation: none;
+  }
+}
+body[data-keyboard] .account-menu {
+  animation: none;
+}
+
+.project-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.project-list-heading .section-label {
+  margin-bottom: 0;
+}

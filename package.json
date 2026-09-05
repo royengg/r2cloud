@@ -19,12 +19,13 @@
     "db:stop": "bash scripts/postgres.sh stop",
     "db:generate": "bun --bun prisma generate",
     "db:migrate": "bun --bun prisma migrate deploy",
-    "db:setup": "bun run db:generate && bun run db:migrate && bun scripts/setup.ts",
+    "db:setup": "bun run db:generate && bun run db:migrate",
     "test": "bun test --timeout 30000 tests",
     "test:browser": "bun scripts/browser-check.ts",
     "format": "bun --bun prettier --write \"{apps,packages,scripts,tests}/**/*.{ts,tsx,css,json}\"",
     "design:lint": "bun node_modules/@google/design.md/dist/index.js lint DESIGN.md",
-    "test:auth-browser": "bun scripts/auth-browser-check.ts"
+    "test:auth-browser": "bun scripts/auth-browser-check.ts",
+    "test:seed": "R2_MODE=fixture bun scripts/setup.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

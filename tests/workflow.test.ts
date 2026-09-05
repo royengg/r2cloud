@@ -328,7 +328,7 @@ test('private previews enforce expiry and current project membership', async () 
   await expect(readPreview(other.url.split('#')[1])).rejects.toThrow('expired');
 });
 test('API validates sessions, CSRF origin, schemas, and durable command keys', async () => {
-  const app = createApp({ fixture: false });
+  const app = createApp({ fixture: true });
   await request(app).get('/api/me').expect(401);
   const cookie = await sessionCookie();
   await request(app)
@@ -343,7 +343,10 @@ test('API validates sessions, CSRF origin, schemas, and durable command keys', a
     .send({ title: 'x' })
     .expect(400);
   await request(app).get('/api/projects/private/snapshot').set('Cookie', cookie).expect(403);
-  await request(app).post('/api/local-session').send({ userId: 'maya' }).expect(401);
+  await request(createApp({ fixture: false }))
+    .post('/api/local-session')
+    .send({ userId: 'maya' })
+    .expect(401);
   const input = {
     title: 'A clearer welcome',
     outcome: 'Make it easy to begin',
@@ -366,7 +369,7 @@ test('API validates sessions, CSRF origin, schemas, and durable command keys', a
   expect(repeated.body).toEqual(first.body);
 });
 test('Socket.IO reconnection takes a fresh authoritative snapshot; closing it retains ownership', async () => {
-  const { server, io } = createHttpServer({ fixture: false });
+  const { server, io } = createHttpServer({ fixture: true });
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   const addr = server.address() as { port: number };
   const cookie = await sessionCookie();
@@ -397,7 +400,7 @@ test('Socket.IO reconnection takes a fresh authoritative snapshot; closing it re
   await new Promise<void>((r) => io.close(() => r()));
 });
 test('full fixture journey: create, start, review, correction, publication, separate verified merge', async () => {
-  const app = createApp({ fixture: false }),
+  const app = createApp({ fixture: true }),
     cookie = await sessionCookie();
   const created = await request(app)
     .post('/api/projects/launch/tasks')
@@ -827,4 +830,209 @@ test('missing OAuth configuration fails closed and login attempts are rate limit
     );
   expect(statuses.at(-1)).toBe(429);
   expect(await prisma.authRateLimit.count()).toBeGreaterThan(0);
+});
+
+test('product API rejects legacy fixture cookies and exposes no demo session endpoint', async () => {
+  const token = key();
+  await pool.query("INSERT INTO sessions VALUES($1,'maya',now()+interval '1 hour')", [hash(token)]);
+  const app = createApp({ fixture: false });
+  await request(app).get('/api/me').set('Cookie', `r2session=${token}`).expect(401);
+  await request(app).post('/api/local-session').send({ userId: 'maya' }).expect(401);
+  const config = await request(app).get('/api/auth-config').expect(200);
+  expect(config.body).toEqual({ mode: 'unconfigured', provider: 'github', enabled: false });
+});
+test('workspace owners create empty projects idempotently; members and other organisations cannot', async () => {
+  const { createProject } = await import('@r2cloud/core/projects');
+  await pool.query("UPDATE memberships SET role='owner' WHERE user_id='maya' AND org_id='studio'");
+  const receipt = key();
+  const values = await Promise.all([
+    createProject(maya, 'studio', receipt, { name: 'Customer portal' }),
+    createProject(maya, 'studio', receipt, { name: 'Customer portal' }),
+  ]);
+  expect(values[0]).toEqual(values[1]);
+  const board = await snapshot(maya, values[0].projectId);
+  expect(board.tasks).toHaveLength(0);
+  expect(board.project.repo_id).toBeNull();
+  expect(board.project.review).toBe(true);
+  await expect(createProject(alex, 'studio', key(), { name: 'Hidden access' })).rejects.toThrow(
+    'administrator',
+  );
+  await expect(createProject(maya, 'other', key(), { name: 'Hidden access' })).rejects.toThrow(
+    'administrator',
+  );
+  await expect(createProject(maya, 'studio', receipt, { name: 'Changed payload' })).rejects.toThrow(
+    'different content',
+  );
+});
+
+test('Vercel allocation and commands use durable intents, explicit credentials and restricted defaults', async () => {
+  const { VercelSandboxes } = await import('@r2cloud/adapters/vercel');
+  const { PostgresSandboxJournal } = await import('@r2cloud/core/sandbox-journal');
+  await command(maya, 'launch', 'welcome', key(), start);
+  const job = (await pool.query("SELECT * FROM jobs WHERE task_id='welcome'")).rows[0];
+  await pool.query(
+    `UPDATE runs SET manifest=jsonb_set(manifest,'{mode}','"managed"') WHERE id=$1`,
+    [job.run_id],
+  );
+  const identity = { operationId: job.id, runId: job.run_id, generation: 1 };
+  const journal = new PostgresSandboxJournal();
+  let created: any;
+  let runs = 0;
+  let stopCalls = 0;
+  const session = {
+    runCommand: async (params: any) => {
+      runs++;
+      expect(params.env).toEqual({});
+      expect(params.timeoutMs).toBe(60000);
+      return { exitCode: 0 };
+    },
+  };
+  const sandbox: any = {
+    name: '',
+    status: 'running',
+    tags: {},
+    currentSession: () => session,
+    stop: async () => {
+      stopCalls++;
+      return { status: 'stopped' };
+    },
+  };
+  const sdk: any = {
+    create: async (params: any) => {
+      created = params;
+      sandbox.name = params.name;
+      sandbox.tags = params.tags;
+      return sandbox;
+    },
+    get: async (params: any) => {
+      expect(params.resume).toBe(false);
+      return sandbox;
+    },
+  };
+  const cloud = new VercelSandboxes(
+    { token: 'test-token', projectId: 'test-project', teamId: 'test-team' },
+    journal,
+    sdk,
+  );
+  const plan = {
+    image: 'r2/base@sha256:' + 'a'.repeat(64),
+    region: 'iad1' as const,
+    minutes: 15,
+    vcpus: 2 as const,
+  };
+  await cloud.ensure(identity, plan);
+  await cloud.ensure(identity, plan);
+  expect(created.networkPolicy).toBe('deny-all');
+  expect(created.env).toEqual({});
+  expect(created.ports).toEqual([]);
+  expect(created.persistent).toBe(false);
+  expect(created.source).toBeUndefined();
+  const cmd = { cmd: 'bun', args: ['test'], cwd: '/vercel/sandbox/repository' };
+  await cloud.command(identity, 'tests', cmd);
+  await cloud.command(identity, 'tests', cmd);
+  expect(runs).toBe(1);
+  await expect(
+    cloud.command(identity, 'tests', { ...cmd, args: ['run', 'build'] }),
+  ).rejects.toThrow('different content');
+  await expect(cloud.ensure(identity, { ...plan, vcpus: 4 })).rejects.toThrow('different');
+  const proof = await cloud.stop(identity);
+  expect(proof).toHaveLength(64);
+  await cloud.stop(identity);
+  expect(stopCalls).toBe(1);
+  await expect(cloud.command(identity, 'later', cmd)).rejects.toThrow('not reserved');
+  expect((await cloud.observe(identity)).state).toBe('stopped');
+});
+test('uncertain Vercel creation never creates a replacement and stale generations are rejected', async () => {
+  const { VercelSandboxes } = await import('@r2cloud/adapters/vercel');
+  const { PostgresSandboxJournal } = await import('@r2cloud/core/sandbox-journal');
+  await command(maya, 'launch', 'welcome', key(), start);
+  const job = (await pool.query("SELECT * FROM jobs WHERE task_id='welcome'")).rows[0];
+  await pool.query(
+    `UPDATE runs SET manifest=jsonb_set(manifest,'{mode}','"managed"') WHERE id=$1`,
+    [job.run_id],
+  );
+  const identity = { operationId: job.id, runId: job.run_id, generation: 1 };
+  let creates = 0;
+  const sdk: any = {
+    create: async () => {
+      creates++;
+      throw new Error('Timeout after allocation');
+    },
+    get: async () => {
+      throw new Error('Network unavailable');
+    },
+  };
+  const cloud = new VercelSandboxes(
+    { token: 'test', projectId: 'test', teamId: 'test' },
+    new PostgresSandboxJournal(),
+    sdk,
+  );
+  const plan = {
+    image: 'r2/base@sha256:' + 'a'.repeat(64),
+    region: 'iad1' as const,
+    minutes: 15,
+    vcpus: 2 as const,
+  };
+  await expect(cloud.ensure(identity, plan)).rejects.toThrow('uncertain');
+  await expect(cloud.ensure(identity, plan)).rejects.toThrow('replacement');
+  expect(creates).toBe(1);
+  expect((await cloud.observe(identity)).state).toBe('unknown');
+  await expect(cloud.ensure({ ...identity, generation: 2 }, plan)).rejects.toThrow('Stale');
+});
+
+test('a lost Vercel command response is not replayed; stop can be reconciled after a timeout', async () => {
+  const { VercelSandboxes } = await import('@r2cloud/adapters/vercel');
+  const { PostgresSandboxJournal } = await import('@r2cloud/core/sandbox-journal');
+  await command(maya, 'launch', 'welcome', key(), start);
+  const job = (await pool.query("SELECT * FROM jobs WHERE task_id='welcome'")).rows[0];
+  await pool.query(
+    `UPDATE runs SET manifest=jsonb_set(manifest,'{mode}','"managed"') WHERE id=$1`,
+    [job.run_id],
+  );
+  const identity = { operationId: job.id, runId: job.run_id, generation: 1 };
+  let commands = 0,
+    stops = 0;
+  const sandbox: any = {
+    name: '',
+    status: 'running',
+    tags: {},
+    currentSession: () => ({
+      runCommand: async () => {
+        commands++;
+        throw new Error('Lost response');
+      },
+    }),
+    stop: async () => {
+      stops++;
+      if (stops === 1) throw new Error('Lost stop');
+      return { status: 'stopped' };
+    },
+  };
+  const sdk: any = {
+    create: async (p: any) => {
+      sandbox.name = p.name;
+      sandbox.tags = p.tags;
+      return sandbox;
+    },
+    get: async () => sandbox,
+  };
+  const cloud = new VercelSandboxes(
+    { token: 'test', teamId: 'test', projectId: 'test' },
+    new PostgresSandboxJournal(),
+    sdk,
+  );
+  await cloud.ensure(identity, {
+    image: 'r2/base@sha256:' + 'a'.repeat(64),
+    region: 'iad1',
+    minutes: 15,
+    vcpus: 2,
+  });
+  const step = { cmd: 'bun', args: ['test'], cwd: '/vercel/sandbox/repository' };
+  await expect(cloud.command(identity, 'run', step)).rejects.toThrow('Lost response');
+  await expect(cloud.command(identity, 'run', step)).rejects.toThrow('must not be replayed');
+  expect(commands).toBe(1);
+  await expect(cloud.stop(identity)).rejects.toThrow('not confirmed');
+  await expect(cloud.command(identity, 'another', step)).rejects.toThrow('not reserved');
+  expect(await cloud.stop(identity)).toHaveLength(64);
+  expect(stops).toBe(2);
 });

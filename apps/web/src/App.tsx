@@ -296,6 +296,7 @@ export function App() {
             </div>
           )}
           <Composer
+            key={w.projectId}
             projectName={context?.name ?? 'Project'}
             busy={w.busy}
             canComment={!!project?.contribute}

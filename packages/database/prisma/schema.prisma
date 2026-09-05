@@ -1,0 +1,335 @@
+// Partial unique indexes, CHECK constraints and immutability trigger live in SQL migrations.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model approvals {
+  id             String     @id
+  org_id         String
+  project_id     String
+  task_id        String
+  candidate_id   String
+  action         String
+  digest         String
+  approver_id    String
+  policy_version String
+  expires_at     DateTime   @db.Timestamptz(6)
+  revoked_at     DateTime?  @db.Timestamptz(6)
+  consumed_at    DateTime?  @db.Timestamptz(6)
+  users          users      @relation(fields: [approver_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  candidates     candidates @relation(fields: [org_id, project_id, task_id, candidate_id], references: [org_id, project_id, task_id, id], onDelete: NoAction, onUpdate: NoAction)
+  jobs           jobs[]
+}
+
+model candidates {
+  id             String           @id
+  org_id         String
+  project_id     String
+  task_id        String
+  run_id         String
+  generation     Int
+  digest         String
+  manifest       Json
+  evidence       Json
+  created_at     DateTime         @default(now()) @db.Timestamptz(6)
+  approvals      approvals[]
+  runs           runs             @relation(fields: [org_id, project_id, task_id, run_id], references: [org_id, project_id, task_id, id], onDelete: NoAction, onUpdate: NoAction)
+  preview_grants preview_grants[]
+  publications   publications[]
+  tasks          tasks[]
+
+  @@unique([org_id, project_id, task_id, id])
+}
+
+model claims {
+  id           String       @id
+  org_id       String
+  project_id   String
+  task_id      String
+  owner_id     String
+  repo_id      String
+  released_at  DateTime?    @db.Timestamptz(6)
+  created_at   DateTime     @default(now()) @db.Timestamptz(6)
+  tasks        tasks        @relation(fields: [org_id, project_id, task_id], references: [org_id, project_id, id], onDelete: NoAction, onUpdate: NoAction)
+  repositories repositories @relation(fields: [org_id, repo_id], references: [org_id, id], onDelete: NoAction, onUpdate: NoAction)
+  users        users        @relation(fields: [owner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  runs         runs[]
+
+  @@unique([org_id, project_id, task_id, id])
+}
+
+model comments {
+  id         String   @id
+  org_id     String
+  project_id String
+  task_id    String?
+  user_id    String
+  body       String
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  projects   projects @relation(fields: [org_id, project_id], references: [org_id, id], onDelete: NoAction, onUpdate: NoAction)
+  tasks      tasks?   @relation(fields: [org_id, project_id, task_id], references: [org_id, project_id, id], onDelete: NoAction, onUpdate: NoAction)
+  users      users    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model dependencies {
+  org_id                                                 String
+  project_id                                             String
+  task_id                                                String
+  depends_on                                             String
+  tasks_dependencies_org_id_project_id_depends_onTotasks tasks  @relation("dependencies_org_id_project_id_depends_onTotasks", fields: [org_id, project_id, depends_on], references: [org_id, project_id, id], onDelete: NoAction, onUpdate: NoAction)
+  tasks_dependencies_org_id_project_id_task_idTotasks    tasks  @relation("dependencies_org_id_project_id_task_idTotasks", fields: [org_id, project_id, task_id], references: [org_id, project_id, id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([task_id, depends_on])
+}
+
+model events {
+  id         BigInt   @id @default(autoincrement())
+  org_id     String
+  project_id String
+  task_id    String?
+  actor_id   String?
+  kind       String
+  detail     Json
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  users      users?   @relation(fields: [actor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  projects   projects @relation(fields: [org_id, project_id], references: [org_id, id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([project_id, id], map: "events_project_cursor")
+}
+
+model fixture_external {
+  operation_id String @id
+  kind         String
+  result       Json
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model jobs {
+  id           String        @id
+  org_id       String
+  project_id   String
+  task_id      String
+  run_id       String?
+  approval_id  String?
+  kind         String
+  state        String        @default("ready")
+  attempts     Int           @default(0)
+  lease_until  DateTime?     @db.Timestamptz(6)
+  lease_token  String?
+  available_at DateTime      @default(now()) @db.Timestamptz(6)
+  error        String?
+  created_at   DateTime      @default(now()) @db.Timestamptz(6)
+  approvals    approvals?    @relation(fields: [approval_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tasks        tasks         @relation(fields: [org_id, project_id, task_id], references: [org_id, project_id, id], onDelete: NoAction, onUpdate: NoAction)
+  publications publications?
+}
+
+model memberships {
+  org_id               String
+  user_id              String
+  organisations        organisations          @relation(fields: [org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                users                  @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  project_access       project_access[]
+  provider_connections provider_connections[]
+
+  @@id([org_id, user_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model organisations {
+  id                   String                 @id
+  name                 String
+  max_runs             Int                    @default(2)
+  memberships          memberships[]
+  projects             projects[]
+  provider_connections provider_connections[]
+  repositories         repositories[]
+}
+
+model preview_grants {
+  token_hash   String     @id
+  user_id      String
+  candidate_id String
+  expires_at   DateTime   @db.Timestamptz(6)
+  candidates   candidates @relation(fields: [candidate_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users        users      @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model project_access {
+  org_id      String
+  project_id  String
+  user_id     String
+  contribute  Boolean     @default(false)
+  review      Boolean     @default(false)
+  merge       Boolean     @default(false)
+  projects    projects    @relation(fields: [org_id, project_id], references: [org_id, id], onDelete: NoAction, onUpdate: NoAction)
+  memberships memberships @relation(fields: [org_id, user_id], references: [org_id, user_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([project_id, user_id])
+}
+
+model projects {
+  id                   String                 @id
+  org_id               String
+  name                 String
+  repo_id              String
+  comments             comments[]
+  events               events[]
+  project_access       project_access[]
+  organisations        organisations          @relation(fields: [org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  repositories         repositories           @relation(fields: [org_id, repo_id], references: [org_id, id], onDelete: NoAction, onUpdate: NoAction)
+  provider_connections provider_connections[]
+  receipts             receipts[]
+  skills               skills[]
+  tasks                tasks[]
+
+  @@unique([org_id, id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model provider_connections {
+  id            String        @id
+  org_id        String
+  project_id    String
+  user_id       String
+  provider      String
+  secret_ref    String?
+  mode          String
+  enabled       Boolean       @default(false)
+  organisations organisations @relation(fields: [org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  projects      projects      @relation(fields: [org_id, project_id], references: [org_id, id], onDelete: NoAction, onUpdate: NoAction)
+  memberships   memberships   @relation(fields: [org_id, user_id], references: [org_id, user_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model publications {
+  operation_id String     @id
+  org_id       String
+  project_id   String
+  task_id      String
+  candidate_id String
+  pr_number    Int
+  url          String
+  head_sha     String
+  merged_sha   String?
+  jobs         jobs       @relation(fields: [operation_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  candidates   candidates @relation(fields: [org_id, project_id, task_id, candidate_id], references: [org_id, project_id, task_id, id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model receipts {
+  user_id      String
+  project_id   String
+  key          String
+  payload_hash String
+  response     Json
+  projects     projects @relation(fields: [project_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users        users    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([user_id, project_id, key])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model repositories {
+  id            String        @id
+  org_id        String
+  full_name     String
+  target_ref    String        @default("main")
+  base_sha      String
+  max_changes   Int           @default(1)
+  claims        claims[]
+  projects      projects[]
+  organisations organisations @relation(fields: [org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([org_id, id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model runs {
+  id           String       @id
+  org_id       String
+  project_id   String
+  task_id      String
+  claim_id     String
+  generation   Int
+  state        String
+  stopped_at   DateTime?    @db.Timestamptz(6)
+  stop_proof   String?
+  heartbeat_at DateTime?    @db.Timestamptz(6)
+  manifest     Json
+  created_at   DateTime     @default(now()) @db.Timestamptz(6)
+  candidates   candidates[]
+  claims       claims       @relation(fields: [org_id, project_id, task_id, claim_id], references: [org_id, project_id, task_id, id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([org_id, project_id, task_id, id])
+}
+
+model schema_migrations {
+  version String @id
+}
+
+model sessions {
+  token_hash String   @id
+  user_id    String
+  expires_at DateTime @db.Timestamptz(6)
+  users      users    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model skills {
+  id           String
+  version      String
+  org_id       String
+  project_id   String
+  digest       String
+  instructions String
+  enabled      Boolean  @default(false)
+  projects     projects @relation(fields: [org_id, project_id], references: [org_id, id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([id, version])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model tasks {
+  id                                                            String         @id
+  org_id                                                        String
+  project_id                                                    String
+  title                                                         String
+  outcome                                                       String
+  criteria                                                      Json
+  priority                                                      String
+  state                                                         String         @default("todo")
+  version                                                       Int            @default(1)
+  generation                                                    Int            @default(0)
+  candidate_id                                                  String?
+  merged_sha                                                    String?
+  completed_at                                                  DateTime?      @db.Timestamptz(6)
+  created_at                                                    DateTime       @default(now()) @db.Timestamptz(6)
+  claims                                                        claims[]
+  comments                                                      comments[]
+  dependencies_dependencies_org_id_project_id_depends_onTotasks dependencies[] @relation("dependencies_org_id_project_id_depends_onTotasks")
+  dependencies_dependencies_org_id_project_id_task_idTotasks    dependencies[] @relation("dependencies_org_id_project_id_task_idTotasks")
+  jobs                                                          jobs[]
+  projects                                                      projects       @relation(fields: [org_id, project_id], references: [org_id, id], onDelete: NoAction, onUpdate: NoAction)
+  candidates                                                    candidates?    @relation(fields: [org_id, project_id, id, candidate_id], references: [org_id, project_id, task_id, id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([org_id, project_id, id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model users {
+  id             String           @id
+  name           String
+  kind           String
+  approvals      approvals[]
+  claims         claims[]
+  comments       comments[]
+  events         events[]
+  memberships    memberships[]
+  preview_grants preview_grants[]
+  receipts       receipts[]
+  sessions       sessions[]
+}

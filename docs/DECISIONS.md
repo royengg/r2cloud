@@ -14,7 +14,7 @@ Confirmed by the user on 5 September 2026. This record supersedes the preliminar
 | Experience | Dark, approachable three-column board; technical detail is progressively disclosed. |
 | Workspace | `/home/paseo-agent/workspace/r2cloud`. Both session and VPS instructions explicitly permit this path. |
 
-Reversible engineering choices: React/TypeScript/Vite, Express/TypeScript, Postgres, separate API/workflow/publisher processes, durable database jobs and events, immutable review manifests, authenticated preview grants, versioned run-pinned skills. Neon is a possible deployment vendor, not a commitment.
+Reversible engineering choices: React/TypeScript/Vite, Express/TypeScript, Postgres, separate API/workflow/publisher processes, durable database jobs and events, immutable review manifests, authenticated preview grants, versioned run-pinned skills. The user subsequently selected Prisma for Neon Postgres, Socket.IO for realtime, and Bun workspaces/package manager/runtime. No Neon resource has been provisioned.
 
 One unresolved change per repository is a configurable pilot policy (`repositories.max_changes`), not a permanent data-model restriction or separately confirmed product requirement. Organisation concurrency and per-run time/budget grants are independent limits.
 
@@ -27,3 +27,5 @@ Open choices: sandbox vendor, infrastructure budget, expected concurrency, regio
 All four original documents were read and moved from the mistaken project directory without overwriting files. The target initially contained only an unborn Git repository. RESEARCH.md retains the earlier agent's source-review provenance; it is not a claim that this session repeated that review.
 
 Local implementation uses clearly labelled fixtures for external execution and publication until approved accounts and vendor implementations exist. A fixture result never proves real cloud execution or GitHub publication. See [IMPLEMENTATION.md](IMPLEMENTATION.md) for the current boundaries and validation record.
+
+The user explicitly authorised incremental commits and pushes to the remote main branch during implementation. Deployment and paid provisioning remain unauthorised.

@@ -10,7 +10,7 @@ The product should centre on an outcome: a task explains the user problem, expec
 
 Build a responsive website first. It supports invitations, shared links, central access control, and review across devices. The browser controls execution through a server; it cannot silently use a visitor's local CLI installation or credentials. A paired runner is required for that mode. A desktop wrapper can be added later without redesigning the core.
 
-Use one TypeScript backend codebase with explicit domain modules, separately deployed API and background-worker processes, and isolated execution infrastructure. Do not start with a fleet of domain microservices. Process and security boundaries still matter even where code is shared.
+Use a Bun workspace monorepo and one TypeScript backend codebase with explicit domain modules, separately deployed API and background-worker processes, and isolated execution infrastructure. Do not start with a fleet of domain microservices. Process and security boundaries still matter even where code is shared.
 
 ## 2. System map
 
@@ -53,8 +53,8 @@ The additions to the sketch are the workflow worker, durable job processing, exe
 | --- | --- | --- |
 | Website | React, TypeScript, Vite | A board-centric application with rich client interaction; no need to couple agent execution to rendering. |
 | HTTP backend | Express, TypeScript, schema validation | Fits the sketch. Keep routes thin and domain transactions explicit. |
-| Realtime | WebSockets; HTTP for durable commands | Board updates, agent progress, presence; terminal transport later if needed. |
-| Database | Postgres; Neon is a suitable managed candidate | Transactions, constraints, relational permissions, row security, durable jobs. |
+| Realtime | Socket.IO over WebSockets; HTTP for durable commands | Board updates, agent progress, presence; terminal transport later if needed. |
+| Database | Prisma ORM on Postgres; Neon selected for managed hosting | Transactions, constraints, relational permissions, row security, durable jobs. |
 | Workflow | Persisted state machine and Postgres jobs/outbox | Restart recovery and retries without an additional queue service initially. |
 | Execution | Managed sandbox provider behind an adapter | Avoid building a VM fleet before proving the product. Vendor selection remains open. |
 | Preview automation | Playwright inside each execution environment | Browser checks, screenshots, traces, console/network evidence. |

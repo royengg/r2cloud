@@ -1,8 +1,31 @@
 import express from 'express';
-import {readPreview} from '../../../packages/core/src/preview';
-if(process.env.R2_MODE!=='fixture')throw new Error('A separate-site managed preview gateway is required.');
-const app=express();app.disable('x-powered-by');
-app.use((_req,res,next)=>{res.set({'Referrer-Policy':'no-referrer','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; script-src 'nonce-r2-fixture'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"});next();});
-app.get('/view',(_req,res)=>res.type('html').send(`<!doctype html><html lang="en"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>R2Cloud · Fixture preview</title><style>body{margin:0;background:#101513;color:#e5eee8;font:16px system-ui;padding:8vw}small{color:#99b9a3}h1{font-size:clamp(30px,5vw,64px);max-width:900px;letter-spacing:-.04em}section{max-width:800px;padding:32px;border:1px solid #334439;border-radius:20px}li{margin:18px 0}p{line-height:1.7;color:#aec1b4}</style><small>R2CLOUD / FIXTURE PREVIEW</small><h1>A place to review the outcome.</h1><section id="content">Checking private preview access…</section><script nonce="r2-fixture">const token=location.hash.slice(1);history.replaceState(null,'','/view');fetch('/snapshot',{headers:{Authorization:'Bearer '+token}}).then(async r=>{const data=await r.json();if(!r.ok)throw Error(data.error);const box=document.getElementById('content');box.replaceChildren();const p=document.createElement('p');p.textContent='This is a simulated review artifact, not a running repository application.';box.append(p);const title=document.createElement('h2');title.textContent=data.manifest.summary;box.append(title);const ul=document.createElement('ul');for(const check of data.evidence.checks){const li=document.createElement('li');li.textContent=check.name+' · fixture result';ul.append(li)}box.append(ul);const note=document.createElement('p');note.textContent='Snapshot '+data.manifest.artifactDigest.slice(0,12);box.append(note)}).catch(e=>document.getElementById('content').textContent=e.message);</script></html>`));
-app.get('/snapshot',async(req,res)=>{try{res.json(await readPreview((req.headers.authorization??'').replace(/^Bearer /,'')));}catch(e){res.status(403).json({error:e instanceof Error?e.message:'Access denied'});}});
-app.listen(4311,'127.0.0.1',()=>console.log('Private fixture preview · http://127.0.0.1:4311'));
+import { readPreview } from '@r2cloud/core/preview';
+if (process.env.R2_MODE !== 'fixture')
+  throw new Error('A separate-site managed preview gateway is required.');
+const app = express();
+app.disable('x-powered-by');
+app.use((_req, res, next) => {
+  res.set({
+    'Referrer-Policy': 'no-referrer',
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy':
+      "default-src 'none'; script-src 'nonce-r2-fixture'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'",
+  });
+  next();
+});
+app.get('/view', (_req, res) =>
+  res
+    .type('html')
+    .send(
+      `<!doctype html><html lang="en"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>R2Cloud · Fixture preview</title><style>body{margin:0;background:#101513;color:#e5eee8;font:16px system-ui;padding:8vw}small{color:#99b9a3}h1{font-size:clamp(30px,5vw,64px);max-width:900px;letter-spacing:-.04em}section{max-width:800px;padding:32px;border:1px solid #334439;border-radius:20px}li{margin:18px 0}p{line-height:1.7;color:#aec1b4}</style><small>R2CLOUD / FIXTURE PREVIEW</small><h1>A place to review the outcome.</h1><section id="content">Checking private preview access…</section><script nonce="r2-fixture">const token=location.hash.slice(1);history.replaceState(null,'','/view');fetch('/snapshot',{headers:{Authorization:'Bearer '+token}}).then(async r=>{const data=await r.json();if(!r.ok)throw Error(data.error);const box=document.getElementById('content');box.replaceChildren();const p=document.createElement('p');p.textContent='This is a simulated review artifact, not a running repository application.';box.append(p);const title=document.createElement('h2');title.textContent=data.manifest.summary;box.append(title);const ul=document.createElement('ul');for(const check of data.evidence.checks){const li=document.createElement('li');li.textContent=check.name+' · fixture result';ul.append(li)}box.append(ul);const note=document.createElement('p');note.textContent='Snapshot '+data.manifest.artifactDigest.slice(0,12);box.append(note)}).catch(e=>document.getElementById('content').textContent=e.message);</script></html>`,
+    ),
+);
+app.get('/snapshot', async (req, res) => {
+  try {
+    res.json(await readPreview((req.headers.authorization ?? '').replace(/^Bearer /, '')));
+  } catch (e) {
+    res.status(403).json({ error: e instanceof Error ? e.message : 'Access denied' });
+  }
+});
+app.listen(4311, '127.0.0.1', () => console.log('Private fixture preview · http://127.0.0.1:4311'));

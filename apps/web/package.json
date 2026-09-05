@@ -1,0 +1,16 @@
+{
+  "name": "@r2cloud/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "lucide-react": "^0.544.0",
+    "socket.io-client": "^4.8.3",
+    "@r2cloud/contracts": "workspace:*"
+  },
+  "scripts": {
+    "dev": "bun --bun vite --host 127.0.0.1"
+  }
+}

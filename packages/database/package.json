@@ -1,0 +1,14 @@
+{
+  "name": "@r2cloud/database",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@prisma/client": "7.10.0",
+    "@prisma/adapter-pg": "7.10.0",
+    "pg": "^8.16.3"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

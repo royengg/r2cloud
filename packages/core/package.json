@@ -1,0 +1,13 @@
+{
+  "name": "@r2cloud/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@r2cloud/database": "workspace:*",
+    "@r2cloud/contracts": "workspace:*"
+  },
+  "exports": {
+    "./*": "./src/*.ts"
+  }
+}

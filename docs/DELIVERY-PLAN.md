@@ -21,7 +21,7 @@ Project permission updates use expected versions. Removing project access retain
 
 ## External gates
 
-GitHub product OAuth is configured. Repository App credentials, scoped Codex credentials, Vercel project/team access, approved spending/region, object storage and a separate preview domain remain absent. Test doubles are restricted to test tooling. Provider selection alone does not enable live resource creation. Missing integrations must leave truthful setup/blocked states, with planning still usable.
+GitHub product OAuth is configured. Repository App credentials, scoped Codex credentials, Vercel project/team access, verified Hobby quota (free-only; Paris pilot region), object storage and a separate preview domain remain absent. Test doubles are restricted to test tooling. Provider selection alone does not enable live resource creation. Missing integrations must leave truthful setup/blocked states, with planning still usable.
 
 ## Implemented in this increment
 
@@ -32,3 +32,5 @@ Live Codex credential scope is awaiting the user's choice (project keys, organiz
 ## Execution setup increment
 
 Versioned repository execution profiles, checked read/write APIs, immutable per-run profile pinning and Codex device-login protocol methods are implemented. [Execution connection details](EXECUTION-CONNECTIONS.md) distinguish these from the pending live credential broker and Vercel supervisor. No live subscription link or sandbox run has been completed.
+
+Pilot constraint: one tester on their own repositories, $0 paid sandbox usage; use Paris (`cdg1`) as the closest currently supported Sandbox region to Kolkata. See [pilot limits](VERCEL-SANDBOX.md#personal-pilot-policy--2026-09-05). Live account eligibility remains unverified.

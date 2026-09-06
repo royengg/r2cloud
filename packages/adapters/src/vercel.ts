@@ -79,6 +79,7 @@ export class VercelSandboxes {
         name,
         image: plan.image,
         region: plan.region,
+        failoverRegions: [],
         resources: { vcpus: plan.vcpus },
         timeout: plan.minutes * 60_000,
         persistent: false,

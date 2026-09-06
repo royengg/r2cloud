@@ -12,7 +12,7 @@ The product is under development. No live agent execution, repository publicatio
 - Repository execution settings UI and 10-minute, zero-paid task-start defaults; managed runs reject paid allowances.
 - Light design system, workspace picker, task review panels and expanded project conversations.
 
-Product GitHub OAuth is configured locally. Repository App discovery, Codex and Vercel adapter checks use mocked external protocols. The personal subscription connection flow is implemented but has not been validated with a real account. Cloud coding remains disabled.
+Product GitHub OAuth is configured locally. Repository App discovery and Codex completion checks use mocked external protocols. A real Vercel Hobby sandbox passed creation, tool inspection, confirmed stop and removal; application-worker execution remains unvalidated. The personal subscription connection flow is implemented but has not been validated with a real account. Cloud coding remains disabled.
 
 ## Next implementation steps
 

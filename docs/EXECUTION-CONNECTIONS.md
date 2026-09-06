@@ -41,7 +41,7 @@ The protected API exposes `GET` and `POST /api/projects/:projectId/codex`, and `
 
 ## Remaining live gates
 
-GitHub product OAuth is configured. The separate repository App client configuration/installations are not yet configured here. Vercel credentials, verified free quota, trusted image, a complete supervisor transport, private preview/object storage and production broker isolation remain outstanding. The status endpoint deliberately returns `ready: false`; the account-link button is available only when the separate login broker is configured. No paid resources or live Codex login were initiated by this increment.
+GitHub product OAuth is configured. The separate repository App client configuration/installations are not yet configured here. Vercel CLI login and a live Hobby sandbox smoke check are complete. A compatible Codex image, renewable worker credentials, complete supervisor transport, private preview/object storage and production broker isolation remain outstanding. The status endpoint deliberately returns `ready: false`; the account-link button is available only when the separate login broker is configured. No paid resources or live Codex login were initiated by this increment.
 
 Sources checked on 2026-09-05: [Codex authentication](https://learn.chatgpt.com/docs/auth), [app-server authentication](https://learn.chatgpt.com/docs/app-server), [Vercel Sandbox lifecycle](https://vercel.com/docs/sandbox/working-with-sandbox).
 
@@ -65,11 +65,19 @@ Snapshot intent closes command intake. Snapshot identifiers and a separately con
 
 ## Not enabled for live coding yet
 
-The control plane is implemented and tested with the official SDK replaced by a test double. It is **not yet a complete ManagedSandboxProvider/Codex supervisor** and is not wired into the product worker. No real Vercel resource has been created.
+The control plane is implemented and tested with the official SDK replaced by a test double. It is **not yet a complete ManagedSandboxProvider/Codex supervisor** and is not wired into the product worker. A real CLI sandbox passed the smoke check below; the application worker has not executed a task on Vercel.
 
 The next integration requires a reviewed, pinned image containing Bun/Codex/browser tools; repository import with read-only credentials; a scoped model credential broker and spending enforcement; a durable Codex transport; immutable artifact export; independent checks; private preview gateway; and worker wiring. The existing generic managed harness describes those interfaces but does not implement them on Vercel yet. The default product launcher deliberately does not start a simulated worker in their place.
 
-Credential configuration will use dedicated `R2_VERCEL_TOKEN`, `R2_VERCEL_TEAM_ID` and `R2_VERCEL_PROJECT_ID` in the worker environment. They are constructor inputs to the control plane, not auto-discovered operator credentials. Pilot region and spending policy are recorded below. A Vercel account with verified Hobby eligibility and remaining quota, dedicated credentials and live tests are still required.
+Credential configuration will use dedicated `R2_VERCEL_TOKEN`, `R2_VERCEL_TEAM_ID` and `R2_VERCEL_PROJECT_ID` in the worker environment. They are constructor inputs to the control plane, not auto-discovered operator credentials. Pilot region and spending policy are recorded below. The local CLI session uses a verified active Hobby team. Its short-lived access token is saved in ignored `.env.sandbox` alongside the team/project IDs, region and observed image digest; it must be refreshed before expiry. This file is not loaded into the API or product worker. Renewable worker credential handling and full task execution tests are still required.
+
+## Live setup verification — 2026-09-06
+
+The official Sandbox CLI 4.2.1 is installed in ignored `.local/vercel-cli`, with authentication stored separately under `.local/vercel-auth` (private directory and file permissions). The signed-in team is on an active Hobby plan. Vercel’s CLI selected its default sandbox project; no application was deployed or connected for automatic Git deployment.
+
+The smoke test created a nonpersistent sandbox in `cdg1`, with two vCPUs, a two-minute deadline, no failover, no public ports and deny-all networking. CLI command execution returned x86_64, Node 24.19.0, Bun 1.3.14, Codex 0.147.0 and Git 2.53.0. SDK inspection confirmed the running state and resolved image `vercel/sandbox/universal@sha256:0e3e3617e824397f170fc7c43ccaa565dd7ac36518e83ead3d41e077cd9f6ec7`.
+
+The CLI reported 39.246 seconds of session duration and 4.438 seconds of active CPU. Stop was independently confirmed through an SDK read with `resume: false`, followed by removal. No repository, model credentials or product secrets entered the sandbox. Codex 0.147.0 in that image differs from the broker’s pinned 0.153.2, so this is an infrastructure check, not a validated agent execution image.
 
 ## Verified sources
 
@@ -82,7 +90,7 @@ The user is testing alone from Kolkata, India, on their own repositories, using 
 
 Use Paris (`cdg1`) as the pilot region: it is geographically closest to Kolkata among the currently documented Sandbox regions (`iad1`, `sfo1`, `cle1`, `cdg1`). This is a geographic choice, not a measured latency result. There is no documented India or Singapore Sandbox region. Reconsider once data/storage locations and measured latency are known.
 
-Conservative implementation defaults: one concurrent run, 2 vCPUs, 10-minute session timeout, no automatic timeout extension or region failover. These are proposed operational limits within the user’s free-only testing constraint, not additional confirmed product requirements. Stop idle execution and keep snapshot retention bounded. Account plan and remaining quotas must be verified before launching; unknown eligibility blocks creation. No real sandbox has been provisioned under this policy yet.
+Conservative implementation defaults: one concurrent run, 2 vCPUs, 10-minute session timeout, no automatic timeout extension or region failover. These are proposed operational limits within the user’s free-only testing constraint, not additional confirmed product requirements. Stop idle execution and keep snapshot retention bounded. Account plan and remaining quotas must be verified before launching; unknown eligibility blocks creation. A nonpersistent two-minute smoke sandbox was created under this policy and stopped after approximately 39 seconds.
 
 Vercel currently documents Hobby allowances of 5 active CPU hours/month, 420 GB-hours of provisioned memory/month, 5,000 creations/month, 20 GB transfer/month and 15 GB lifetime snapshot storage. Hobby pauses creation at quota exhaustion instead of charging overages. Pro uses credits and then paid usage, so it cannot be treated as equivalent to Hobby free testing. These allowances cover sandbox infrastructure, not OpenAI model usage; use the explicitly connected subscription without API-key fallback for this pilot.
 

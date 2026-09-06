@@ -1,4 +1,4 @@
-import { pool } from '@r2cloud/database';
+import { prisma, json } from '@r2cloud/database';
 import { digest } from '@r2cloud/contracts/hash';
 import type {
   ExecutionBackend,
@@ -11,18 +11,20 @@ import type {
   MergeResult,
 } from '@r2cloud/contracts/adapters';
 async function observe<T>(operationId: string): Promise<Observation<T>> {
-  const row = (
-    await pool.query('SELECT result FROM fixture_external WHERE operation_id=$1', [operationId])
-  ).rows[0];
-  return row ? { state: 'finished', result: row.result } : { state: 'absent' };
+  const row = await prisma.fixture_external.findUnique({
+    where: { operation_id: operationId },
+    select: { result: true },
+  });
+  return row ? { state: 'finished', result: row.result as T } : { state: 'absent' };
 }
 async function save<T>(operationId: string, kind: string, result: T): Promise<T> {
-  return (
-    await pool.query(
-      'INSERT INTO fixture_external VALUES($1,$2,$3) ON CONFLICT(operation_id) DO UPDATE SET operation_id=EXCLUDED.operation_id RETURNING result',
-      [operationId, kind, JSON.stringify(result)],
-    )
-  ).rows[0].result;
+  const row = await prisma.fixture_external.upsert({
+    where: { operation_id: operationId },
+    create: { operation_id: operationId, kind, result: json(result) },
+    update: { operation_id: operationId },
+    select: { result: true },
+  });
+  return row.result as T;
 }
 export class FixtureExecution implements ExecutionBackend {
   readonly mode = 'fixture' as const;

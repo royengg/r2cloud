@@ -9,6 +9,7 @@
     "pg": "^8.16.3"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./locking": "./src/locking.ts"
   }
 }

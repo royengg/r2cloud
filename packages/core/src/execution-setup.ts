@@ -1,27 +1,21 @@
 import { z } from 'zod';
-import { pool, transaction, type DB } from './db';
-import { access, event, lockProject } from './service';
+import { prisma, json, type DB } from '@r2cloud/database';
+import { access, event, lockProject } from './project-context';
 import { projectAdministrator } from './team';
 import { digest } from '@r2cloud/contracts/hash';
 import { requireThat, type Actor } from '@r2cloud/contracts/domain';
 import { executionProfile } from '@r2cloud/contracts/execution';
 export { executionProfile } from '@r2cloud/contracts/execution';
 export async function readExecutionSetup(actor: Actor, projectId: string) {
-  const project = await access(pool, actor, projectId);
-  const profile =
-    (
-      await pool.query(
-        'SELECT version,config,updated_at FROM execution_profiles WHERE project_id=$1',
-        [projectId],
-      )
-    ).rows[0] ?? null;
-  const connection =
-    (
-      await pool.query(
-        'SELECT provider,mode,enabled FROM provider_connections WHERE project_id=$1 AND user_id=$2',
-        [projectId, actor.id],
-      )
-    ).rows[0] ?? null;
+  const project = await access(prisma, actor, projectId);
+  const profile = await prisma.execution_profiles.findUnique({
+    where: { project_id: projectId },
+    select: { version: true, config: true, updated_at: true },
+  });
+  const connection = await prisma.provider_connections.findFirst({
+    where: { project_id: projectId, user_id: actor.id },
+    select: { provider: true, mode: true, enabled: true },
+  });
   return {
     repositoryConnected: !!project.repo_id,
     profile,
@@ -46,17 +40,14 @@ export async function saveExecutionSetup(
     .strict()
     .parse(input);
   requireThat(key.length >= 8 && key.length <= 128, 400, 'A valid command key is required.');
-  return transaction(async (db) => {
+  return prisma.$transaction(async (db) => {
     await lockProject(db, projectId);
     const project = await projectAdministrator(db, actor, projectId);
     requireThat(project.repo_id, 409, 'Connect a repository before configuring execution.');
     const payloadHash = digest({ action: 'execution-setup', ...parsed });
-    const prior = (
-      await db.query(
-        'SELECT payload_hash,response FROM receipts WHERE user_id=$1 AND project_id=$2 AND key=$3',
-        [actor.id, projectId, key],
-      )
-    ).rows[0];
+    const prior = await db.receipts.findUnique({
+      where: { user_id_project_id_key: { user_id: actor.id, project_id: projectId, key } },
+    });
     if (prior) {
       requireThat(
         prior.payload_hash === payloadHash,
@@ -65,31 +56,46 @@ export async function saveExecutionSetup(
       );
       return prior.response;
     }
-    const previous = (
-      await db.query('SELECT version FROM execution_profiles WHERE project_id=$1', [projectId])
-    ).rows[0];
+    const previous = await db.execution_profiles.findUnique({
+      where: { project_id: projectId },
+      select: { version: true },
+    });
     requireThat(
       (previous?.version ?? 0) === parsed.version,
       409,
       'Execution setup changed. Reload before saving.',
     );
     const version = parsed.version + 1;
-    await db.query(
-      'INSERT INTO execution_profiles(project_id,org_id,version,config,updated_by) VALUES($1,$2,$3,$4,$5) ON CONFLICT(project_id) DO UPDATE SET version=$3,config=$4,updated_by=$5,updated_at=now()',
-      [projectId, project.org_id, version, JSON.stringify(parsed.config), actor.id],
-    );
+    await db.execution_profiles.upsert({
+      where: { project_id: projectId },
+      create: {
+        project_id: projectId,
+        org_id: project.org_id,
+        version,
+        config: json(parsed.config),
+        updated_by: actor.id,
+      },
+      update: {
+        version,
+        config: json(parsed.config),
+        updated_by: actor.id,
+        updated_at: new Date(),
+      },
+    });
     await event(db, projectId, null, actor.id, 'Execution setup updated', {
       version,
       digest: digest(parsed.config),
     });
     const result = { version };
-    await db.query('INSERT INTO receipts VALUES($1,$2,$3,$4,$5)', [
-      actor.id,
-      projectId,
-      key,
-      payloadHash,
-      JSON.stringify(result),
-    ]);
+    await db.receipts.create({
+      data: {
+        user_id: actor.id,
+        project_id: projectId,
+        key,
+        payload_hash: payloadHash,
+        response: result,
+      },
+    });
     return result;
   });
 }
@@ -100,9 +106,10 @@ export async function pinExecutionSetup(
   minutes: number,
   budgetCents: number,
 ) {
-  const profile = (
-    await db.query('SELECT version,config FROM execution_profiles WHERE project_id=$1', [projectId])
-  ).rows[0];
+  const profile = await db.execution_profiles.findUnique({
+    where: { project_id: projectId },
+    select: { version: true, config: true },
+  });
   requireThat(profile, 409, 'Configure repository setup and sandbox limits before starting work.');
   const config = executionProfile.parse(profile.config);
   requireThat(

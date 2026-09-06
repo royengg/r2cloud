@@ -1,7 +1,7 @@
 import type { Server as HttpServer } from 'node:http';
 import { Server as SocketServer } from 'socket.io';
-import { pool } from '@r2cloud/database';
-import { access } from '@r2cloud/core/service';
+import { prisma } from '@r2cloud/database';
+import { access } from '@r2cloud/core/project-context';
 import { requestActor } from '../auth/session';
 import { allowedOrigins, type AppOptions } from '../config/options';
 export function attachRealtime(server: HttpServer, options: AppOptions) {
@@ -15,7 +15,7 @@ export function attachRealtime(server: HttpServer, options: AppOptions) {
     try {
       const projectId = String(socket.handshake.auth.projectId ?? '');
       const actor = await requestActor(options, socket.request.headers);
-      await access(pool, actor, projectId);
+      await access(prisma, actor, projectId);
       socket.data = { projectId, actor };
       next();
     } catch {
@@ -31,13 +31,12 @@ export function attachRealtime(server: HttpServer, options: AppOptions) {
       checking = true;
       try {
         await requestActor(options, socket.request.headers);
-        await access(pool, actor, projectId);
-        const latest = (
-          await pool.query(
-            'SELECT COALESCE(max(id),0)::text cursor FROM events WHERE project_id=$1',
-            [projectId],
-          )
-        ).rows[0].cursor;
+        await access(prisma, actor, projectId);
+        const aggregate = await prisma.events.aggregate({
+          where: { project_id: projectId },
+          _max: { id: true },
+        });
+        const latest = String(aggregate._max.id ?? 0);
         if (latest !== cursor) {
           cursor = latest;
           socket.emit('snapshot-required', { cursor });

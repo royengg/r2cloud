@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { pool } from '@r2cloud/database';
+import { prisma } from '@r2cloud/database';
 import { hash } from '@r2cloud/contracts/hash';
 import { sessionToken } from '../auth/session';
 import type { AppOptions } from '../config/options';
@@ -7,10 +7,12 @@ import { invitationInbox } from '@r2cloud/core/team';
 import { projects } from '@r2cloud/core/service';
 export function accountRoutes(options: AppOptions) {
   const router = Router();
-  router.get('/me', async (req, res) => {
+  router.get('/me', async (_req, res) => {
     const actor = res.locals.actor;
-    const user = (await pool.query('SELECT id,name,kind FROM users WHERE id=$1', [actor.id]))
-      .rows[0];
+    const user = await prisma.users.findUnique({
+      where: { id: actor.id },
+      select: { id: true, name: true, kind: true },
+    });
     res.json({
       user,
       invitations: await invitationInbox(actor),
@@ -21,9 +23,9 @@ export function accountRoutes(options: AppOptions) {
   });
   router.post('/logout', async (req, res) => {
     if (options.identity) return options.identity.signOut(req, res);
-    await pool.query('DELETE FROM sessions WHERE token_hash=$1', [
-      hash(sessionToken(req.headers.cookie)),
-    ]);
+    await prisma.sessions.deleteMany({
+      where: { token_hash: hash(sessionToken(req.headers.cookie)) },
+    });
     res.clearCookie('r2session');
     res.json({ ok: true });
   });

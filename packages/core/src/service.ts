@@ -1,55 +1,20 @@
+import { access, lockProject, event, type AccessibleProject } from './project-context';
 import { pinExecutionSetup } from './execution-setup';
-import { type DB, pool, prisma, transaction } from './db';
+import { type DB, type tasks, Prisma, prisma, json } from '@r2cloud/database';
+import { lockRow } from '@r2cloud/database/locking';
 import {
   type Actor,
   type Command,
   type TaskInput,
   type BatchInput,
+  type Evidence,
   taskInput,
   commandInput,
   batchInput,
   requireThat,
 } from '@r2cloud/contracts/domain';
+import type { RunGrant } from '@r2cloud/contracts/adapters';
 import { digest, id } from '@r2cloud/contracts/hash';
-export async function access(
-  db: DB,
-  actor: Actor,
-  projectId: string,
-  capability?: 'contribute' | 'review' | 'merge',
-) {
-  const row = (
-    await db.query(
-      'SELECT p.*,a.contribute,a.review,a.merge,u.kind actor_kind FROM projects p JOIN project_access a ON a.project_id=p.id AND a.org_id=p.org_id JOIN memberships m ON m.org_id=p.org_id AND m.user_id=a.user_id JOIN users u ON u.id=a.user_id WHERE p.id=$1 AND a.user_id=$2',
-      [projectId, actor.id],
-    )
-  ).rows[0];
-  requireThat(row, 403, 'You do not have access to this project.');
-  if (capability)
-    requireThat(row[capability], 403, `This action requires project ${capability} permission.`);
-  if (capability === 'review' || capability === 'merge')
-    requireThat(row.actor_kind === 'human', 403, 'A person must authorise this action.');
-  return row;
-}
-export async function lockProject(db: DB, projectId: string) {
-  // Fixed lock order coordinates project events and organisation/repository limits across API/worker processes.
-  const p = (await db.query('SELECT org_id FROM projects WHERE id=$1', [projectId])).rows[0];
-  requireThat(p, 404, 'Project not found.');
-  await db.query('SELECT id FROM organisations WHERE id=$1 FOR UPDATE', [p.org_id]);
-  await db.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE', [projectId]);
-}
-export async function event(
-  db: DB,
-  projectId: string,
-  taskId: string | null,
-  actorId: string | null,
-  kind: string,
-  detail: unknown = {},
-) {
-  await db.query(
-    'INSERT INTO events(org_id,project_id,task_id,actor_id,kind,detail) SELECT org_id,id,$2,$3,$4,$5 FROM projects WHERE id=$1',
-    [projectId, taskId, actorId, kind, JSON.stringify(detail)],
-  );
-}
 async function receipt<T>(
   actor: Actor,
   projectId: string,
@@ -58,16 +23,12 @@ async function receipt<T>(
   fn: (db: DB) => Promise<T>,
 ): Promise<T> {
   requireThat(key.length >= 8 && key.length <= 128, 400, 'A valid idempotency key is required.');
-  return transaction(async (db) => {
+  return prisma.$transaction(async (db) => {
     await access(db, actor, projectId);
     await lockProject(db, projectId);
-    const prev = (
-      await db.query('SELECT * FROM receipts WHERE user_id=$1 AND project_id=$2 AND key=$3', [
-        actor.id,
-        projectId,
-        key,
-      ])
-    ).rows[0];
+    const prev = await db.receipts.findUnique({
+      where: { user_id_project_id_key: { user_id: actor.id, project_id: projectId, key } },
+    });
     const d = digest(payload);
     if (prev) {
       requireThat(
@@ -75,16 +36,18 @@ async function receipt<T>(
         409,
         'This request key was already used for different content.',
       );
-      return prev.response;
+      return prev.response as T;
     }
     const result = await fn(db);
-    await db.query('INSERT INTO receipts VALUES($1,$2,$3,$4,$5)', [
-      actor.id,
-      projectId,
-      key,
-      d,
-      JSON.stringify(result),
-    ]);
+    await db.receipts.create({
+      data: {
+        user_id: actor.id,
+        project_id: projectId,
+        key,
+        payload_hash: d,
+        response: json(result),
+      },
+    });
     return result;
   });
 }
@@ -93,57 +56,39 @@ export async function createTask(actor: Actor, projectId: string, key: string, i
   return receipt(actor, projectId, key, { type: 'create', input }, async (db) => {
     const p = await access(db, actor, projectId, 'contribute');
     const tid = id();
-    await db.query(
-      'INSERT INTO tasks(id,org_id,project_id,title,outcome,criteria,priority) VALUES($1,$2,$3,$4,$5,$6,$7)',
-      [
-        tid,
-        p.org_id,
-        projectId,
-        input.title,
-        input.outcome,
-        JSON.stringify(input.criteria),
-        input.priority,
-      ],
-    );
+    await db.tasks.create({ data: { id: tid, org_id: p.org_id, project_id: projectId, ...input } });
     await event(db, projectId, tid, actor.id, 'Task created');
     return { id: tid };
   });
 }
 async function queueRun(
   db: DB,
-  actor: Actor,
-  p: any,
-  t: any,
+  actor: Pick<Actor, 'id'>,
+  p: AccessibleProject,
+  t: tasks,
   claimId: string,
   minutes: number,
   budgetCents: number,
 ) {
-  const connection = (
-    await db.query(
-      'SELECT id,mode FROM provider_connections WHERE project_id=$1 AND user_id=$2 AND enabled=true',
-      [p.id, actor.id],
-    )
-  ).rows[0];
+  const connection = await db.provider_connections.findFirst({
+    where: { project_id: p.id, user_id: actor.id, enabled: true },
+    select: { id: true, mode: true },
+  });
   requireThat(
     connection,
     409,
     'Connect an AI account authorised for this project before starting work.',
   );
-  const active = (
-    await db.query('SELECT count(*)::int n FROM runs WHERE org_id=$1 AND stopped_at IS NULL', [
-      p.org_id,
-    ])
-  ).rows[0].n;
-  const org = (await db.query('SELECT max_runs FROM organisations WHERE id=$1', [p.org_id]))
-    .rows[0];
+  const active = await db.runs.count({ where: { org_id: p.org_id, stopped_at: null } });
+  const org = await db.organisations.findUniqueOrThrow({ where: { id: p.org_id } });
   requireThat(active < org.max_runs, 409, 'The organisation has reached its concurrent run limit.');
-  const skills = (
-    await db.query(
-      'SELECT id,version,digest FROM skills WHERE project_id=$1 AND enabled=true ORDER BY id',
-      [p.id],
-    )
-  ).rows;
-  const repo = (await db.query('SELECT * FROM repositories WHERE id=$1', [p.repo_id])).rows[0];
+  const skills = await db.skills.findMany({
+    where: { project_id: p.id, enabled: true },
+    select: { id: true, version: true, digest: true },
+    orderBy: { id: 'asc' },
+  });
+  requireThat(p.repo_id, 409, 'Connect a repository before starting this task.');
+  const repo = await db.repositories.findUniqueOrThrow({ where: { id: p.repo_id } });
   const runId = id(),
     gen = t.generation + 1;
   const executionSetup =
@@ -168,18 +113,32 @@ async function queueRun(
     },
     previousCandidate: t.candidate_id,
   };
-  await db.query(
-    "INSERT INTO runs(id,org_id,project_id,task_id,claim_id,generation,state,manifest) VALUES($1,$2,$3,$4,$5,$6,'queued',$7)",
-    [runId, p.org_id, p.id, t.id, claimId, gen, JSON.stringify(manifest)],
-  );
-  await db.query(
-    "UPDATE tasks SET state='building',generation=$2,candidate_id=NULL,version=version+1 WHERE id=$1",
-    [t.id, gen],
-  );
-  await db.query(
-    "INSERT INTO jobs(id,org_id,project_id,task_id,run_id,kind) VALUES($1,$2,$3,$4,$5,'execute')",
-    [id(), p.org_id, p.id, t.id, runId],
-  );
+  await db.runs.create({
+    data: {
+      id: runId,
+      org_id: p.org_id,
+      project_id: p.id,
+      task_id: t.id,
+      claim_id: claimId,
+      generation: gen,
+      state: 'queued',
+      manifest: json(manifest),
+    },
+  });
+  await db.tasks.update({
+    where: { id: t.id },
+    data: { state: 'building', generation: gen, candidate_id: null, version: { increment: 1 } },
+  });
+  await db.jobs.create({
+    data: {
+      id: id(),
+      org_id: p.org_id,
+      project_id: p.id,
+      task_id: t.id,
+      run_id: runId,
+      kind: 'execute',
+    },
+  });
   await event(db, p.id, t.id, actor.id, 'Work started', {
     runId,
     generation: gen,
@@ -191,36 +150,38 @@ async function queueRun(
 async function startTask(
   db: DB,
   actor: Actor,
-  p: any,
-  t: any,
+  p: AccessibleProject,
+  t: tasks,
   input: Extract<Command, { action: 'start' }>,
 ) {
   requireThat(p.repo_id, 409, 'Connect a repository before starting this task.');
   requireThat(t.state === 'todo', 409, 'This task already has an implementation owner.');
-  const deps = (
-    await db.query(
-      "SELECT t.title FROM dependencies d JOIN tasks t ON t.id=d.depends_on WHERE d.task_id=$1 AND t.state<>'completed'",
-      [t.id],
-    )
-  ).rows;
-  requireThat(!deps.length, 409, 'Complete the prerequisite tasks before starting this work.');
-  const repo = (await db.query('SELECT * FROM repositories WHERE id=$1 FOR UPDATE', [p.repo_id]))
-    .rows[0];
-  const occupied = (
-    await db.query('SELECT count(*)::int n FROM claims WHERE repo_id=$1 AND released_at IS NULL', [
-      p.repo_id,
-    ])
-  ).rows[0].n;
+  const deps = await db.dependencies.count({
+    where: {
+      task_id: t.id,
+      tasks_dependencies_org_id_project_id_depends_onTotasks: { state: { not: 'completed' } },
+    },
+  });
+  requireThat(!deps, 409, 'Complete the prerequisite tasks before starting this work.');
+  await lockRow(db, 'repositories', p.repo_id);
+  const repo = await db.repositories.findUniqueOrThrow({ where: { id: p.repo_id } });
+  const occupied = await db.claims.count({ where: { repo_id: p.repo_id, released_at: null } });
   requireThat(
     occupied < repo.max_changes,
     409,
     'Another change is awaiting completion in this repository. Its review or merge must finish first.',
   );
   const claimId = id();
-  await db.query(
-    'INSERT INTO claims(id,org_id,project_id,task_id,owner_id,repo_id) VALUES($1,$2,$3,$4,$5,$6)',
-    [claimId, p.org_id, p.id, t.id, actor.id, p.repo_id],
-  );
+  await db.claims.create({
+    data: {
+      id: claimId,
+      org_id: p.org_id,
+      project_id: p.id,
+      task_id: t.id,
+      owner_id: actor.id,
+      repo_id: p.repo_id,
+    },
+  });
   return queueRun(db, actor, p, t, claimId, input.minutes, input.budgetCents);
 }
 export async function command(
@@ -244,12 +205,8 @@ export async function command(
             ? undefined
             : 'contribute',
     );
-    const t = (
-      await db.query('SELECT * FROM tasks WHERE id=$1 AND project_id=$2 FOR UPDATE', [
-        taskId,
-        projectId,
-      ])
-    ).rows[0];
+    await lockRow(db, 'tasks', taskId);
+    const t = await db.tasks.findFirst({ where: { id: taskId, project_id: projectId } });
     requireThat(t, 404, 'Task not found.');
     requireThat(
       t.version === input.version,
@@ -257,9 +214,7 @@ export async function command(
       'This task has changed. Refresh and review the latest version.',
     );
     if (input.action === 'start') return startTask(db, actor, p, t, input);
-    const claim = (
-      await db.query('SELECT * FROM claims WHERE task_id=$1 AND released_at IS NULL', [taskId])
-    ).rows[0];
+    const claim = await db.claims.findFirst({ where: { task_id: taskId, released_at: null } });
     requireThat(claim, 409, 'This task has no active claim.');
     if (input.action === 'changes') {
       requireThat(
@@ -273,79 +228,93 @@ export async function command(
         'Only the owner or a designated reviewer can request a correction.',
       );
       requireThat(
-        !(await db.query('SELECT 1 FROM runs WHERE claim_id=$1 AND stopped_at IS NULL', [claim.id]))
-          .rowCount,
+        !(await db.runs.count({ where: { claim_id: claim.id, stopped_at: null } })),
         409,
         'The previous execution has not been confirmed stopped.',
       );
-      await db.query(
-        'UPDATE approvals SET revoked_at=now() WHERE task_id=$1 AND consumed_at IS NULL',
-        [taskId],
-      );
-      await db.query(
-        'INSERT INTO comments(id,org_id,project_id,task_id,user_id,body) VALUES($1,$2,$3,$4,$5,$6)',
-        [id(), p.org_id, projectId, taskId, actor.id, input.feedback],
-      );
+      await db.approvals.updateMany({
+        where: { task_id: taskId, consumed_at: null },
+        data: { revoked_at: new Date() },
+      });
+      await db.comments.create({
+        data: {
+          id: id(),
+          org_id: p.org_id,
+          project_id: projectId,
+          task_id: taskId,
+          user_id: actor.id,
+          body: input.feedback,
+        },
+      });
       await event(db, projectId, taskId, actor.id, 'Changes requested', {
         feedback: input.feedback,
       });
-      const owner = (await db.query('SELECT id,kind FROM users WHERE id=$1', [claim.owner_id]))
-        .rows[0];
+      const owner = await db.users.findUniqueOrThrow({ where: { id: claim.owner_id } });
       await access(db, owner, projectId, 'contribute');
-      const previous = (
-        await db.query(
-          'SELECT manifest FROM runs WHERE claim_id=$1 ORDER BY generation DESC LIMIT 1',
-          [claim.id],
-        )
-      ).rows[0].manifest;
-      return queueRun(db, owner, p, t, claim.id, previous.minutes, previous.budgetCents);
+      const previous = await db.runs.findFirstOrThrow({
+        where: { claim_id: claim.id },
+        orderBy: { generation: 'desc' },
+        select: { manifest: true },
+      });
+      const config = previous.manifest as unknown as RunGrant['config'];
+      return queueRun(db, owner, p, t, claim.id, config.minutes, config.budgetCents);
     }
     requireThat(
       t.state === (input.action === 'publish' ? 'review' : 'code_review'),
       409,
       'This action is not available at this stage.',
     );
-    const c = (
-      await db.query('SELECT * FROM candidates WHERE id=$1 AND task_id=$2', [
-        input.candidateId,
-        taskId,
-      ])
-    ).rows[0];
+    const c = await db.candidates.findFirst({ where: { id: input.candidateId, task_id: taskId } });
     requireThat(
       c && c.id === t.candidate_id && c.generation === t.generation && c.digest === input.digest,
       409,
       'The candidate has changed. Review and approve the current snapshot.',
     );
+    const evidence = c.evidence as unknown as Evidence;
     requireThat(
-      c.evidence.checks.length > 0 && c.evidence.checks.every((x: any) => x.status === 'passed'),
+      evidence.checks.length > 0 && evidence.checks.every((x) => x.status === 'passed'),
       409,
       'Acceptance checks must pass before publication.',
     );
     if (input.action === 'merge')
       requireThat(
-        (
-          await db.query('SELECT 1 FROM publications WHERE task_id=$1 AND candidate_id=$2', [
-            taskId,
-            c.id,
-          ])
-        ).rowCount,
+        await db.publications.count({ where: { task_id: taskId, candidate_id: c.id } }),
         409,
         'A verified pull request is required.',
       );
     const approvalId = id(),
       operationId = id();
-    await db.query(
-      "INSERT INTO approvals(id,org_id,project_id,task_id,candidate_id,action,digest,approver_id,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'v1',now()+interval '30 minutes')",
-      [approvalId, p.org_id, projectId, taskId, c.id, input.action, c.digest, actor.id],
-    );
-    await db.query(
-      'INSERT INTO jobs(id,org_id,project_id,task_id,approval_id,kind) VALUES($1,$2,$3,$4,$5,$6)',
-      [operationId, p.org_id, projectId, taskId, approvalId, input.action],
-    );
-    await db.query('UPDATE tasks SET state=$2,version=version+1 WHERE id=$1', [
-      taskId,
-      input.action === 'publish' ? 'publishing' : 'merging',
-    ]);
+    await db.approvals.create({
+      data: {
+        id: approvalId,
+        org_id: p.org_id,
+        project_id: projectId,
+        task_id: taskId,
+        candidate_id: c.id,
+        action: input.action,
+        digest: c.digest,
+        approver_id: actor.id,
+        policy_version: 'v1',
+        expires_at: new Date(Date.now() + 30 * 60_000),
+      },
+    });
+    await db.jobs.create({
+      data: {
+        id: operationId,
+        org_id: p.org_id,
+        project_id: projectId,
+        task_id: taskId,
+        approval_id: approvalId,
+        kind: input.action,
+      },
+    });
+    await db.tasks.update({
+      where: { id: taskId },
+      data: {
+        state: input.action === 'publish' ? 'publishing' : 'merging',
+        version: { increment: 1 },
+      },
+    });
     await event(
       db,
       projectId,
@@ -373,64 +342,94 @@ export async function addComment(
     );
     if (taskId)
       requireThat(
-        (await db.query('SELECT 1 FROM tasks WHERE id=$1 AND project_id=$2', [taskId, projectId]))
-          .rowCount,
+        await db.tasks.count({ where: { id: taskId, project_id: projectId } }),
         404,
         'Task not found.',
       );
     const commentId = id();
-    await db.query('INSERT INTO comments VALUES($1,$2,$3,$4,$5,$6,now())', [
-      commentId,
-      p.org_id,
-      projectId,
-      taskId,
-      actor.id,
-      body,
-    ]);
+    await db.comments.create({
+      data: {
+        id: commentId,
+        org_id: p.org_id,
+        project_id: projectId,
+        task_id: taskId,
+        user_id: actor.id,
+        body,
+      },
+    });
     await event(db, projectId, taskId, actor.id, 'Feedback added');
     return { id: commentId };
   });
 }
 export async function snapshot(actor: Actor, projectId: string) {
-  return transaction(async (db) => {
-    await db.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
-    const project = await access(db, actor, projectId);
-    project.provider_connected = (
-      await db.query(
-        'SELECT EXISTS(SELECT 1 FROM provider_connections WHERE project_id=$1 AND user_id=$2 AND enabled=true) connected',
-        [projectId, actor.id],
-      )
-    ).rows[0].connected;
-    const tasks = (
-      await db.query(
-        `SELECT t.*,u.name owner_name,c.owner_id,COALESCE(u.kind,'human') owner_kind,
-   (SELECT row_to_json(r) FROM runs r WHERE r.task_id=t.id ORDER BY generation DESC LIMIT 1) run,
-   (SELECT row_to_json(k) FROM candidates k WHERE k.id=t.candidate_id) candidate,
-   (SELECT row_to_json(p) FROM publications p WHERE p.candidate_id=t.candidate_id LIMIT 1) publication
-   FROM tasks t LEFT JOIN LATERAL (SELECT * FROM claims WHERE task_id=t.id ORDER BY created_at DESC LIMIT 1) c ON true LEFT JOIN users u ON u.id=c.owner_id
-   WHERE t.project_id=$1 ORDER BY t.created_at,t.id`,
-        [projectId],
-      )
-    ).rows;
-    const participants = (
-      await db.query(
-        "SELECT u.id,u.name,a.contribute,a.review,a.merge FROM project_access a JOIN users u ON u.id=a.user_id WHERE a.project_id=$1 AND u.kind='human' ORDER BY u.name",
-        [projectId],
-      )
-    ).rows;
-    const comments = (
-      await db.query(
-        'SELECT c.*,u.name FROM comments c JOIN users u ON u.id=c.user_id WHERE c.project_id=$1 ORDER BY c.created_at',
-        [projectId],
-      )
-    ).rows;
-    const events = (
-      await db.query('SELECT * FROM events WHERE project_id=$1 ORDER BY id DESC LIMIT 100', [
-        projectId,
-      ])
-    ).rows;
-    return { project, tasks, participants, comments, events, cursor: events[0]?.id ?? '0' };
-  });
+  return prisma.$transaction(
+    async (db) => {
+      const project = {
+        ...(await access(db, actor, projectId)),
+        provider_connected: Boolean(
+          await db.provider_connections.count({
+            where: { project_id: projectId, user_id: actor.id, enabled: true },
+          }),
+        ),
+      };
+      const rows = await db.tasks.findMany({
+        where: { project_id: projectId },
+        orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+        include: {
+          claims: { orderBy: { created_at: 'desc' }, take: 1, include: { users: true } },
+          candidates: { include: { publications: { take: 1 } } },
+        },
+      });
+      // Fetch latest runs in one query without loading every historical run into the board.
+      const runs = await db.runs.findMany({
+        where: { project_id: projectId },
+        orderBy: { generation: 'desc' },
+        distinct: ['task_id'],
+      });
+      const latest = new Map(runs.map((run) => [run.task_id, run]));
+      const tasks = rows.map(({ claims, candidates, ...task }) => {
+        const claim = claims[0];
+        const { publications, ...candidate } = candidates ?? { publications: [] };
+        return {
+          ...task,
+          owner_name: claim?.users.name ?? null,
+          owner_id: claim?.owner_id ?? null,
+          owner_kind: claim?.users.kind ?? 'human',
+          run: latest.get(task.id) ?? null,
+          candidate: candidates ? candidate : null,
+          publication: publications[0] ?? null,
+        };
+      });
+      const grants = await db.project_access.findMany({
+        where: { project_id: projectId, memberships: { users: { kind: 'human' } } },
+        include: { memberships: { include: { users: true } } },
+        orderBy: { memberships: { users: { name: 'asc' } } },
+      });
+      const participants = grants.map((g) => ({
+        id: g.user_id,
+        name: g.memberships.users.name,
+        contribute: g.contribute,
+        review: g.review,
+        merge: g.merge,
+      }));
+      const commentRows = await db.comments.findMany({
+        where: { project_id: projectId },
+        include: { users: { select: { name: true } } },
+        orderBy: { created_at: 'asc' },
+      });
+      const comments = commentRows.map(({ users, ...comment }) => ({
+        ...comment,
+        name: users.name,
+      }));
+      const events = await db.events.findMany({
+        where: { project_id: projectId },
+        orderBy: { id: 'desc' },
+        take: 100,
+      });
+      return { project, tasks, participants, comments, events, cursor: events[0]?.id ?? '0' };
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+  );
 }
 export async function projects(actor: Actor) {
   const rows = await prisma.projects.findMany({
@@ -451,8 +450,7 @@ export async function projects(actor: Actor) {
     workspace_role: organisations.memberships[0]?.role,
   }));
 }
-
-/** Explicit, all-or-nothing batches. No background selection or authority beyond named tasks. */
+/** Explicit, all-or-nothing batches. No authority beyond named tasks. */
 export async function startBatch(actor: Actor, projectId: string, key: string, input: BatchInput) {
   input = batchInput.parse(input);
   requireThat(
@@ -464,12 +462,8 @@ export async function startBatch(actor: Actor, projectId: string, key: string, i
     const p = await access(db, actor, projectId, 'contribute');
     const results = [];
     for (const selected of [...input.tasks].sort((a, b) => a.taskId.localeCompare(b.taskId))) {
-      const t = (
-        await db.query('SELECT * FROM tasks WHERE id=$1 AND project_id=$2 FOR UPDATE', [
-          selected.taskId,
-          projectId,
-        ])
-      ).rows[0];
+      await lockRow(db, 'tasks', selected.taskId);
+      const t = await db.tasks.findFirst({ where: { id: selected.taskId, project_id: projectId } });
       requireThat(t, 404, 'A selected task does not belong to this project.');
       requireThat(
         t.version === selected.version,

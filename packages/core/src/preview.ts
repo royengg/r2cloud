@@ -1,24 +1,29 @@
-import { pool, transaction } from './db';
+import { prisma } from '@r2cloud/database';
 import { hash, id } from '@r2cloud/contracts/hash';
-import { access } from './service';
-import { requireThat, type Actor } from '@r2cloud/contracts/domain';
+import { access } from './project-context';
+import {
+  requireThat,
+  type Actor,
+  type CandidateManifest,
+  type Evidence,
+} from '@r2cloud/contracts/domain';
 export async function issuePreview(actor: Actor, projectId: string, candidateId: string) {
-  return transaction(async (db) => {
+  return prisma.$transaction(async (db) => {
     await access(db, actor, projectId);
-    const c = (
-      await db.query('SELECT * FROM candidates WHERE id=$1 AND project_id=$2', [
-        candidateId,
-        projectId,
-      ])
-    ).rows[0];
-    requireThat(c?.evidence.preview.available, 404, 'This preview is not available.');
-    requireThat(c.manifest.fixture, 503, 'The managed preview gateway has not been configured.');
+    const c = await db.candidates.findFirst({ where: { id: candidateId, project_id: projectId } });
+    const evidence = c?.evidence as unknown as Evidence | undefined;
+    requireThat(c && evidence?.preview.available, 404, 'This preview is not available.');
+    const manifest = c.manifest as unknown as CandidateManifest;
+    requireThat(manifest.fixture, 503, 'The managed preview gateway has not been configured.');
     const token = id() + id();
-    await db.query("INSERT INTO preview_grants VALUES($1,$2,$3,now()+interval '5 minutes')", [
-      hash(token),
-      actor.id,
-      c.id,
-    ]);
+    await db.preview_grants.create({
+      data: {
+        token_hash: hash(token),
+        user_id: actor.id,
+        candidate_id: c.id,
+        expires_at: new Date(Date.now() + 5 * 60_000),
+      },
+    });
     const origin =
       process.env.R2_MODE === 'fixture' && process.env.R2_PREVIEW_ORIGIN
         ? new URL(process.env.R2_PREVIEW_ORIGIN).origin
@@ -32,15 +37,13 @@ export async function issuePreview(actor: Actor, projectId: string, candidateId:
   });
 }
 export async function readPreview(token: string) {
-  return transaction(async (db) => {
-    const g = (
-      await db.query(
-        'SELECT g.*,u.kind,c.project_id,c.manifest,c.evidence FROM preview_grants g JOIN users u ON u.id=g.user_id JOIN candidates c ON c.id=g.candidate_id WHERE g.token_hash=$1 AND g.expires_at>now()',
-        [hash(token)],
-      )
-    ).rows[0];
+  return prisma.$transaction(async (db) => {
+    const g = await db.preview_grants.findFirst({
+      where: { token_hash: hash(token), expires_at: { gt: new Date() } },
+      include: { candidates: true },
+    });
     requireThat(g, 403, 'Preview access expired. Open it again from the task.');
-    await access(db, { id: g.user_id, kind: g.kind }, g.project_id);
-    return { manifest: g.manifest, evidence: g.evidence };
+    await access(db, { id: g.user_id }, g.candidates.project_id);
+    return { manifest: g.candidates.manifest, evidence: g.candidates.evidence };
   });
 }

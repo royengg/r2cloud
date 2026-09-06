@@ -342,3 +342,5 @@ apps/api/src/
 ```
 
 Routes translate HTTP requests into checked services in `packages/core`; database access, ownership and workflow policy remain there. `packages/adapters` owns external integration protocols. `app.ts` and `server.ts` create instances without starting listeners, while `processes/` owns startup. Better Auth mounts before JSON parsing, and protected routes mount after authentication. The preview entry point serves fixed local test content only.
+
+Core modules share project access checks, lock ordering and event writes through `packages/core/src/project-context.ts`. They import the database package directly; shared policy does not depend on task commands or execution setup.

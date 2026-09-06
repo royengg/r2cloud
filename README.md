@@ -6,31 +6,27 @@ A shared product board where people describe outcomes, start coding work, review
 
 ## Local development
 
-Workspace: `/home/paseo-agent/workspace/r2cloud`.
-
-`tests/` and `scripts/` are intentionally local-only and ignored by Git. The helper commands below apply to this existing workspace; a fresh clone does not include the dev/database launchers or test suites. `bun run typecheck` and `bun run build` remain available from tracked source.
+Install Bun 1.4.2 (the pinned lockfile requires a compatible Bun version), then:
 
 ```bash
-source scripts/env.sh  # this VPS: load its private ARM64 toolchain and project-local Bun
 bun install --frozen-lockfile
-bun run db:start
-bun run db:setup
-bun run dev
+bun run db:generate
 ```
 
-Open `http://127.0.0.1:5173`. The product opens with GitHub sign-in. Configure this project's OAuth app using [authentication setup](docs/SETUP.md); without configuration, sign-in is visibly unavailable and legacy demo cookies are rejected. New accounts create their workspace and first project, then land on an empty board. No seed data or simulated worker is started by normal development.
+For a running app, configure `DATABASE_URL` (and optionally `DIRECT_URL` for migrations) in an ignored `.env`, using [.env.example](.env.example). Supply an existing Postgres database, then run `bun run db:migrate`. The Unix-socket fallback is for the original private development environment; this checkout does not include a database launcher.
 
-Postgres uses existing ARM64 binaries with project-private storage and a Unix socket only. No existing database service is used. The API binds loopback port 4310; the fixture-only preview test uses 4311. Stop the app with Ctrl+C and the database with `bun run db:stop`.
+Start `bun run api` and `bun run web` in separate terminals. Open `http://127.0.0.1:5173`. Configure GitHub OAuth using [authentication setup](docs/SETUP.md); without it, sign-in is visibly unavailable and legacy demo cookies are rejected. New accounts create their workspace and first project, then land on an empty board. No seed data or simulated worker starts automatically.
+
+The API binds loopback port 4310. The fixture preview entry point uses 4311. Stop each process with Ctrl+C.
 
 ```bash
 bun run typecheck
-bun test
+bun run test
 bun run build
 bun run design:lint
-bun run test:browser
 ```
 
-Tests require the private database to be running and create/drop only their own randomly named schema. Browser checks use `R2_BROWSER_PATH` or this VPS’s existing ARM64 Chromium. On this VPS, run `python3 scripts/prepare-browser.py` once to prepare a project-private copy with compatible existing libraries; no browser download or system modification is needed.
+The tracked regression tests cover HTTP errors and team permission commands without a database. Earlier Postgres and browser suites were local-only and are absent from this checkout; their historical results are recorded in [status](docs/STATUS.md).
 
 For an explicitly authorised temporary UI tunnel, set `R2_DEV_ORIGIN` to its exact HTTPS origin and `R2_PREVIEW_ORIGIN` to a different HTTPS tunnel forwarding the fixture preview on port 4311. The app origin forwards Vite on port 5173. No wildcard tunnel origins are accepted. The tunnel shows the product sign-in screen. Live OAuth requires matching the callback and trusted origin to that exact URL. Vite blocks project-private toolchain/data directories. Stop the tunnel processes when review ends.
 
@@ -43,8 +39,7 @@ packages/core        Checked task commands and durable workflow
 packages/database    Prisma schema, SQL migrations and client
 packages/adapters    Codex and managed-provider seams; labelled fixtures
 packages/contracts   Shared domain schemas and integration contracts
-tests                Local-only Postgres invariants and adapter contracts
-scripts              Local-only development and verification helpers
+tests                Tracked regression tests
 ```
 
 Bun 1.4.2 is the runtime and package manager; `bun.lock` is the only project lockfile. There is no Turborepo. Prisma is pinned to stable 7.10.0 across CLI/client/adapter. Use the pooled Neon `DATABASE_URL` for application connections and `DIRECT_URL` for Prisma migrations. No Neon database has been provisioned or connected. Never use `prisma db push` to replace the checked SQL migrations: they preserve ownership constraints and the immutable-candidate trigger.

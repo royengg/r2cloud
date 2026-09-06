@@ -231,7 +231,15 @@ export function TeamPanel({ projectId, close }: { projectId: string; close: () =
                 key={`${member.id}:${member.version}`}
                 member={member}
                 busy={busy}
-                save={(input) => act(`/projects/${projectId}/members/${member.id}`, input)}
+                save={({ contribute, review, merge, version, remove }) =>
+                  act(`/projects/${projectId}/members/${member.id}`, {
+                    contribute,
+                    review,
+                    merge,
+                    version,
+                    remove,
+                  })
+                }
               />
             ))}
           </section>

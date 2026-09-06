@@ -3,7 +3,7 @@ import { prismaAdapter } from '@better-auth/prisma-adapter';
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node';
 import type { Express, Request, Response as ExpressResponse } from 'express';
 import type { IncomingHttpHeaders } from 'node:http';
-import { prisma, pool } from '@r2cloud/database';
+import { prisma } from '@r2cloud/database';
 import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { requireThat, type Actor } from '@r2cloud/contracts/domain';
 
@@ -113,15 +113,19 @@ export function createIdentity(config: {
       });
       requireThat(session?.user.emailVerified, 401, 'Sign in with a verified account.');
       // Stable provider ID mapping, never email matching or client-supplied actor/role fields.
-      const user = (
-        await pool.query(
-          `INSERT INTO users(id,name,kind,auth_user_id) VALUES($1,$2,'human',$3)
-         ON CONFLICT(auth_user_id) DO UPDATE SET name=EXCLUDED.name RETURNING id,kind`,
-          [`person:${session.user.id}`, session.user.name, session.user.id],
-        )
-      ).rows[0];
+      const user = await prisma.users.upsert({
+        where: { auth_user_id: session.user.id },
+        create: {
+          id: 'person:' + session.user.id,
+          name: session.user.name,
+          kind: 'human',
+          auth_user_id: session.user.id,
+        },
+        update: { name: session.user.name },
+        select: { id: true, kind: true },
+      });
       requireThat(user.kind === 'human', 403, 'Product sign-in is reserved for people.');
-      return user;
+      return { id: user.id, kind: user.kind };
     },
     async signOut(req, res) {
       const response = await auth.api.signOut({

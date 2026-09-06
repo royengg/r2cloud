@@ -8,24 +8,18 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun scripts/dev.ts",
     "api": "bun apps/api/src/processes/api.ts",
     "worker": "bun apps/api/src/processes/workflow.ts",
     "publisher": "bun apps/api/src/processes/publisher.ts",
     "web": "bun --bun vite --host 127.0.0.1",
     "build": "bun run typecheck && bun --bun vite build",
     "typecheck": "bun --bun tsc --noEmit",
-    "db:start": "bash scripts/postgres.sh start",
-    "db:stop": "bash scripts/postgres.sh stop",
     "db:generate": "bun --bun prisma generate",
     "db:migrate": "bun --bun prisma migrate deploy",
     "db:setup": "bun run db:generate && bun run db:migrate",
     "test": "bun test --timeout 30000 tests",
-    "test:browser": "bun scripts/browser-check.ts",
     "format": "bun --bun prettier --write \"{apps,packages,scripts,tests}/**/*.{ts,tsx,css,json}\"",
-    "design:lint": "bun node_modules/@google/design.md/dist/index.js lint DESIGN.md",
-    "test:auth-browser": "bun scripts/auth-browser-check.ts",
-    "test:seed": "R2_MODE=fixture bun scripts/setup.ts"
+    "design:lint": "bun node_modules/@google/design.md/dist/index.js lint DESIGN.md"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

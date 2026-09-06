@@ -1,7 +1,8 @@
-import { pool, transaction, type DB } from './db';
-import { access, event, lockProject } from './service';
+import { prisma, json, type DB, type jobs } from '@r2cloud/database';
+import { lockRow, nextJob } from '@r2cloud/database/locking';
+import { access, event, lockProject } from './project-context';
 import { digest, id } from '@r2cloud/contracts/hash';
-import { Fault, requireThat } from '@r2cloud/contracts/domain';
+import { Fault, requireThat, type CandidateManifest } from '@r2cloud/contracts/domain';
 import {
   SetupRequired,
   Uncertain,
@@ -14,72 +15,69 @@ import {
   type MergeResult,
 } from '@r2cloud/contracts/adapters';
 async function reserve(kinds: string[]) {
-  return transaction(async (db) => {
-    const job = (
-      await db.query(
-        `SELECT * FROM jobs WHERE kind=ANY($1) AND available_at<=now() AND (state IN ('ready','uncertain') OR (state='processing' AND lease_until<now())) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1`,
-        [kinds],
-      )
-    ).rows[0];
-    if (!job) return null;
-    const token = id();
-    await db.query(
-      "UPDATE jobs SET state='processing',attempts=attempts+1,lease_token=$2,lease_until=now()+interval '90 seconds' WHERE id=$1",
-      [job.id, token],
-    );
-    return {
-      ...job,
-      lease_token: token,
-      recovery: job.state !== 'ready',
-      attempts: job.attempts + 1,
-    };
+  return prisma.$transaction(async (db) => {
+    const jobId = await nextJob(db, kinds);
+    if (!jobId) return null;
+    return db.jobs.update({
+      where: { id: jobId },
+      data: {
+        state: 'processing',
+        attempts: { increment: 1 },
+        lease_token: id(),
+        lease_until: new Date(Date.now() + 90_000),
+      },
+    });
   });
 }
-async function assertJob(db: DB, job: any) {
+async function assertJob(db: DB, job: jobs) {
+  await lockRow(db, 'jobs', job.id);
   requireThat(
-    (
-      await db.query(
-        "SELECT 1 FROM jobs WHERE id=$1 AND lease_token=$2 AND state='processing' FOR UPDATE",
-        [job.id, job.lease_token],
-      )
-    ).rowCount,
+    await db.jobs.count({
+      where: { id: job.id, lease_token: job.lease_token, state: 'processing' },
+    }),
     409,
     'Worker lease was superseded.',
   );
 }
-async function executionGrant(job: any): Promise<RunGrant> {
-  return transaction(async (db) => {
+async function executionGrant(job: jobs): Promise<RunGrant> {
+  return prisma.$transaction(async (db) => {
     await lockProject(db, job.project_id);
     await assertJob(db, job);
-    const r = (
-      await db.query(
-        'SELECT r.*,t.outcome,t.criteria,t.generation current_generation,c.owner_id FROM runs r JOIN tasks t ON t.id=r.task_id JOIN claims c ON c.id=r.claim_id WHERE r.id=$1 AND c.released_at IS NULL',
-        [job.run_id],
-      )
-    ).rows[0];
+    const r = job.run_id
+      ? await db.runs.findFirst({
+          where: { id: job.run_id, claims: { released_at: null } },
+          include: { claims: { include: { tasks: true, users: true } } },
+        })
+      : null;
     requireThat(
-      r && r.generation === r.current_generation && !r.stopped_at,
+      r && r.generation === r.claims.tasks.generation && !r.stopped_at,
       409,
       'Stale execution generation.',
     );
-    const actor = (await db.query('SELECT id,kind FROM users WHERE id=$1', [r.owner_id])).rows[0];
+    const actor = r.claims.users;
     await access(db, actor, job.project_id, 'contribute');
+    const manifest = r.manifest as unknown as RunGrant['config'] & { connectionId: string };
     requireThat(
-      (
-        await db.query(
-          'SELECT 1 FROM provider_connections WHERE id=$1 AND user_id=$2 AND project_id=$3 AND enabled=true',
-          [r.manifest.connectionId, r.owner_id, job.project_id],
-        )
-      ).rowCount,
+      await db.provider_connections.count({
+        where: {
+          id: manifest.connectionId,
+          user_id: actor.id,
+          project_id: job.project_id,
+          enabled: true,
+        },
+      }),
       403,
       'AI account access has been revoked.',
     );
-    const feedback = (
-      await db.query('SELECT body FROM comments WHERE task_id=$1 ORDER BY created_at', [
-        job.task_id,
-      ])
-    ).rows.map((x) => x.body);
-    await db.query("UPDATE runs SET state='running',heartbeat_at=now() WHERE id=$1", [r.id]);
+    const comments = await db.comments.findMany({
+      where: { task_id: job.task_id },
+      orderBy: { created_at: 'asc' },
+      select: { body: true },
+    });
+    await db.runs.update({
+      where: { id: r.id },
+      data: { state: 'running', heartbeat_at: new Date() },
+    });
     return {
       operationId: job.id,
       runId: r.id,
@@ -87,18 +85,19 @@ async function executionGrant(job: any): Promise<RunGrant> {
       projectId: job.project_id,
       orgId: job.org_id,
       generation: r.generation,
-      outcome: r.outcome,
-      criteria: r.criteria,
-      feedback,
-      config: r.manifest,
+      outcome: r.claims.tasks.outcome,
+      criteria: r.claims.tasks.criteria as string[],
+      feedback: comments.map((x) => x.body),
+      config: manifest,
     };
   });
 }
-async function finishRun(job: any, grant: RunGrant, result: RunResult) {
-  return transaction(async (db) => {
+async function finishRun(job: jobs, grant: RunGrant, result: RunResult) {
+  return prisma.$transaction(async (db) => {
     await lockProject(db, job.project_id);
     await assertJob(db, job);
-    const t = (await db.query('SELECT * FROM tasks WHERE id=$1 FOR UPDATE', [job.task_id])).rows[0];
+    await lockRow(db, 'tasks', job.task_id);
+    const t = await db.tasks.findUniqueOrThrow({ where: { id: job.task_id } });
     const m = result.manifest;
     requireThat(
       t.generation === grant.generation &&
@@ -129,35 +128,38 @@ async function finishRun(job: any, grant: RunGrant, result: RunResult) {
       'Invalid immutable artifact identity.',
     );
     const candidateId = id();
-    await db.query(
-      'INSERT INTO candidates(id,org_id,project_id,task_id,run_id,generation,digest,manifest,evidence) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',
-      [
-        candidateId,
-        t.org_id,
-        t.project_id,
-        t.id,
-        grant.runId,
-        t.generation,
-        digest(m),
-        JSON.stringify(m),
-        JSON.stringify(result.evidence),
-      ],
-    );
-    await db.query(
-      "UPDATE runs SET state='stopped',stopped_at=now(),stop_proof=$2 WHERE id=$1 AND stopped_at IS NULL",
-      [grant.runId, result.stopProof],
-    );
+    await db.candidates.create({
+      data: {
+        id: candidateId,
+        org_id: t.org_id,
+        project_id: t.project_id,
+        task_id: t.id,
+        run_id: grant.runId,
+        generation: t.generation,
+        digest: digest(m),
+        manifest: json(m),
+        evidence: json(result.evidence),
+      },
+    });
+    await db.runs.updateMany({
+      where: { id: grant.runId, stopped_at: null },
+      data: { state: 'stopped', stopped_at: new Date(), stop_proof: result.stopProof },
+    });
     const passed =
       result.evidence.checks.length === grant.criteria.length &&
       result.evidence.checks.every((x, i) => x.status === 'passed' && x.name === grant.criteria[i]);
-    await db.query('UPDATE tasks SET candidate_id=$2,state=$3,version=version+1 WHERE id=$1', [
-      t.id,
-      candidateId,
-      passed ? 'review' : 'blocked',
-    ]);
-    await db.query("UPDATE jobs SET state='done',lease_until=NULL,error=NULL WHERE id=$1", [
-      job.id,
-    ]);
+    await db.tasks.update({
+      where: { id: t.id },
+      data: {
+        candidate_id: candidateId,
+        state: passed ? 'review' : 'blocked',
+        version: { increment: 1 },
+      },
+    });
+    await db.jobs.update({
+      where: { id: job.id },
+      data: { state: 'done', lease_until: null, error: null },
+    });
     await event(
       db,
       t.project_id,
@@ -168,28 +170,29 @@ async function finishRun(job: any, grant: RunGrant, result: RunResult) {
     );
   });
 }
-async function publicationGrant(job: any, reconcile = false): Promise<PublicationGrant> {
-  return transaction(async (db) => {
+async function publicationGrant(job: jobs, reconcile = false): Promise<PublicationGrant> {
+  return prisma.$transaction(async (db) => {
     await lockProject(db, job.project_id);
     await assertJob(db, job);
-    const a = (
-      await db.query(
-        'SELECT a.*,u.kind FROM approvals a JOIN users u ON u.id=a.approver_id WHERE a.id=$1',
-        [job.approval_id],
-      )
-    ).rows[0];
-    const t = (await db.query('SELECT * FROM tasks WHERE id=$1 FOR UPDATE', [job.task_id])).rows[0];
-    const c = (await db.query('SELECT * FROM candidates WHERE id=$1', [a?.candidate_id])).rows[0];
+    const a = job.approval_id
+      ? await db.approvals.findUnique({
+          where: { id: job.approval_id },
+          include: { candidates: true, users: true },
+        })
+      : null;
+    await lockRow(db, 'tasks', job.task_id);
+    const t = await db.tasks.findUniqueOrThrow({ where: { id: job.task_id } });
     requireThat(
       a &&
-        c &&
         a.action === job.kind &&
         a.task_id === job.task_id &&
         a.project_id === job.project_id &&
-        a.org_id === job.org_id,
+        a.org_id === job.org_id &&
+        (job.kind === 'publish' || job.kind === 'merge'),
       409,
       'Publication intent does not match approval.',
     );
+    const c = a.candidates;
     requireThat(
       t.candidate_id === c.id &&
         t.generation === c.generation &&
@@ -199,34 +202,29 @@ async function publicationGrant(job: any, reconcile = false): Promise<Publicatio
       'Approval no longer matches the current immutable candidate.',
     );
     requireThat(
-      (await db.query('SELECT 1 FROM claims WHERE task_id=$1 AND released_at IS NULL', [t.id]))
-        .rowCount,
+      await db.claims.count({ where: { task_id: t.id, released_at: null } }),
       409,
       'The task is no longer owned.',
     );
-    // Read-only reconciliation is permitted after expiry/revocation, so a completed external
-    // operation is still recorded truthfully. New writes ALWAYS require fresh validation.
+    // Reconciliation may record an already-completed external write after expiry/revocation.
+    // Every new external write still requires a currently valid approval.
     if (!reconcile) {
-      await access(
-        db,
-        { id: a.approver_id, kind: a.kind },
-        job.project_id,
-        job.kind === 'merge' ? 'merge' : 'review',
-      );
+      await access(db, a.users, job.project_id, job.kind === 'merge' ? 'merge' : 'review');
       requireThat(
-        !a.revoked_at && new Date(a.expires_at) > new Date() && a.policy_version === 'v1',
+        !a.revoked_at && a.expires_at > new Date() && a.policy_version === 'v1',
         403,
         'Approval expired or was revoked.',
       );
-      await db.query('UPDATE approvals SET consumed_at=COALESCE(consumed_at,now()) WHERE id=$1', [
-        a.id,
-      ]);
+      await db.approvals.updateMany({
+        where: { id: a.id, consumed_at: null },
+        data: { consumed_at: new Date() },
+      });
     }
-    const pub = (await db.query('SELECT * FROM publications WHERE candidate_id=$1 LIMIT 1', [c.id]))
-      .rows[0];
+    const candidate = c.manifest as unknown as CandidateManifest;
+    const pub = await db.publications.findFirst({ where: { candidate_id: c.id } });
     return {
       operationId: job.id,
-      candidate: c.manifest,
+      candidate,
       digest: c.digest,
       action: job.kind,
       publication: pub
@@ -234,24 +232,29 @@ async function publicationGrant(job: any, reconcile = false): Promise<Publicatio
             prNumber: pub.pr_number,
             url: pub.url,
             headSha: pub.head_sha,
-            repository: c.manifest.repository,
-            targetRef: c.manifest.targetRef,
-            branch: c.manifest.branch,
+            repository: candidate.repository,
+            targetRef: candidate.targetRef,
+            branch: candidate.branch,
           }
         : undefined,
     };
   });
 }
 async function finishPublication(
-  job: any,
+  job: jobs,
   g: PublicationGrant,
   result: PublicationResult | MergeResult,
 ) {
-  return transaction(async (db) => {
+  return prisma.$transaction(async (db) => {
     await lockProject(db, job.project_id);
     await assertJob(db, job);
-    const t = (await db.query('SELECT * FROM tasks WHERE id=$1 FOR UPDATE', [job.task_id])).rows[0];
-    requireThat(t.generation === g.candidate.generation, 409, 'Stale publication generation.');
+    await lockRow(db, 'tasks', job.task_id);
+    const t = await db.tasks.findUniqueOrThrow({ where: { id: job.task_id } });
+    requireThat(
+      t.generation === g.candidate.generation && t.candidate_id,
+      409,
+      'Stale publication generation.',
+    );
     requireThat(
       result.headSha === g.candidate.headSha &&
         result.repository === g.candidate.repository &&
@@ -261,20 +264,25 @@ async function finishPublication(
       'Repository facts do not match the approved changes.',
     );
     if (job.kind === 'publish') {
-      await db.query(
-        'INSERT INTO publications(operation_id,org_id,project_id,task_id,candidate_id,pr_number,url,head_sha) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING',
-        [
-          job.id,
-          t.org_id,
-          t.project_id,
-          t.id,
-          t.candidate_id,
-          result.prNumber,
-          result.url,
-          result.headSha,
+      await db.publications.createMany({
+        data: [
+          {
+            operation_id: job.id,
+            org_id: t.org_id,
+            project_id: t.project_id,
+            task_id: t.id,
+            candidate_id: t.candidate_id,
+            pr_number: result.prNumber,
+            url: result.url,
+            head_sha: result.headSha,
+          },
         ],
-      );
-      await db.query("UPDATE tasks SET state='code_review',version=version+1 WHERE id=$1", [t.id]);
+        skipDuplicates: true,
+      });
+      await db.tasks.update({
+        where: { id: t.id },
+        data: { state: 'code_review', version: { increment: 1 } },
+      });
     } else {
       const merged = result as MergeResult;
       requireThat(
@@ -287,22 +295,28 @@ async function finishPublication(
         409,
         'A separately authorised, verified merge with required checks is needed for completion.',
       );
-      await db.query('UPDATE publications SET merged_sha=$2 WHERE candidate_id=$1', [
-        t.candidate_id,
-        merged.mergeSha,
-      ]);
-      await db.query(
-        "UPDATE tasks SET state='completed',merged_sha=$2,completed_at=now(),version=version+1 WHERE id=$1",
-        [t.id, merged.mergeSha],
-      );
-      await db.query(
-        'UPDATE claims SET released_at=now() WHERE task_id=$1 AND released_at IS NULL',
-        [t.id],
-      );
+      await db.publications.updateMany({
+        where: { candidate_id: t.candidate_id },
+        data: { merged_sha: merged.mergeSha },
+      });
+      await db.tasks.update({
+        where: { id: t.id },
+        data: {
+          state: 'completed',
+          merged_sha: merged.mergeSha,
+          completed_at: new Date(),
+          version: { increment: 1 },
+        },
+      });
+      await db.claims.updateMany({
+        where: { task_id: t.id, released_at: null },
+        data: { released_at: new Date() },
+      });
     }
-    await db.query("UPDATE jobs SET state='done',lease_until=NULL,error=NULL WHERE id=$1", [
-      job.id,
-    ]);
+    await db.jobs.update({
+      where: { id: job.id },
+      data: { state: 'done', lease_until: null, error: null },
+    });
     await event(
       db,
       t.project_id,
@@ -313,49 +327,58 @@ async function finishPublication(
     );
   });
 }
-async function failure(job: any, error: unknown) {
+async function failure(job: jobs, error: unknown) {
   const setup = error instanceof SetupRequired;
-  const exhausted = job.attempts >= 5;
-  const policyFailure = error instanceof Fault;
-  const blocked = setup || exhausted || policyFailure;
+  const blocked = setup || job.attempts >= 5 || error instanceof Fault;
   const message = error instanceof Error ? error.message : 'External outcome is uncertain.';
-  await transaction(async (db) => {
+  await prisma.$transaction(async (db) => {
     await lockProject(db, job.project_id);
+    await lockRow(db, 'jobs', job.id);
     if (
-      !(
-        await db.query(
-          "SELECT 1 FROM jobs WHERE id=$1 AND lease_token=$2 AND state='processing' FOR UPDATE",
-          [job.id, job.lease_token],
-        )
-      ).rowCount
+      !(await db.jobs.count({
+        where: { id: job.id, lease_token: job.lease_token, state: 'processing' },
+      }))
     )
       return;
-    await db.query(
-      "UPDATE jobs SET state=$2,error=$3,available_at=now()+interval '10 seconds',lease_until=NULL WHERE id=$1",
-      [job.id, blocked ? 'blocked' : 'uncertain', message.slice(0, 500)],
-    );
-    // A stale worker may record its own failure, but cannot change a newer task generation.
-    const current = (
-      await db.query(
-        `SELECT 1 FROM tasks t WHERE t.id=$1 AND (
-        EXISTS(SELECT 1 FROM runs r WHERE r.id=$2 AND r.task_id=t.id AND r.generation=t.generation)
-        OR EXISTS(SELECT 1 FROM approvals a JOIN candidates c ON c.id=a.candidate_id WHERE a.id=$3 AND c.id=t.candidate_id AND c.generation=t.generation)
-      )`,
-        [job.task_id, job.run_id, job.approval_id],
-      )
-    ).rowCount;
-    if (!current) {
-      await db.query("UPDATE jobs SET state='blocked' WHERE id=$1", [job.id]);
+    await db.jobs.update({
+      where: { id: job.id },
+      data: {
+        state: blocked ? 'blocked' : 'uncertain',
+        error: message.slice(0, 500),
+        available_at: new Date(Date.now() + 10_000),
+        lease_until: null,
+      },
+    });
+    const task = await db.tasks.findUniqueOrThrow({ where: { id: job.task_id } });
+    const currentRun = job.run_id
+      ? await db.runs.count({
+          where: { id: job.run_id, task_id: task.id, generation: task.generation },
+        })
+      : 0;
+    const currentApproval =
+      job.approval_id && task.candidate_id
+        ? await db.approvals.count({
+            where: {
+              id: job.approval_id,
+              candidate_id: task.candidate_id,
+              candidates: { generation: task.generation },
+            },
+          })
+        : 0;
+    // A stale worker can record its own failure without changing a newer generation.
+    if (!currentRun && !currentApproval) {
+      await db.jobs.update({ where: { id: job.id }, data: { state: 'blocked' } });
       return;
     }
     if (job.run_id)
-      await db.query("UPDATE runs SET state='unknown' WHERE id=$1 AND stopped_at IS NULL", [
-        job.run_id,
-      ]);
-    await db.query(
-      "UPDATE tasks SET state='blocked',version=version+1 WHERE id=$1 AND state<>'completed'",
-      [job.task_id],
-    );
+      await db.runs.updateMany({
+        where: { id: job.run_id, stopped_at: null },
+        data: { state: 'unknown' },
+      });
+    await db.tasks.updateMany({
+      where: { id: job.task_id, state: { not: 'completed' } },
+      data: { state: 'blocked', version: { increment: 1 } },
+    });
     await event(
       db,
       job.project_id,

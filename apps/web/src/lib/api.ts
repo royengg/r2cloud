@@ -1,5 +1,5 @@
 const pending = new Map<string, string>();
-export async function api<T = any>(path: string, body?: unknown): Promise<T> {
+export async function api<T = unknown>(path: string, body?: unknown): Promise<T> {
   const fingerprint = path + JSON.stringify(body),
     key = pending.get(fingerprint) ?? crypto.randomUUID();
   if (body !== undefined) pending.set(fingerprint, key);

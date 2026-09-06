@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { snapshot, startBatch, createTask, command, addComment } from '@r2cloud/core/service';
-import { requireThat, taskInput, commandInput } from '@r2cloud/contracts/domain';
+import { requireThat } from '@r2cloud/contracts/domain';
 import { issuePreview } from '@r2cloud/core/preview';
 export function tasksRoutes() {
   const router = Router();
@@ -25,7 +25,7 @@ export function tasksRoutes() {
           res.locals.actor,
           String(req.params.projectId),
           req.get('Idempotency-Key') ?? '',
-          taskInput.parse(req.body),
+          req.body,
         ),
       );
   });
@@ -36,7 +36,7 @@ export function tasksRoutes() {
         String(req.params.projectId),
         String(req.params.taskId),
         req.get('Idempotency-Key') ?? '',
-        commandInput.parse(req.body),
+        req.body,
       ),
     );
   });

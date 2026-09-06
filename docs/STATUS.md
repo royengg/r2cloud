@@ -27,4 +27,4 @@ Pilot policy: one tester on their own repositories, free-only Vercel usage ($0 p
 
 Latest backend increment: 55 local tests passed (264 assertions), Prisma migration/generation and TypeScript/Vite build passed. The last full authentication browser journey passed eight axe audits; the fixture task-to-merge journey passed seven. Later UI changes had focused component checks, not a repeated full browser audit. No real cloud/Codex/GitHub publication end-to-end check has run.
 
-Tests, scripts, screenshots and historical research/verification documents are local-only. The archive is in `.local/docs-archive/20260905`. Historical test results are evidence of those revisions, not claims that later changes were retested.
+The earlier Postgres/browser tests, scripts, screenshots and historical research/verification documents are local-only. Focused regression tests now live in tracked `tests/`. The archive is in `.local/docs-archive/20260905`. Historical test results are evidence of those revisions, not claims that later changes were retested.

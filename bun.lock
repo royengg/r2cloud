@@ -78,6 +78,7 @@
       "name": "@r2cloud/core",
       "version": "0.1.0",
       "dependencies": {
+        "@r2cloud/adapters": "workspace:*",
         "@r2cloud/contracts": "workspace:*",
         "@r2cloud/database": "workspace:*",
         "zod": "^4.1.5",

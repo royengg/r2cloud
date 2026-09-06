@@ -1,3 +1,4 @@
+import { SandboxConnection } from './SandboxConnection';
 import { CodexConnection } from './CodexConnection';
 import { ExecutionSetup } from './ExecutionSetup';
 import { useEffect, useState } from 'react';
@@ -189,13 +190,7 @@ export function ConnectionsPanel({
             <p className="subtle">Ask a workspace administrator to connect a repository.</p>
           )}
           <CodexConnection projectId={projectId} />
-          <div className="connection-row">
-            <Icon name="cloud" />
-            <div>
-              <strong>Vercel Sandbox</strong>
-              <span>Execution setup pending</span>
-            </div>
-          </div>
+          <SandboxConnection projectId={projectId} />
           {state.repository && <ExecutionSetup projectId={projectId} manage={state.manage} />}
           <p className="subtle">
             Repository access and AI credentials are separate from project membership.

@@ -35,7 +35,19 @@ export function TaskDetail({
   async function send(event: FormEvent) {
     event.preventDefault();
     if (!feedback.trim()) return;
-    if (await onFeedback(feedback)) setFeedback('');
+    const sent =
+      task.state === 'todo' && project.contribute
+        ? await onCommand({
+            action: 'start',
+            version: task.version,
+            minutes: 10,
+            budgetCents: 0,
+            message: feedback,
+          })
+        : task.state === 'blocked' && task.run?.state === 'stopped' && task.owner_id === userId
+          ? await onCommand({ action: 'changes', version: task.version, feedback })
+          : await onFeedback(feedback);
+    if (sent) setFeedback('');
   }
   const candidate = task.candidate;
   return (
@@ -193,9 +205,11 @@ export function TaskDetail({
                           <small>{check.status}</small>
                         </div>
                       ))}
-                      <p className="subtle">
-                        Fixture results are simulated, not application tests.
-                      </p>
+                      {candidate.manifest.fixture && (
+                        <p className="subtle">
+                          Fixture results are simulated, not application tests.
+                        </p>
+                      )}
                     </div>
                   </details>
                   <details className="evidence-disclosure">
@@ -257,7 +271,9 @@ export function TaskDetail({
                     <p>
                       Artifact: <code>{candidate.manifest.artifactDigest}</code>
                     </p>
-                    <p>Fixture runs contain no real diff or execution log.</p>
+                    {candidate.manifest.fixture && (
+                      <p>Fixture runs contain no real diff or execution log.</p>
+                    )}
                   </>
                 )}
                 {task.run && (
@@ -302,7 +318,13 @@ export function TaskDetail({
                 disabled={!project.contribute}
               />
               <Button icon="up" busy={busy} disabled={!project.contribute}>
-                Send feedback
+                {task.state === 'todo' && project.contribute
+                  ? 'Start work with this message'
+                  : task.state === 'blocked' &&
+                      task.run?.state === 'stopped' &&
+                      task.owner_id === userId
+                    ? 'Retry task with this message'
+                    : 'Send feedback'}
               </Button>
             </form>
           </section>
@@ -355,7 +377,23 @@ export function TaskDetail({
               Start work
             </Button>
           </>
-        ) : task.state === 'review' ? (
+        ) : task.state === 'blocked' &&
+          !candidate &&
+          task.run?.state === 'stopped' &&
+          task.owner_id === userId ? (
+          <Button
+            busy={busy}
+            onClick={() =>
+              void onCommand({
+                action: 'changes',
+                version: task.version,
+                feedback: 'Retry this task with the current execution settings.',
+              })
+            }
+          >
+            Retry task
+          </Button>
+        ) : ['review', 'blocked'].includes(task.state) && candidate ? (
           <>
             {project.review || task.owner_id === userId ? (
               <Button onClick={() => setCorrection(true)} busy={busy}>
@@ -367,7 +405,7 @@ export function TaskDetail({
             <Button
               variant="primary"
               icon="external"
-              disabled={!project.review}
+              disabled={!project.review || task.state !== 'review'}
               busy={busy}
               onClick={() => setConfirmation('publish')}
             >

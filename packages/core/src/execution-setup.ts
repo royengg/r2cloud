@@ -14,6 +14,7 @@ export async function readExecutionSetup(actor: Actor, projectId: string) {
   });
   const connection = await prisma.provider_connections.findFirst({
     where: { project_id: projectId, user_id: actor.id },
+    orderBy: { enabled: 'desc' },
     select: { provider: true, mode: true, enabled: true },
   });
   const subscription = await prisma.codexConnection.findFirst({
@@ -21,17 +22,26 @@ export async function readExecutionSetup(actor: Actor, projectId: string) {
     orderBy: { createdAt: 'desc' },
     select: { state: true },
   });
+  const runtime = await prisma.executionRuntime.findFirst({
+    where: { projectId, expiresAt: { gt: new Date() } },
+  });
   return {
     repositoryConnected: !!project.repo_id,
     profile,
     provider: connection,
-    sandbox: { provider: 'vercel', status: 'supervisor_setup_required' },
+    sandbox: { provider: 'vercel', status: runtime ? 'available' : 'worker_unavailable' },
     subscription: {
       method: 'codex_app_server_device_code',
       scope: 'personal_project',
       status: subscription?.state ?? 'not_connected',
     },
-    ready: false,
+    ready: Boolean(
+      runtime &&
+      profile &&
+      project.repo_id &&
+      subscription?.state === 'connected' &&
+      connection?.enabled,
+    ),
   };
 }
 export async function saveExecutionSetup(

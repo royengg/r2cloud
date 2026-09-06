@@ -15,9 +15,10 @@ export async function lockRow(db: DB, table: keyof typeof tables, id: string) {
     Prisma.sql`SELECT id FROM ${namespace}.${tables[table]} WHERE id=${id} FOR UPDATE`,
   );
 }
-export async function nextJob(db: DB, kinds: string[]) {
+export async function nextJob(db: DB, kinds: string[], projectId?: string) {
   const rows = await db.$queryRaw<{ id: string }[]>(Prisma.sql`
     SELECT id FROM ${namespace}.jobs WHERE kind IN (${Prisma.join(kinds)}) AND available_at<=now()
+    AND (${projectId ?? null}::text IS NULL OR project_id=${projectId ?? null})
     AND (state IN ('ready','uncertain') OR (state='processing' AND lease_until<now()))
     ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1
   `);

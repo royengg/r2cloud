@@ -124,9 +124,7 @@ export function CodexConnection({ projectId }: { projectId: string }) {
           Connect your Codex account
         </Button>
       )}
-      {linked && (
-        <p className="subtle">Linked for this project. Cloud execution setup is still pending.</p>
-      )}
+      {linked && <p className="subtle">Linked only for you in this project.</p>}
       {state && !state.available && !linked && !pending && (
         <p className="subtle">Codex account connections are being configured.</p>
       )}

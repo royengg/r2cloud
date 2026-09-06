@@ -11,6 +11,7 @@ export const commandInput = z.discriminatedUnion('action', [
   z
     .object({
       action: z.literal('start'),
+      message: z.string().trim().min(1).max(8000).optional(),
       version: z.number().int().positive(),
       minutes: z.number().int().min(1).max(60).default(10),
       budgetCents: z.number().int().min(0).max(5000).default(0),

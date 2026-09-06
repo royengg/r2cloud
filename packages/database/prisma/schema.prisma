@@ -177,6 +177,7 @@ model project_access {
 }
 
 model projects {
+  executionRuntime      ExecutionRuntime?
   codexConnections      CodexConnection[]
   executionProfiles     execution_profiles[]
   repositoryConnections RepositoryConnection[]
@@ -532,4 +533,12 @@ model CodexConnection {
   user       users     @relation(fields: [userId], references: [id])
 
   @@map("codex_connections")
+}
+
+model ExecutionRuntime {
+  projectId String   @id @map("project_id")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  project   projects @relation(fields: [projectId], references: [id], onDelete: NoAction)
+
+  @@map("execution_runtime")
 }

@@ -84,6 +84,14 @@ async function queueRun(
     400,
     'This pilot only permits subscription usage with no paid overage.',
   );
+  if (connection.mode === 'managed')
+    requireThat(
+      await db.executionRuntime.count({
+        where: { projectId: p.id, expiresAt: { gt: new Date() } },
+      }),
+      409,
+      'The managed execution worker is not available.',
+    );
   const active = await db.runs.count({ where: { org_id: p.org_id, stopped_at: null } });
   const org = await db.organisations.findUniqueOrThrow({ where: { id: p.org_id } });
   requireThat(active < org.max_runs, 409, 'The organisation has reached its concurrent run limit.');
@@ -218,12 +226,28 @@ export async function command(
       409,
       'This task has changed. Refresh and review the latest version.',
     );
-    if (input.action === 'start') return startTask(db, actor, p, t, input);
+    if (input.action === 'start') {
+      const result = await startTask(db, actor, p, t, input);
+      if (input.message) {
+        await db.comments.create({
+          data: {
+            id: id(),
+            org_id: p.org_id,
+            project_id: projectId,
+            task_id: taskId,
+            user_id: actor.id,
+            body: input.message,
+          },
+        });
+        await event(db, projectId, taskId, actor.id, 'Task instructions added');
+      }
+      return result;
+    }
     const claim = await db.claims.findFirst({ where: { task_id: taskId, released_at: null } });
     requireThat(claim, 409, 'This task has no active claim.');
     if (input.action === 'changes') {
       requireThat(
-        t.state === 'review',
+        ['review', 'blocked'].includes(t.state),
         409,
         'Corrections can start when this candidate is ready for review.',
       );

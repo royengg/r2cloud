@@ -1,38 +1,38 @@
 # Implementation status
 
-The product is under development. No live agent execution, repository publication or deployment has been validated.
+The project-scoped Vercel/Codex pilot worker is implemented and running locally. A real subscription-backed connection-check turn completed in Vercel. The selected repository’s complete checkout/edit/build journey has not yet been validated. Nothing has been published or deployed through the product.
 
 ## Implemented
 
 - Bun workspaces with React/Vite, Express, Prisma/Postgres and Socket.IO.
-- GitHub-only Better Auth, empty-workspace onboarding, projects, invitations and separate contributor/reviewer/merge permissions.
-- Collaborative boards, exclusive task claims, version/generation checks, durable jobs/events and approval-bound internal workflows.
-- Repository GitHub App discovery and verified attachment, plus versioned execution setup and run-limit enforcement.
-- Personal Codex device-login broker, encrypted credential storage, project-scoped connect/disconnect UI and native app-server handshake. Vercel allocation/command/snapshot/stop journaling.
-- Repository execution settings UI and 10-minute, zero-paid task-start defaults; managed runs reject paid allowances.
-- Light design system, workspace picker, task review panels and expanded project conversations.
+- GitHub sign-in, workspace onboarding, projects, invitations and separate contribution, publication-review and merge permissions.
+- GitHub App repository discovery and attachment; the pilot project is connected to `royengg/roy`.
+- Personal Codex device login, encrypted credentials and project-scoped disconnect.
+- Exclusive task claims, version/generation checks, durable jobs, worker leases and request reconciliation.
+- Vercel allocation, restricted repository import, dependency setup, Codex app-server transport, command checks and confirmed stop.
+- Model credentials injected by Vercel’s network layer; real tokens never enter sandbox files or command environments. No GitHub write credentials enter the sandbox.
+- Immutable Git bundle export to private local artifact storage; correction runs restore the previous candidate. Unknown product acceptance stays explicit and requires human review.
+- Task conversation instructions can start a Todo atomically. Agent summaries appear as Codex messages without granting that author project permissions.
+- Execution readiness reflects a live worker heartbeat and saved repository settings.
 
-Product GitHub OAuth is configured locally. Repository App discovery and Codex completion checks use mocked external protocols. A real Vercel Hobby sandbox passed creation, tool inspection, confirmed stop and removal; application-worker execution remains unvalidated. The personal subscription connection flow is implemented but has not been validated with a real account. Cloud coding remains disabled.
+## Pilot limits
 
-## Next implementation steps
+One configured project, public repositories, an active Vercel Hobby team, Paris (`cdg1`), two CPUs, ten minutes maximum and no paid allowance. No region failover, automatic resource extension or API-key fallback. Saved credentials expire; renewable worker authentication is unfinished. Artifact export is limited to 64 MiB and requires 21 GiB of free local disk space.
 
-1. Validate personal Codex sign-in with the tester’s account and deploy the broker with separate credential custody.
-2. Complete Vercel supervisor with read-only repository import, Codex transport, free-quota enforcement and worker wiring.
-3. Private artifact storage and authenticated preview gateway with immutable review evidence.
-4. Real GitHub publisher, required-check enforcement, reconciliation and verified merge facts.
-5. Confirmed-stop handoff/recovery, skill-management UI, and explicit batch controls.
-6. Production isolation, trusted proxy policy, repository revocation/refresh and cross-organisation coordination, retention and pagination. Board snapshots currently include all project tasks/comments; Socket.IO polls per connection.
+A project conversation remains shared feedback. Open a Todo’s Conversation tab and use **Start work with this message**, or use its existing **Start work** action. During a run, additional messages are saved for subsequent work; live turn steering is not implemented.
 
-Pilot policy: one tester on their own repositories, free-only Vercel usage ($0 paid authorization), Paris (`cdg1`), with account eligibility checked before creating resources. Region selection and limits are detailed in [execution setup](EXECUTION-CONNECTIONS.md).
+## Still unfinished
 
-## Verification
+1. Validate the complete selected-repository coding/build journey and recovery of partial work. Explicit retry now requires confirmed stop and retains exclusive ownership.
+2. Authenticated browser previews, downloadable diff/artifact review and production object storage. The pilot currently marks previews unavailable.
+3. GitHub installation credential custody for private repositories, publisher, required checks, reconciliation and verified merge integration.
+4. Renewable Codex/Vercel credentials, skills mounting, batch UI and production service isolation.
+5. Repository revocation/refresh, retention and pagination. Board snapshots still include all project tasks/comments.
 
-The account-linking increment passed 65 local tests (310 assertions), the TypeScript/Vite build and ten browser axe audits. Tests include real private-Postgres policy checks and mocked login journeys, including cancellation, stale leases, revoked access, encrypted storage and zero-paid allowances. The native Codex 0.153.2 initialization/account-read handshake passed without signing in or making a model request. Real account login, cloud execution and publication remain unvalidated.
+## Validation
 
-Audit of `8f7d1ff` (2026-09-06): Prisma model queries, interactive transactions and the isolated SQL locking helper were retained. The board now selects current execution generations without an in-memory distinct over run history. SQL migrations still enforce exclusive claims/executions and candidate immutability. No applied migration was changed.
+Local tests cover Postgres/HTTP/Socket.IO invariants and mocked Vercel/Codex execution. Live checks cover Vercel create/stop/remove, the installed Codex 0.147.0 protocol, credential-brokered model access and one subscription-backed connection-check turn without repository edits. Probe sandboxes were removed.
 
-57 local tests passed (269 assertions) using private Postgres, HTTP/Socket.IO and mocked external providers. An additional client regression checks that a pending snapshot cannot restore a board after access revocation. Prisma validation and the TypeScript/Vite build passed. The authentication browser journey passed eight axe audits using single-page legacy mode after Chromium crashed in axe’s extra-page mode. GitHub OAuth exchanges in that journey are mocked. No real cloud/Codex/GitHub publication end-to-end check has run.
+The TypeScript/Vite build and 71 local tests pass. The authentication browser journey passes ten axe audits. Browser checks required pausing the dev processes to stay within shared-VPS thread resources.
 
-The cleanup removed unused styles/icons, corrected stale setup claims, restored local-only test exclusions and kept local test helpers out of the product typecheck. Shared repository types live in contracts, so the frontend does not import a server adapter.
-
-Tests, scripts, screenshots and historical research remain local-only. The archive is in `.local/docs-archive/20260905`. Existing docs cover architecture, decisions, setup, integration readiness and required design/license provenance; no additional audit document is needed.
+Tests, scripts, screenshots, CLI authentication and environment files remain local-only. No deployment or GitHub publication has been validated.

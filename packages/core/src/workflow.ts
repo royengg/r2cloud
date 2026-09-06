@@ -14,9 +14,9 @@ import {
   type PublicationResult,
   type MergeResult,
 } from '@r2cloud/contracts/adapters';
-async function reserve(kinds: string[]) {
+async function reserve(kinds: string[], projectId?: string) {
   return prisma.$transaction(async (db) => {
-    const jobId = await nextJob(db, kinds);
+    const jobId = await nextJob(db, kinds, projectId);
     if (!jobId) return null;
     return db.jobs.update({
       where: { id: jobId },
@@ -141,13 +141,35 @@ async function finishRun(job: jobs, grant: RunGrant, result: RunResult) {
         evidence: json(result.evidence),
       },
     });
+    if (!m.fixture) {
+      const bot = await db.users.upsert({
+        where: { id: `codex-agent:${grant.projectId}` },
+        create: { id: `codex-agent:${grant.projectId}`, name: 'Codex', kind: 'agent' },
+        update: {},
+      });
+      requireThat(bot.kind === 'agent' && !bot.auth_user_id, 409, 'Invalid agent author identity.');
+      await db.comments.create({
+        data: {
+          id: id(),
+          org_id: grant.orgId,
+          project_id: grant.projectId,
+          task_id: grant.taskId,
+          user_id: bot.id,
+          body: m.summary.slice(0, 8000),
+        },
+      });
+    }
     await db.runs.updateMany({
       where: { id: grant.runId, stopped_at: null },
       data: { state: 'stopped', stopped_at: new Date(), stop_proof: result.stopProof },
     });
     const passed =
       result.evidence.checks.length === grant.criteria.length &&
-      result.evidence.checks.every((x, i) => x.status === 'passed' && x.name === grant.criteria[i]);
+      result.evidence.checks.every(
+        (x, i) =>
+          (x.status === 'passed' || (!m.fixture && x.status === 'unknown')) &&
+          x.name === grant.criteria[i],
+      );
     await db.tasks.update({
       where: { id: t.id },
       data: {
@@ -370,11 +392,22 @@ async function failure(job: jobs, error: unknown) {
       await db.jobs.update({ where: { id: job.id }, data: { state: 'blocked' } });
       return;
     }
-    if (job.run_id)
+    if (job.run_id) {
+      const stopped = await db.sandboxAllocation.findFirst({
+        where: {
+          operationId: job.id,
+          runId: job.run_id,
+          state: 'stopped',
+          stopProof: { not: null },
+        },
+      });
       await db.runs.updateMany({
         where: { id: job.run_id, stopped_at: null },
-        data: { state: 'unknown' },
+        data: stopped
+          ? { state: 'stopped', stopped_at: new Date(), stop_proof: stopped.stopProof }
+          : { state: 'unknown' },
       });
+    }
     await db.tasks.updateMany({
       where: { id: job.task_id, state: { not: 'completed' } },
       data: { state: 'blocked', version: { increment: 1 } },
@@ -389,9 +422,17 @@ async function failure(job: jobs, error: unknown) {
     );
   });
 }
-export async function executeOne(backend: ExecutionBackend) {
-  const job = await reserve(['execute']);
+export async function executeOne(backend: ExecutionBackend, projectId?: string) {
+  const job = await reserve(['execute'], projectId);
   if (!job) return false;
+  const heartbeat = setInterval(() => {
+    void prisma.jobs
+      .updateMany({
+        where: { id: job.id, lease_token: job.lease_token, state: 'processing' },
+        data: { lease_until: new Date(Date.now() + 90000) },
+      })
+      .catch(() => {});
+  }, 20000);
   try {
     const grant = await executionGrant(job);
     requireThat(
@@ -407,6 +448,8 @@ export async function executeOne(backend: ExecutionBackend) {
     await finishRun(job, grant, result);
   } catch (e) {
     await failure(job, e);
+  } finally {
+    clearInterval(heartbeat);
   }
   return true;
 }

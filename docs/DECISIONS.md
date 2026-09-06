@@ -28,3 +28,7 @@ Pilot: one tester on their own repositories, free-only sandbox usage ($0 paid), 
 Keep code minimal, readable and formatted with Prettier. Add comments only when necessary to explain non-obvious behavior. Commit locally as Rudraksh Roy (`royengg`); push only when authorized. Tests and scripts remain local-only. Preserve required third-party license notices.
 
 External fixtures are confined to local testing. See [implementation status](STATUS.md) for actual integration readiness. Earlier architecture research and progress reports are archived locally.
+
+## Unified agent conversation
+
+Confirmed on 6 September 2026: one persistent thread and one native agent harness handle conversation, planning, questions and implementation. Do not introduce a separate chat path or require every message to create/claim a task. The agent uses project-scoped Kanban tools; the backend grants implementation authority through the existing checked claim service. Stream real provider events and show questions/plan decisions inline. See [source review and implementation design](HARNESS.md).

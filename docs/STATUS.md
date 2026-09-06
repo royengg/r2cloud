@@ -20,7 +20,9 @@ The project-scoped Vercel/Codex pilot worker is implemented and running locally.
 
 One configured project, public repositories, an active Vercel Hobby team, Paris (`cdg1`), two CPUs, ten minutes maximum and no paid allowance. No region failover, automatic resource extension or API-key fallback. Saved credentials expire; renewable worker authentication is unfinished. Artifact export is limited to 64 MiB and requires 21 GiB of free local disk space.
 
-Open **Threads**, or a task’s **Conversation** tab. Create a thread, choose a model and optional instructions, then use **Start work** or **Create task & start work**. **Save note** only records a message. Each later turn uses the retained candidate and a pinned copy of that thread’s history in a fresh isolated Codex session. Native provider-session restoration and live turn steering are not implemented. History is bounded to 40 messages / 64,000 characters per run; create another thread when that limit is reached.
+Open **Threads**, or a task’s **Conversation** tab. New threads open directly into a composer with a model picker; the first sent message names the thread. Use **Start work** or **Create task & start work**. **Save note** only records a message. Each later turn uses the retained candidate and a pinned copy of that thread’s history in a fresh isolated Codex session. Native provider-session restoration and live turn steering are not implemented. History is bounded to 40 messages / 64,000 characters per run; create another thread when that limit is reached.
+
+The current run flow is an implementation prototype, not the desired unified agent experience. The [harness source review](HARNESS.md) records the required session, streaming and board-tool changes. Those changes are not implemented yet.
 
 ## Still unfinished
 

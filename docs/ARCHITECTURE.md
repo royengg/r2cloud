@@ -1,5 +1,6 @@
 # System architecture proposal
 
+The unified thread/session design and upstream source review in [HARNESS.md](HARNESS.md) supersede any assumption below that every agent message starts an implementation run.
 Status: intended architecture. See [decisions](DECISIONS.md) for product constraints and [implementation status](STATUS.md) for what is built. Historical source-review notes are archived locally.
 
 ## 1. Product direction and feasibility

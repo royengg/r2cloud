@@ -47,4 +47,5 @@ export type AgentGrant = {
   providerState: string | null;
   taskId: string | null;
   minutes: number;
+  startedAt?: number;
 };

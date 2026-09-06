@@ -75,28 +75,40 @@ export async function waitForAgentResponse(
   detail: unknown,
 ) {
   await activeAgentTurn(grant);
-  const request = await prisma.agentRequest.upsert({
-    where: { turnId_sourceId: { turnId: grant.id, sourceId } },
-    create: { id: id(), turnId: grant.id, sourceId, kind, prompt, detail: json(detail) },
-    update: {},
+  const request = await prisma.$transaction(async (db) => {
+    await lockProject(db, grant.projectId);
+    requireThat(
+      await db.agentTurn.count({
+        where: {
+          id: grant.id,
+          stoppedAt: null,
+          stopRequested: false,
+          state: { in: ['running', 'waiting'] },
+        },
+      }),
+      409,
+      'This turn is no longer accepting requests.',
+    );
+    const request = await db.agentRequest.upsert({
+      where: { turnId_sourceId: { turnId: grant.id, sourceId } },
+      create: { id: id(), turnId: grant.id, sourceId, kind, prompt, detail: json(detail) },
+      update: {},
+    });
+    requireThat(
+      request.kind === kind &&
+        request.prompt === prompt &&
+        digest(request.detail) === digest(detail),
+      409,
+      'The agent request changed. A new approval is required.',
+    );
+    await db.agentTurn.update({ where: { id: grant.id }, data: { state: 'waiting' } });
+    await event(db, grant.projectId, grant.taskId, null, 'Agent needs your response', {
+      threadId: grant.threadId,
+    });
+    return request;
   });
-  requireThat(
-    request.kind === kind && request.prompt === prompt && digest(request.detail) === digest(detail),
-    409,
-    'The agent request changed. A new approval is required.',
-  );
-  await prisma.agentTurn.update({ where: { id: grant.id }, data: { state: 'waiting' } });
-  await event(prisma, grant.projectId, grant.taskId, null, 'Agent needs your response', {
-    threadId: grant.threadId,
-  });
-  while (
-    Date.now() <
-    new Date(
-      (await prisma.agentTurn.findUniqueOrThrow({ where: { id: grant.id } })).createdAt,
-    ).getTime() +
-      grant.minutes * 60000 -
-      30000
-  ) {
+  const deadline = (grant.startedAt ?? Date.now()) + grant.minutes * 60000 - 30000;
+  while (Date.now() < deadline) {
     const turn = await activeAgentTurn(grant);
     if (turn.stopRequested) throw new Error('Turn stopped while waiting for a response.');
     const current = await prisma.agentRequest.findUniqueOrThrow({ where: { id: request.id } });

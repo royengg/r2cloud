@@ -23,6 +23,13 @@ export function agentControl(projectId: string, vault: CredentialVault): Session
   };
   return {
     authorize,
+    async models(grant, models) {
+      await authorize(grant);
+      await prisma.executionRuntime.update({
+        where: { projectId },
+        data: { models: json(models), modelsUpdatedAt: new Date() },
+      });
+    },
     async stopped(grant) {
       return (await activeAgentTurn(grant)).stopRequested;
     },
@@ -59,12 +66,11 @@ export function agentControl(projectId: string, vault: CredentialVault): Session
             );
             previous = { digest: m.artifactDigest, headSha: m.headSha };
           }
-          const turn = await prisma.agentTurn.findUniqueOrThrow({ where: { id: grant.id } });
           const checkout = new TaskCheckout(
             sandbox,
             run,
             await authorize(grant),
-            turn.createdAt.getTime() + grant.minutes * 60000,
+            (grant.startedAt ?? Date.now()) + grant.minutes * 60000,
             previous,
           );
           const prepared = await checkout.prepare();
@@ -212,11 +218,19 @@ export async function runAgentTurn(
       orderBy: { createdAt: 'asc' },
     });
     if (!turn) return null;
+    const grant = {
+      ...(turn.grant as unknown as AgentGrant),
+      ...(turn.state === 'queued' ? { startedAt: Date.now() } : {}),
+    };
     await db.agentTurn.update({
       where: { id: turn.id },
-      data: { state: turn.state === 'queued' ? 'running' : 'unknown', heartbeatAt: new Date() },
+      data: {
+        grant: json(grant),
+        state: turn.state === 'queued' ? 'running' : 'unknown',
+        heartbeatAt: new Date(),
+      },
     });
-    return turn;
+    return { ...turn, grant };
   });
   if (!selected) return false;
   const grant = selected.grant as unknown as AgentGrant;

@@ -1,4 +1,5 @@
 import type { Sandbox } from '@vercel/sandbox';
+import type { CodexModel } from '@r2cloud/contracts/threads';
 import type { AgentGrant } from '@r2cloud/contracts/agent';
 import { SetupRequired, Uncertain } from '@r2cloud/contracts/adapters';
 import { VercelSandboxes, type SandboxJournal } from './vercel';
@@ -10,6 +11,7 @@ import { setTimeout as pause } from 'node:timers/promises';
 export type SessionControl = {
   authorize(grant: AgentGrant): Promise<ExecutionCredentials>;
   stopped(grant: AgentGrant): Promise<boolean>;
+  models?(grant: AgentGrant, models: CodexModel[]): Promise<void>;
   events(grant: AgentGrant, events: { seq: number; message: Record<string, any> }[]): Promise<void>;
   request(grant: AgentGrant, message: Record<string, any>, sandbox: Sandbox): Promise<unknown>;
   settle(
@@ -64,7 +66,7 @@ export class AgentSession {
     let providerId: string | undefined;
     let rolloutPath: string | undefined;
     let error: string | undefined;
-    const deadline = Date.now() + grant.minutes * 60000;
+    const deadline = (grant.startedAt ?? Date.now()) + grant.minutes * 60000;
     let revoked = false;
     let checking = false;
     const monitor = setInterval(() => {
@@ -170,6 +172,7 @@ export class AgentSession {
         chatgptPlanType: auth.plan,
       });
       const models = await harness.models(`${grant.id}:models`);
+      await this.control.models?.(grant, models);
       if (grant.model && !models.some((m) => m.model === grant.model))
         throw new SetupRequired('The selected model is not available.');
       const settings = {

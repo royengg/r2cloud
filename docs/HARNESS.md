@@ -141,6 +141,25 @@ The existing claim constraints, policy checks, receipts, jobs, sandbox identity,
 
 Do not postpone invariant tests until the UI appears complete. Keep tests and source-review scratch files local under the existing repository policy.
 
+## Implementation progress — 6 September 2026
+
+| Increment                  | Current result                                                                                                                                                                                                                                                                      |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Durable native turns       | `AgentTurn` owns queued/running/waiting/terminal state independently of implementation runs. A partial unique index prevents competing turns in one thread.                                                                                                                         |
+| Session and streaming      | Codex 0.147.0 `thread/start` dynamic tools and `thread/resume` rollout paths were verified in real Vercel execution. Ordered bridge batches feed persisted timeline items; real replies and reasoning summaries are rendered without exposing raw reasoning.                        |
+| Board and repository tools | Project context, paged task search, task details, bounded public repository reads, inline questions, approved task creation and checked implementation grants. No classifier or second conversation harness.                                                                        |
+| Ownership and recovery     | Claim/version/dependency/limit checks commit before checkout. The native turn worker owns durable execution intent. No replacement until cloud stop is confirmed. Interruptions attempt artifact preservation after process quiescence; a vanished VM can still lose unsaved edits. |
+| Product UI                 | One Send action, inline decisions, Markdown replies, expandable technical activity, per-thread model picker, Stop, board activity and reconnect snapshots.                                                                                                                          |
+| Preview/publication        | Still unfinished: authenticated live preview service, browser evidence, GitHub credential custody/publisher and real merge reconciliation. Existing immutable candidate and approval policies remain in force.                                                                      |
+
+Next integration sequence:
+
+1. Validate the checked `start_task` path against the selected test repository, including a correction and interrupted export. Do not publish the resulting candidate automatically.
+2. Add a separately authenticated preview runtime tied to a candidate and approved dev command/port. Preserve its independent expiry; never extend the implementation writer while waiting for review. Add isolated browser inspection and immutable screenshots.
+3. Connect the isolated publisher to scoped GitHub App credentials, then validate approval-bound publication and uncertain-response reconciliation before a separately authorised merge test.
+
+Native checkpoints remain on the backend, never in thread API responses. Experimental protocol fields are pinned to the tested CLI version. Runtime setup and model credentials are identical for messages and coding; repository files arrive only after the checked implementation operation. Public read-only repository inspection uses scoped backend tools and does not acquire a claim.
+
 ## Compatibility limits
 
 Upstream HEAD is not the pilot's installed protocol. r2cloud currently pins Codex 0.147.0 in Vercel; its local account broker has used a newer version. Native session restore, dynamic tools, plan/question events, model switching and turn steering must be probed on the actual execution version. Do not copy new APIs from HEAD and assume the pilot supports them.

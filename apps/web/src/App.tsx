@@ -295,19 +295,14 @@ export function App() {
               {w.error && <Button onClick={() => location.reload()}>Reload workspace</Button>}
             </div>
           )}
-          <Composer
-            key={w.projectId}
-            projectName={context?.name ?? 'Project'}
-            busy={w.busy}
-            canComment={!!project?.contribute}
-            comments={w.snapshot?.comments.filter((c) => !c.task_id) ?? []}
-            onSend={(body) =>
-              w.act(
-                () => api(`/projects/${w.projectId}/comments`, { taskId: null, body }),
-                'Project feedback shared',
-              )
-            }
-          />
+          {project && (
+            <Composer
+              key={w.projectId}
+              project={project}
+              userId={w.identity.user.id}
+              comments={w.snapshot?.comments.filter((c) => !c.task_id && !c.threadId) ?? []}
+            />
+          )}
         </main>
       </div>
       {task && project && (
@@ -328,12 +323,6 @@ export function App() {
             )
           }
           onPreview={preview}
-          onFeedback={(body) =>
-            w.act(
-              () => api(`/projects/${w.projectId}/comments`, { taskId: task.id, body }),
-              'Task feedback shared',
-            )
-          }
         />
       )}
       {newProject && context && (

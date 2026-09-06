@@ -1,4 +1,6 @@
-import { access, lockProject, event, type AccessibleProject } from './project-context';
+import { receipt } from './receipt';
+import { pinThread } from './thread-context';
+import { access, event, type AccessibleProject } from './project-context';
 import { pinExecutionSetup } from './execution-setup';
 import { type DB, type tasks, Prisma, prisma, json } from '@r2cloud/database';
 import { lockRow } from '@r2cloud/database/locking';
@@ -14,43 +16,7 @@ import {
   requireThat,
 } from '@r2cloud/contracts/domain';
 import type { RunGrant } from '@r2cloud/contracts/adapters';
-import { digest, id } from '@r2cloud/contracts/hash';
-async function receipt<T>(
-  actor: Actor,
-  projectId: string,
-  key: string,
-  payload: unknown,
-  fn: (db: DB) => Promise<T>,
-): Promise<T> {
-  requireThat(key.length >= 8 && key.length <= 128, 400, 'A valid idempotency key is required.');
-  return prisma.$transaction(async (db) => {
-    await access(db, actor, projectId);
-    await lockProject(db, projectId);
-    const prev = await db.receipts.findUnique({
-      where: { user_id_project_id_key: { user_id: actor.id, project_id: projectId, key } },
-    });
-    const d = digest(payload);
-    if (prev) {
-      requireThat(
-        prev.payload_hash === d,
-        409,
-        'This request key was already used for different content.',
-      );
-      return prev.response as T;
-    }
-    const result = await fn(db);
-    await db.receipts.create({
-      data: {
-        user_id: actor.id,
-        project_id: projectId,
-        key,
-        payload_hash: d,
-        response: json(result),
-      },
-    });
-    return result;
-  });
-}
+import { id } from '@r2cloud/contracts/hash';
 export async function createTask(actor: Actor, projectId: string, key: string, input: TaskInput) {
   input = taskInput.parse(input);
   return receipt(actor, projectId, key, { type: 'create', input }, async (db) => {
@@ -69,6 +35,7 @@ async function queueRun(
   claimId: string,
   minutes: number,
   budgetCents: number,
+  thread?: RunGrant['config']['thread'],
 ) {
   const connection = await db.provider_connections.findFirst({
     where: { project_id: p.id, user_id: actor.id, enabled: true },
@@ -107,6 +74,7 @@ async function queueRun(
   const executionSetup =
     connection.mode === 'fixture' ? null : await pinExecutionSetup(db, p.id, minutes, budgetCents);
   const manifest = {
+    thread,
     executionSetup,
     provider: 'codex',
     connectionId: connection.id,
@@ -195,7 +163,10 @@ async function startTask(
       repo_id: p.repo_id,
     },
   });
-  return queueRun(db, actor, p, t, claimId, input.minutes, input.budgetCents);
+  const thread = input.threadId
+    ? await pinThread(db, actor, p.id, t.id, input.threadId, input.threadVersion)
+    : undefined;
+  return queueRun(db, actor, p, t, claimId, input.minutes, input.budgetCents, thread);
 }
 export async function command(
   actor: Actor,
@@ -206,65 +177,38 @@ export async function command(
 ) {
   input = commandInput.parse(input);
   return receipt(actor, projectId, key, { taskId, input }, async (db) => {
-    const p = await access(
-      db,
-      actor,
-      projectId,
-      input.action === 'publish'
-        ? 'review'
-        : input.action === 'merge'
-          ? 'merge'
-          : input.action === 'changes'
-            ? undefined
-            : 'contribute',
-    );
-    await lockRow(db, 'tasks', taskId);
-    const t = await db.tasks.findFirst({ where: { id: taskId, project_id: projectId } });
-    requireThat(t, 404, 'Task not found.');
-    requireThat(
-      t.version === input.version,
-      409,
-      'This task has changed. Refresh and review the latest version.',
-    );
-    if (input.action === 'start') {
-      const result = await startTask(db, actor, p, t, input);
-      if (input.message) {
-        await db.comments.create({
-          data: {
-            id: id(),
-            org_id: p.org_id,
-            project_id: projectId,
-            task_id: taskId,
-            user_id: actor.id,
-            body: input.message,
-          },
-        });
-        await event(db, projectId, taskId, actor.id, 'Task instructions added');
-      }
-      return result;
-    }
-    const claim = await db.claims.findFirst({ where: { task_id: taskId, released_at: null } });
-    requireThat(claim, 409, 'This task has no active claim.');
-    if (input.action === 'changes') {
-      requireThat(
-        ['review', 'blocked'].includes(t.state),
-        409,
-        'Corrections can start when this candidate is ready for review.',
-      );
-      requireThat(
-        p.review || claim.owner_id === actor.id,
-        403,
-        'Only the owner or a designated reviewer can request a correction.',
-      );
-      requireThat(
-        !(await db.runs.count({ where: { claim_id: claim.id, stopped_at: null } })),
-        409,
-        'The previous execution has not been confirmed stopped.',
-      );
-      await db.approvals.updateMany({
-        where: { task_id: taskId, consumed_at: null },
-        data: { revoked_at: new Date() },
-      });
+    return commandInTransaction(db, actor, projectId, taskId, input);
+  });
+}
+export async function commandInTransaction(
+  db: DB,
+  actor: Actor,
+  projectId: string,
+  taskId: string,
+  input: Command,
+) {
+  const p = await access(
+    db,
+    actor,
+    projectId,
+    input.action === 'publish'
+      ? 'review'
+      : input.action === 'merge'
+        ? 'merge'
+        : input.action === 'changes'
+          ? undefined
+          : 'contribute',
+  );
+  await lockRow(db, 'tasks', taskId);
+  const t = await db.tasks.findFirst({ where: { id: taskId, project_id: projectId } });
+  requireThat(t, 404, 'Task not found.');
+  requireThat(
+    t.version === input.version,
+    409,
+    'This task has changed. Refresh and review the latest version.',
+  );
+  if (input.action === 'start') {
+    if (input.message) {
       await db.comments.create({
         data: {
           id: id(),
@@ -272,88 +216,128 @@ export async function command(
           project_id: projectId,
           task_id: taskId,
           user_id: actor.id,
-          body: input.feedback,
+          body: input.message,
+          threadId: input.threadId,
         },
       });
-      await event(db, projectId, taskId, actor.id, 'Changes requested', {
-        feedback: input.feedback,
-      });
-      const owner = await db.users.findUniqueOrThrow({ where: { id: claim.owner_id } });
-      await access(db, owner, projectId, 'contribute');
-      const previous = await db.runs.findFirstOrThrow({
-        where: { claim_id: claim.id },
-        orderBy: { generation: 'desc' },
-        select: { manifest: true },
-      });
-      const config = previous.manifest as unknown as RunGrant['config'];
-      return queueRun(db, owner, p, t, claim.id, config.minutes, config.budgetCents);
+      await event(db, projectId, taskId, actor.id, 'Task instructions added');
     }
+    return startTask(db, actor, p, t, input);
+  }
+  const claim = await db.claims.findFirst({ where: { task_id: taskId, released_at: null } });
+  requireThat(claim, 409, 'This task has no active claim.');
+  if (input.action === 'changes') {
     requireThat(
-      t.state === (input.action === 'publish' ? 'review' : 'code_review'),
+      ['review', 'blocked'].includes(t.state),
       409,
-      'This action is not available at this stage.',
+      'Corrections can start when this candidate is ready for review.',
     );
-    const c = await db.candidates.findFirst({ where: { id: input.candidateId, task_id: taskId } });
     requireThat(
-      c && c.id === t.candidate_id && c.generation === t.generation && c.digest === input.digest,
-      409,
-      'The candidate has changed. Review and approve the current snapshot.',
+      p.review || claim.owner_id === actor.id,
+      403,
+      'Only the owner or a designated reviewer can request a correction.',
     );
-    const evidence = c.evidence as unknown as Evidence;
     requireThat(
-      evidence.checks.length > 0 && evidence.checks.every((x) => x.status === 'passed'),
+      !(await db.runs.count({ where: { claim_id: claim.id, stopped_at: null } })),
       409,
-      'Acceptance checks must pass before publication.',
+      'The previous execution has not been confirmed stopped.',
     );
-    if (input.action === 'merge')
-      requireThat(
-        await db.publications.count({ where: { task_id: taskId, candidate_id: c.id } }),
-        409,
-        'A verified pull request is required.',
-      );
-    const approvalId = id(),
-      operationId = id();
-    await db.approvals.create({
+    await db.approvals.updateMany({
+      where: { task_id: taskId, consumed_at: null },
+      data: { revoked_at: new Date() },
+    });
+    await db.comments.create({
       data: {
-        id: approvalId,
+        id: id(),
         org_id: p.org_id,
         project_id: projectId,
         task_id: taskId,
-        candidate_id: c.id,
-        action: input.action,
-        digest: c.digest,
-        approver_id: actor.id,
-        policy_version: 'v1',
-        expires_at: new Date(Date.now() + 30 * 60_000),
+        user_id: actor.id,
+        body: input.feedback,
+        threadId: input.threadId,
       },
     });
-    await db.jobs.create({
-      data: {
-        id: operationId,
-        org_id: p.org_id,
-        project_id: projectId,
-        task_id: taskId,
-        approval_id: approvalId,
-        kind: input.action,
-      },
+    await event(db, projectId, taskId, actor.id, 'Changes requested', {
+      feedback: input.feedback,
     });
-    await db.tasks.update({
-      where: { id: taskId },
-      data: {
-        state: input.action === 'publish' ? 'publishing' : 'merging',
-        version: { increment: 1 },
-      },
+    const owner = await db.users.findUniqueOrThrow({ where: { id: claim.owner_id } });
+    await access(db, owner, projectId, 'contribute');
+    const previous = await db.runs.findFirstOrThrow({
+      where: { claim_id: claim.id },
+      orderBy: { generation: 'desc' },
+      select: { manifest: true },
     });
-    await event(
-      db,
-      projectId,
-      taskId,
-      actor.id,
-      input.action === 'publish' ? 'Publication authorised' : 'Merge authorised',
-      { candidateId: c.id, digest: c.digest, operationId },
+    const config = previous.manifest as unknown as RunGrant['config'];
+    const thread = input.threadId
+      ? await pinThread(db, owner, projectId, taskId, input.threadId, input.threadVersion)
+      : undefined;
+    return queueRun(db, owner, p, t, claim.id, config.minutes, config.budgetCents, thread);
+  }
+  requireThat(
+    t.state === (input.action === 'publish' ? 'review' : 'code_review'),
+    409,
+    'This action is not available at this stage.',
+  );
+  const c = await db.candidates.findFirst({ where: { id: input.candidateId, task_id: taskId } });
+  requireThat(
+    c && c.id === t.candidate_id && c.generation === t.generation && c.digest === input.digest,
+    409,
+    'The candidate has changed. Review and approve the current snapshot.',
+  );
+  const evidence = c.evidence as unknown as Evidence;
+  requireThat(
+    evidence.checks.length > 0 && evidence.checks.every((x) => x.status === 'passed'),
+    409,
+    'Acceptance checks must pass before publication.',
+  );
+  if (input.action === 'merge')
+    requireThat(
+      await db.publications.count({ where: { task_id: taskId, candidate_id: c.id } }),
+      409,
+      'A verified pull request is required.',
     );
-    return { id: taskId, approvalId, operationId };
+  const approvalId = id(),
+    operationId = id();
+  await db.approvals.create({
+    data: {
+      id: approvalId,
+      org_id: p.org_id,
+      project_id: projectId,
+      task_id: taskId,
+      candidate_id: c.id,
+      action: input.action,
+      digest: c.digest,
+      approver_id: actor.id,
+      policy_version: 'v1',
+      expires_at: new Date(Date.now() + 30 * 60_000),
+    },
   });
+  await db.jobs.create({
+    data: {
+      id: operationId,
+      org_id: p.org_id,
+      project_id: projectId,
+      task_id: taskId,
+      approval_id: approvalId,
+      kind: input.action,
+    },
+  });
+  await db.tasks.update({
+    where: { id: taskId },
+    data: {
+      state: input.action === 'publish' ? 'publishing' : 'merging',
+      version: { increment: 1 },
+    },
+  });
+  await event(
+    db,
+    projectId,
+    taskId,
+    actor.id,
+    input.action === 'publish' ? 'Publication authorised' : 'Merge authorised',
+    { candidateId: c.id, digest: c.digest, operationId },
+  );
+  return { id: taskId, approvalId, operationId };
 }
 export async function addComment(
   actor: Actor,

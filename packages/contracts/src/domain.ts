@@ -11,6 +11,8 @@ export const commandInput = z.discriminatedUnion('action', [
   z
     .object({
       action: z.literal('start'),
+      threadId: z.string().min(1).max(100).optional(),
+      threadVersion: z.number().int().positive().optional(),
       message: z.string().trim().min(1).max(8000).optional(),
       version: z.number().int().positive(),
       minutes: z.number().int().min(1).max(60).default(10),
@@ -20,6 +22,8 @@ export const commandInput = z.discriminatedUnion('action', [
   z
     .object({
       action: z.literal('changes'),
+      threadId: z.string().min(1).max(100).optional(),
+      threadVersion: z.number().int().positive().optional(),
       version: z.number().int().positive(),
       feedback: z.string().trim().min(3).max(8000),
     })

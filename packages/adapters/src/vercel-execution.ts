@@ -13,6 +13,8 @@ import {
   type RunResult,
 } from '@r2cloud/contracts/adapters';
 import { VercelSandboxes, sandboxDigest, type SandboxJournal, type VercelIdentity } from './vercel';
+import type { CodexModel } from '@r2cloud/contracts/threads';
+import { CodexHarness } from './codex';
 import { codexBridge, VercelCodexTransport } from './vercel-codex-transport';
 
 export type ExecutionCredentials = {
@@ -27,6 +29,7 @@ export type ExecutionControl = {
     operationId: string,
   ): Promise<{ identity: VercelIdentity; result: RunResult | null } | null>;
   progress(grant: RunGrant, message: string): Promise<void>;
+  models?(grant: RunGrant, models: CodexModel[]): Promise<void>;
   previousArtifact(grant: RunGrant): Promise<{ digest: string; headSha: string }>;
 };
 export class VercelCodexExecution implements ExecutionBackend {
@@ -265,11 +268,8 @@ export class VercelCodexExecution implements ExecutionBackend {
         identity,
         deadline - 120000,
       );
-      await transport.requestOnce(`${grant.operationId}:init`, 'initialize', {
-        clientInfo: { name: 'r2cloud', version: '0.1.0' },
-        capabilities: { experimentalApi: true },
-      });
-      await transport.notify('initialized');
+      const harness = new CodexHarness(transport);
+      await harness.initialize(grant.operationId);
       const placeholder = [
         Buffer.from(JSON.stringify({ alg: 'none' })).toString('base64url'),
         Buffer.from(
@@ -290,31 +290,25 @@ export class VercelCodexExecution implements ExecutionBackend {
         chatgptAccountId: account.accountId,
         chatgptPlanType: account.plan,
       });
-      const { thread } = await transport.requestOnce<{ thread: { id: string } }>(
-        `${grant.operationId}:thread`,
-        'thread/start',
-        { cwd, approvalPolicy: 'never', sandbox: 'workspace-write' },
-      );
+      const models = await harness.models(`${grant.operationId}:models`);
+      await this.control.models?.(grant, models);
+      const selectedModel = grant.config.thread?.model;
+      if (selectedModel && !models.some((model) => model.model === selectedModel))
+        throw new SetupRequired('The selected model is no longer available. Choose another model.');
+      const { thread } = await harness.start(`${grant.operationId}:thread`, cwd, selectedModel);
       await this.control.authorize(grant);
       await this.control.progress(grant, 'Codex is working on the task');
-      const { turn } = await transport.requestOnce<{ turn: { id: string } }>(
+      const { turn } = await harness.input(
         `${grant.operationId}:turn`,
-        'turn/start',
-        {
-          threadId: thread.id,
-          input: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                outcome: grant.outcome,
-                acceptanceCriteria: grant.criteria,
-                feedback: grant.feedback,
-                instructions:
-                  'Implement this task in the checkout. Do not publish, push, open pull requests, or merge. Keep changes focused. Summarize changes and limitations.',
-              }),
-            },
-          ],
-        },
+        thread.id,
+        JSON.stringify({
+          outcome: grant.outcome,
+          acceptanceCriteria: grant.criteria,
+          threadInstructions: grant.config.thread?.instructions,
+          feedback: grant.feedback,
+          instructions:
+            'Implement this task in the checkout. Do not publish, push, open pull requests, or merge. Keep changes focused. Summarize changes and limitations.',
+        }),
       );
       if ((await transport.waitForTurn(thread.id, turn.id)).status !== 'completed')
         throw new Error('Codex did not finish this turn.');

@@ -11,6 +11,13 @@ export type RunGrant = {
   criteria: string[];
   feedback: string[];
   config: {
+    thread?: {
+      id: string;
+      version: number;
+      model: string | null;
+      instructions: string;
+      history: { role: string; body: string }[];
+    };
     executionSetup?: PinnedExecutionProfile | null;
     repository: string;
     baseSha: string;

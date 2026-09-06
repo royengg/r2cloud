@@ -1,3 +1,4 @@
+import { threadRoutes } from './threads';
 import { Router } from 'express';
 import { codexRoutes } from './codex';
 import type { AppOptions } from '../config/options';
@@ -17,5 +18,6 @@ export function protectedRoutes(options: AppOptions) {
   router.use(accountRoutes(options));
   router.use(workspacesRoutes());
   router.use(tasksRoutes());
+  router.use(threadRoutes());
   return router;
 }

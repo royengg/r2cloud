@@ -70,7 +70,7 @@ async function executionGrant(job: jobs): Promise<RunGrant> {
       'AI account access has been revoked.',
     );
     const comments = await db.comments.findMany({
-      where: { task_id: job.task_id },
+      where: { task_id: job.task_id, threadId: null },
       orderBy: { created_at: 'asc' },
       select: { body: true },
     });
@@ -87,7 +87,9 @@ async function executionGrant(job: jobs): Promise<RunGrant> {
       generation: r.generation,
       outcome: r.claims.tasks.outcome,
       criteria: r.claims.tasks.criteria as string[],
-      feedback: comments.map((x) => x.body),
+      feedback: manifest.thread
+        ? manifest.thread.history.map((x) => `${x.role}: ${x.body}`)
+        : comments.map((x) => x.body),
       config: manifest,
     };
   });
@@ -156,6 +158,7 @@ async function finishRun(job: jobs, grant: RunGrant, result: RunResult) {
           task_id: grant.taskId,
           user_id: bot.id,
           body: m.summary.slice(0, 8000),
+          threadId: grant.config.thread?.id,
         },
       });
     }

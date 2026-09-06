@@ -1,4 +1,5 @@
-import { prisma } from '@r2cloud/database';
+import { codexModels } from '@r2cloud/contracts/threads';
+import { prisma, json } from '@r2cloud/database';
 import { nextCodexConnection } from '@r2cloud/database/locking';
 import { access, event, lockProject } from './project-context';
 import { id } from '@r2cloud/contracts/hash';
@@ -132,4 +133,29 @@ export async function connectCodexOne(
     }
   }
   return true;
+}
+
+export async function refreshCodexModels(
+  read: (auth: Buffer) => Promise<unknown>,
+  vault: Pick<CredentialVault, 'read'>,
+) {
+  const connection = await prisma.codexConnection.findFirst({
+    where: {
+      state: 'connected',
+      OR: [{ modelsUpdatedAt: null }, { modelsUpdatedAt: { lt: new Date(Date.now() - 3600000) } }],
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+  if (!connection) return;
+  await access(prisma, { id: connection.userId }, connection.projectId, 'contribute');
+  const auth = await vault.read(connection.id);
+  try {
+    const models = codexModels.parse(await read(auth));
+    await prisma.codexConnection.updateMany({
+      where: { id: connection.id, state: 'connected' },
+      data: { models: json(models), modelsUpdatedAt: new Date() },
+    });
+  } finally {
+    auth.fill(0);
+  }
 }

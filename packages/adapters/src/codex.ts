@@ -1,3 +1,4 @@
+import { codexModels, type CodexModel } from '@r2cloud/contracts/threads';
 import { EventEmitter } from 'node:events';
 /** Transport is supplied by a trusted managed supervisor, never a shell on the API host.
  * requestOnce persists request intent/result by operation key. An ambiguous turn/start
@@ -36,6 +37,7 @@ export class CodexHarness extends EventEmitter {
   async initialize(connectionId: string) {
     await this.transport.requestOnce(`${connectionId}:init`, 'initialize', {
       clientInfo: { name: 'r2cloud', title: 'R2Cloud', version: '0.1.0' },
+      capabilities: { experimentalApi: true },
     });
     await this.transport.notify('initialized');
   }
@@ -79,9 +81,26 @@ export class CodexHarness extends EventEmitter {
   rateLimits(key: string) {
     return this.transport.requestOnce(key, 'account/rateLimits/read', {});
   }
-  async start(key: string, cwd: string) {
+  async models(key: string) {
+    const models: CodexModel[] = [];
+    let cursor: string | null = null;
+    for (let page = 0; page < 5; page++) {
+      const result: { data: (CodexModel & { hidden?: boolean })[]; nextCursor: string | null } =
+        await this.transport.requestOnce(`${key}:${page}`, 'model/list', {
+          limit: 20,
+          includeHidden: false,
+          cursor,
+        });
+      models.push(...codexModels.parse(result.data.filter((m) => !m.hidden)));
+      if (!result.nextCursor) return codexModels.parse(models);
+      cursor = result.nextCursor;
+    }
+    throw new Error('Codex model catalog exceeded its limit.');
+  }
+  async start(key: string, cwd: string, model?: string | null) {
     return this.transport.requestOnce<{ thread: { id: string } }>(key, 'thread/start', {
       cwd,
+      ...(model ? { model } : {}),
       approvalPolicy: 'never',
       sandbox: 'workspace-write',
     });

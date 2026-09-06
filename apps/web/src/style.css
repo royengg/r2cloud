@@ -2664,3 +2664,208 @@ body[data-keyboard] .account-menu {
   font-family: ui-monospace, monospace;
   font-size: var(--text-caption);
 }
+
+.threaded-dialog[open] {
+  width: min(1020px, calc(100vw - 32px));
+  height: min(800px, calc(100dvh - 48px));
+}
+.thread-panel {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.thread-navigation {
+  width: 210px;
+  flex-shrink: 0;
+  background: var(--color-surface-muted);
+  padding: 16px 12px;
+  overflow-y: auto;
+}
+.thread-navigation > .button {
+  width: 100%;
+}
+.thread-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 16px;
+}
+.thread-list button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px;
+  min-height: 44px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-secondary);
+  text-align: left;
+}
+.thread-list button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thread-list button[aria-pressed='true'] {
+  background: var(--color-surface);
+  color: var(--color-accent-hover);
+  box-shadow: var(--shadow-card);
+}
+.thread-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+.thread-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 24px 12px;
+}
+.thread-heading > div {
+  flex: 1;
+  min-width: 0;
+}
+.thread-heading h3 {
+  overflow-wrap: anywhere;
+  font-size: var(--text-heading);
+}
+.thread-model-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-caption);
+  color: var(--color-text-secondary);
+  margin-top: 6px;
+}
+.thread-task-context {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 24px 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  background: var(--color-todo);
+  font-size: var(--text-caption);
+}
+.thread-task-context > span:first-of-type {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.thread-messages {
+  min-height: 120px;
+}
+.thread-running {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-caption);
+  color: var(--color-accent-hover);
+}
+.thread-settings {
+  display: grid;
+  gap: 20px;
+  padding: 24px;
+}
+.thread-settings > label {
+  display: grid;
+  gap: 8px;
+  font-size: var(--text-label);
+}
+.thread-settings input:not([type='radio']),
+.thread-settings textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 16px;
+}
+.thread-models {
+  border: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+}
+.thread-models legend {
+  font-size: var(--text-label);
+  margin-bottom: 10px;
+}
+.thread-models label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  min-height: 44px;
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+  font-size: var(--text-caption);
+  cursor: pointer;
+}
+.thread-models label:has(:checked) {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-hover);
+}
+.thread-models input {
+  accent-color: var(--color-accent);
+}
+.thread-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.thread-error {
+  padding: 12px 24px;
+}
+.detail-body .thread-panel {
+  min-height: 480px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .thread-list button:hover {
+    background: var(--color-accent-soft);
+    color: var(--color-accent-hover);
+  }
+}
+@media (max-width: 680px) {
+  .thread-panel {
+    flex-direction: column;
+  }
+  .thread-navigation {
+    width: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
+  .thread-navigation > .button {
+    width: auto;
+    flex-shrink: 0;
+  }
+  .thread-list {
+    display: flex;
+    margin: 0;
+  }
+  .thread-list button {
+    max-width: 160px;
+    flex-shrink: 0;
+  }
+  .thread-heading,
+  .thread-settings {
+    padding: 16px;
+  }
+  .thread-task-context {
+    margin-inline: 16px;
+  }
+  .thread-actions .button {
+    flex: 1;
+  }
+}

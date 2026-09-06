@@ -56,6 +56,9 @@ try {
   }
 } finally {
   clearInterval(timer);
-  await prisma.executionRuntime.deleteMany({ where: { projectId } });
+  await prisma.executionRuntime.updateMany({
+    where: { projectId },
+    data: { expiresAt: new Date(0) },
+  });
   await prisma.$disconnect();
 }

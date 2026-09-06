@@ -1,3 +1,4 @@
+import { codexModels, type CodexModel } from '@r2cloud/contracts/threads';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { readFile, mkdir, mkdtemp, writeFile, readdir, readlink, rm } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
@@ -41,7 +42,13 @@ export class CodexLoginProcess implements CodexLoginSession {
       ],
       {
         cwd: home,
-        env: { HOME: home, CODEX_HOME: home, LANG: 'C.UTF-8' },
+        env: {
+          HOME: home,
+          CODEX_HOME: home,
+          LANG: 'C.UTF-8',
+          TOKIO_WORKER_THREADS: '2',
+          RAYON_NUM_THREADS: '2',
+        },
         stdio: 'pipe',
       },
     );
@@ -90,6 +97,28 @@ export class CodexLoginProcess implements CodexLoginSession {
       throw error;
     }
   }
+  static async catalogue(binary: string, root: string, auth: Buffer) {
+    const session = await CodexLoginProcess.create(binary, root);
+    try {
+      await writeFile(join(session.home, 'auth.json'), auth, { mode: 0o600, flag: 'wx' });
+      await session.request('initialize', {
+        clientInfo: { name: 'r2cloud-models', version: '0.1.0' },
+      });
+      session.process.stdin.write(JSON.stringify({ method: 'initialized', params: {} }) + '\n');
+      const models: CodexModel[] = [];
+      let cursor: string | null = null;
+      for (let page = 0; page < 5; page++) {
+        const result: { data: (CodexModel & { hidden?: boolean })[]; nextCursor: string | null } =
+          await session.request('model/list', { limit: 20, includeHidden: false, cursor });
+        models.push(...codexModels.parse(result.data.filter((m) => !m.hidden)));
+        if (!result.nextCursor) return codexModels.parse(models);
+        cursor = result.nextCursor;
+      }
+      throw new Error('Model catalog exceeded its limit.');
+    } finally {
+      await session.close();
+    }
+  }
   private fail() {
     this.stopped = true;
     for (const p of this.pending.values()) {
@@ -130,7 +159,7 @@ export class CodexLoginProcess implements CodexLoginSession {
     }
   }
   private request<T>(
-    method: 'initialize' | 'account/login/start' | 'account/read',
+    method: 'initialize' | 'account/login/start' | 'account/read' | 'model/list',
     params: unknown,
   ): Promise<T> {
     if (this.stopped) return Promise.reject(new Uncertain('Codex sign-in was interrupted.'));

@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react';
+import { ThreadPanel } from './ThreadPanel';
+import { useState } from 'react';
 import type { Command } from '@r2cloud/contracts/domain';
 import type { Task, Project, Comment, Activity } from '../lib/types';
 import { Icon } from './Icon';
@@ -14,7 +15,6 @@ export function TaskDetail({
   close,
   onCommand,
   onPreview,
-  onFeedback,
 }: {
   task: Task;
   project: Project;
@@ -26,29 +26,11 @@ export function TaskDetail({
   close: () => void;
   onCommand: (input: Command) => Promise<boolean>;
   onPreview: () => Promise<void>;
-  onFeedback: (body: string) => Promise<boolean>;
 }) {
   const [view, setView] = useState('overview'),
     [correction, setCorrection] = useState(false),
     [feedback, setFeedback] = useState(''),
     [confirmation, setConfirmation] = useState<'publish' | 'merge' | null>(null);
-  async function send(event: FormEvent) {
-    event.preventDefault();
-    if (!feedback.trim()) return;
-    const sent =
-      task.state === 'todo' && project.contribute
-        ? await onCommand({
-            action: 'start',
-            version: task.version,
-            minutes: 10,
-            budgetCents: 0,
-            message: feedback,
-          })
-        : task.state === 'blocked' && task.run?.state === 'stopped' && task.owner_id === userId
-          ? await onCommand({ action: 'changes', version: task.version, feedback })
-          : await onFeedback(feedback);
-    if (sent) setFeedback('');
-  }
   const candidate = task.candidate;
   return (
     <Modal label={task.title} close={close} className="task-detail">
@@ -288,46 +270,12 @@ export function TaskDetail({
           </>
         )}
         {view === 'conversation' && (
-          <section className="conversation-section">
-            <h3>Conversation & feedback</h3>
-            {comments.length ? (
-              comments.map((comment) => (
-                <article className="comment" key={comment.id}>
-                  <Avatar name={comment.name} size="small" />
-                  <div>
-                    <strong>{comment.name}</strong>
-                    <p>{comment.body}</p>
-                  </div>
-                </article>
-              ))
-            ) : (
-              <div className="conversation-empty">
-                <Icon name="message" size={28} />
-                <p>Add a little context for the task owner.</p>
-              </div>
-            )}
-            <form className="feedback-form" onSubmit={send}>
-              <label htmlFor="task-feedback">Task feedback</label>
-              <textarea
-                id="task-feedback"
-                rows={3}
-                required
-                value={feedback}
-                onChange={(e) => setFeedback(e.target.value)}
-                placeholder="Share a thought or clarify the outcome…"
-                disabled={!project.contribute}
-              />
-              <Button icon="up" busy={busy} disabled={!project.contribute}>
-                {task.state === 'todo' && project.contribute
-                  ? 'Start work with this message'
-                  : task.state === 'blocked' &&
-                      task.run?.state === 'stopped' &&
-                      task.owner_id === userId
-                    ? 'Retry task with this message'
-                    : 'Send feedback'}
-              </Button>
-            </form>
-          </section>
+          <ThreadPanel
+            project={project}
+            taskId={task.id}
+            userId={userId}
+            legacy={comments.filter((c) => !c.threadId)}
+          />
         )}
         {view === 'activity' && (
           <section className="activity-section">

@@ -64,16 +64,18 @@ model claims {
 }
 
 model comments {
-  id         String   @id
+  threadId   String?             @map("thread_id")
+  thread     ConversationThread? @relation(fields: [threadId, project_id], references: [id, projectId], onDelete: NoAction, onUpdate: NoAction)
+  id         String              @id
   org_id     String
   project_id String
   task_id    String?
   user_id    String
   body       String
-  created_at DateTime @default(now()) @db.Timestamptz(6)
-  projects   projects @relation(fields: [org_id, project_id], references: [org_id, id], onDelete: NoAction, onUpdate: NoAction)
-  tasks      tasks?   @relation(fields: [org_id, project_id, task_id], references: [org_id, project_id, id], onDelete: NoAction, onUpdate: NoAction)
-  users      users    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  created_at DateTime            @default(now()) @db.Timestamptz(6)
+  projects   projects            @relation(fields: [org_id, project_id], references: [org_id, id], onDelete: NoAction, onUpdate: NoAction)
+  tasks      tasks?              @relation(fields: [org_id, project_id, task_id], references: [org_id, project_id, id], onDelete: NoAction, onUpdate: NoAction)
+  users      users               @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -177,6 +179,7 @@ model project_access {
 }
 
 model projects {
+  threads               ConversationThread[]
   executionRuntime      ExecutionRuntime?
   codexConnections      CodexConnection[]
   executionProfiles     execution_profiles[]
@@ -304,33 +307,35 @@ model skills {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model tasks {
-  id                                                            String         @id
+  threads                                                       ConversationThread[]
+  id                                                            String               @id
   org_id                                                        String
   project_id                                                    String
   title                                                         String
   outcome                                                       String
   criteria                                                      Json
   priority                                                      String
-  state                                                         String         @default("todo")
-  version                                                       Int            @default(1)
-  generation                                                    Int            @default(0)
+  state                                                         String               @default("todo")
+  version                                                       Int                  @default(1)
+  generation                                                    Int                  @default(0)
   candidate_id                                                  String?
   merged_sha                                                    String?
-  completed_at                                                  DateTime?      @db.Timestamptz(6)
-  created_at                                                    DateTime       @default(now()) @db.Timestamptz(6)
+  completed_at                                                  DateTime?            @db.Timestamptz(6)
+  created_at                                                    DateTime             @default(now()) @db.Timestamptz(6)
   claims                                                        claims[]
   comments                                                      comments[]
-  dependencies_dependencies_org_id_project_id_depends_onTotasks dependencies[] @relation("dependencies_org_id_project_id_depends_onTotasks")
-  dependencies_dependencies_org_id_project_id_task_idTotasks    dependencies[] @relation("dependencies_org_id_project_id_task_idTotasks")
+  dependencies_dependencies_org_id_project_id_depends_onTotasks dependencies[]       @relation("dependencies_org_id_project_id_depends_onTotasks")
+  dependencies_dependencies_org_id_project_id_task_idTotasks    dependencies[]       @relation("dependencies_org_id_project_id_task_idTotasks")
   jobs                                                          jobs[]
-  projects                                                      projects       @relation(fields: [org_id, project_id], references: [org_id, id], onDelete: NoAction, onUpdate: NoAction)
-  candidates                                                    candidates?    @relation(fields: [org_id, project_id, id, candidate_id], references: [org_id, project_id, task_id, id], onDelete: NoAction, onUpdate: NoAction)
+  projects                                                      projects             @relation(fields: [org_id, project_id], references: [org_id, id], onDelete: NoAction, onUpdate: NoAction)
+  candidates                                                    candidates?          @relation(fields: [org_id, project_id, id, candidate_id], references: [org_id, project_id, task_id, id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([org_id, project_id, id])
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model users {
+  conversationThreads   ConversationThread[]
   codexConnections      CodexConnection[]
   executionProfiles     execution_profiles[]
   repositoryConnections RepositoryConnection[]
@@ -516,29 +521,56 @@ model execution_profiles {
 }
 
 model CodexConnection {
-  id         String    @id
-  orgId      String    @map("org_id")
-  projectId  String    @map("project_id")
-  userId     String    @map("user_id")
-  state      String
-  loginId    String?   @map("login_id")
-  userCode   String?   @map("user_code")
-  plan       String?
-  error      String?
-  leaseToken String?   @map("lease_token")
-  leaseUntil DateTime? @map("lease_until") @db.Timestamptz(6)
-  expiresAt  DateTime  @default(dbgenerated("now() + interval '10 minutes'")) @map("expires_at") @db.Timestamptz(6)
-  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  project    projects  @relation(fields: [orgId, projectId], references: [org_id, id])
-  user       users     @relation(fields: [userId], references: [id])
+  models          Json      @default("[]")
+  modelsUpdatedAt DateTime? @map("models_updated_at") @db.Timestamptz(6)
+  id              String    @id
+  orgId           String    @map("org_id")
+  projectId       String    @map("project_id")
+  userId          String    @map("user_id")
+  state           String
+  loginId         String?   @map("login_id")
+  userCode        String?   @map("user_code")
+  plan            String?
+  error           String?
+  leaseToken      String?   @map("lease_token")
+  leaseUntil      DateTime? @map("lease_until") @db.Timestamptz(6)
+  expiresAt       DateTime  @default(dbgenerated("now() + interval '10 minutes'")) @map("expires_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  project         projects  @relation(fields: [orgId, projectId], references: [org_id, id])
+  user            users     @relation(fields: [userId], references: [id])
 
   @@map("codex_connections")
 }
 
 model ExecutionRuntime {
-  projectId String   @id @map("project_id")
-  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
-  project   projects @relation(fields: [projectId], references: [id], onDelete: NoAction)
+  models          Json      @default("[]")
+  modelsUpdatedAt DateTime? @map("models_updated_at") @db.Timestamptz(6)
+  projectId       String    @id @map("project_id")
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(6)
+  project         projects  @relation(fields: [projectId], references: [id], onDelete: NoAction)
 
   @@map("execution_runtime")
+}
+
+model ConversationThread {
+  author       users      @relation(fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id           String     @id
+  projectId    String     @map("project_id")
+  orgId        String     @map("org_id")
+  taskId       String?    @map("task_id")
+  createdBy    String     @map("created_by")
+  title        String
+  model        String?
+  instructions String     @default("")
+  version      Int        @default(1)
+  archivedAt   DateTime?  @map("archived_at") @db.Timestamptz(6)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime   @default(now()) @map("updated_at") @db.Timestamptz(6)
+  project      projects   @relation(fields: [orgId, projectId], references: [org_id, id], onDelete: NoAction, onUpdate: NoAction)
+  task         tasks?     @relation(fields: [orgId, projectId, taskId], references: [org_id, project_id, id], onDelete: NoAction, onUpdate: NoAction)
+  comments     comments[]
+
+  @@unique([id, projectId])
+  @@index([projectId, updatedAt])
+  @@map("conversation_threads")
 }

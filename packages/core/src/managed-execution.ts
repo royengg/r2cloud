@@ -1,4 +1,5 @@
-import { prisma } from '@r2cloud/database';
+import { codexModels } from '@r2cloud/contracts/threads';
+import { prisma, json } from '@r2cloud/database';
 import { access, event } from './project-context';
 import { requireThat, type CandidateManifest } from '@r2cloud/contracts/domain';
 import type { ExecutionControl } from '@r2cloud/adapters/vercel-execution';
@@ -7,6 +8,13 @@ import type { CredentialVault } from '@r2cloud/adapters/credential-vault';
 
 export function executionControl(projectId: string, vault: CredentialVault): ExecutionControl {
   return {
+    async models(grant, models) {
+      requireThat(grant.projectId === projectId, 403, 'This worker is scoped to another project.');
+      await prisma.executionRuntime.updateMany({
+        where: { projectId },
+        data: { models: json(codexModels.parse(models)), modelsUpdatedAt: new Date() },
+      });
+    },
     async authorize(grant) {
       requireThat(grant.projectId === projectId, 403, 'This worker is scoped to another project.');
       const run = await prisma.runs.findFirst({

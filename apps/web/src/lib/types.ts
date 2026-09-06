@@ -32,6 +32,7 @@ export type Task = {
   completed_at: string | null;
 };
 export type Comment = {
+  threadId?: string | null;
   id: string;
   task_id: string | null;
   body: string;

@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { CodexModel } from '@r2cloud/contracts/threads';
 import type { Project, Comment } from '../lib/types';
 import { api } from '../lib/api';
-import { Avatar, Button, IconButton, Status } from './ui';
+import { Avatar, Button, Status } from './ui';
 import { Icon } from './Icon';
-import { CodexLogo } from './CodexLogo';
+import { ModelPicker } from './ModelPicker';
 type Thread = {
   id: string;
   title: string;
@@ -37,11 +37,7 @@ export function ThreadPanel({
   const [models, setModels] = useState<CodexModel[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [editVersion, setEditVersion] = useState(0);
-  const [title, setTitle] = useState('');
   const [model, setModel] = useState<string | null>(null);
-  const [instructions, setInstructions] = useState('');
   const [text, setText] = useState(initialMessage);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -104,7 +100,6 @@ export function ThreadPanel({
         setSelected(result.id);
         setDetail(await api<Detail>(`${path}/${result.id}`));
       }
-      setEditing(false);
       return true;
     } catch (e) {
       setError((e as Error).message);
@@ -116,36 +111,64 @@ export function ThreadPanel({
   function newThread() {
     setSelected(null);
     setDetail(null);
-    setTitle('');
     setModel(null);
-    setInstructions('');
     setText('');
-    setEditing(true);
     setError('');
   }
-  function settings() {
-    if (!detail) return;
-    setEditVersion(detail.thread.version);
-    setTitle(detail.thread.title);
-    setModel(detail.thread.model);
-    setInstructions(detail.thread.instructions);
-    setEditing(true);
-  }
   async function send(run: boolean) {
-    if (!text.trim() || !detail) return;
-    if (
-      await perform(
+    if (busy || !text.trim() || (selected && !detail)) return;
+    setBusy(true);
+    setError('');
+    version.current++;
+    try {
+      let current = detail;
+      if (!current) {
+        const created = await api<{ id: string }>(path, {
+          action: 'create',
+          title: text.trim().replace(/\s+/g, ' ').slice(0, 80),
+          model,
+          instructions: '',
+          taskId: taskId ?? null,
+        });
+        setSelected(created.id);
+        current = await api<Detail>(`${path}/${created.id}`);
+        setDetail(current);
+      }
+      await api(
+        `${path}/${current.thread.id}`,
         run
           ? {
               action: 'run',
-              version: detail.thread.version,
-              taskVersion: detail.task?.version,
+              version: current.thread.version,
+              taskVersion: current.task?.version,
               body: text,
             }
           : { action: 'message', body: text },
-      )
-    )
+      );
       setText('');
+      const updated = await api<Detail>(`${path}/${current.thread.id}`);
+      const list = await api<{ threads: Thread[]; models: CodexModel[] }>(path);
+      version.current++;
+      setDetail(updated);
+      setThreads(list.threads.filter((t) => !taskId || t.taskId === taskId));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  function changeModel(value: string | null) {
+    if (!detail) {
+      setModel(value);
+      return;
+    }
+    void perform({
+      action: 'update',
+      version: detail.thread.version,
+      title: detail.thread.title,
+      instructions: detail.thread.instructions,
+      model: value,
+    });
   }
   const messages = detail?.messages ?? [];
   return (
@@ -163,7 +186,6 @@ export function ThreadPanel({
               disabled={busy}
               onClick={() => {
                 setSelected(thread.id);
-                setEditing(false);
                 setText('');
                 setError('');
               }}
@@ -175,199 +197,127 @@ export function ThreadPanel({
         </div>
       </nav>
       <div className="thread-content">
-        {editing || (!selected && !threads.length && loaded) ? (
-          <form
-            className="thread-settings"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void perform(
-                selected && detail
-                  ? { action: 'update', version: editVersion, title, model, instructions }
-                  : { action: 'create', title, model, instructions, taskId: taskId ?? null },
-                selected,
-              );
-            }}
-          >
-            <h3>{selected ? 'Thread settings' : 'A new conversation'}</h3>
-            <label>
-              Thread name
-              <input
-                autoFocus
-                required
-                maxLength={160}
-                placeholder="What are we working on?"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </label>
-            <fieldset className="thread-models">
-              <legend>Model</legend>
-              {[{ model: '', displayName: 'Codex default', isDefault: true }, ...models].map(
-                (m) => (
-                  <label key={m.model}>
-                    <input
-                      type="radio"
-                      name="thread-model"
-                      value={m.model}
-                      checked={(model ?? '') === m.model}
-                      onChange={() => setModel(m.model || null)}
-                    />
-                    <span>{m.displayName}</span>
-                  </label>
-                ),
-              )}
-            </fieldset>
-            <label>
-              Instructions <span className="subtle">Optional</span>
-              <textarea
-                rows={3}
-                maxLength={8000}
-                placeholder="Preferences and context for this thread…"
-                value={instructions}
-                onChange={(e) => setInstructions(e.target.value)}
-              />
-            </label>
-            <div className="thread-actions">
-              <Button variant="primary" busy={busy} disabled={!project.contribute || !title.trim()}>
-                {selected ? 'Save settings' : 'Create thread'}
-              </Button>
-              {selected && (
-                <Button type="button" onClick={() => setEditing(false)}>
-                  Cancel
-                </Button>
-              )}
-            </div>
-          </form>
-        ) : (
-          <>
-            <header className="thread-heading">
-              <div>
-                <h3>{detail?.thread.title ?? 'Conversations'}</h3>
-                {detail && (
-                  <span className="thread-model-label">
-                    <CodexLogo />
-                    {models.find((m) => m.model === detail.thread.model)?.displayName ??
-                      detail.thread.model ??
-                      'Codex default'}
-                  </span>
-                )}
-              </div>
-              {detail && (detail.thread.createdBy === userId || project.review) && (
-                <>
-                  <IconButton
-                    name="settings"
-                    label="Thread settings"
-                    disabled={busy || running}
-                    onClick={settings}
-                  />
-                  <Button
-                    variant="ghost"
-                    disabled={busy || running}
-                    onClick={() =>
-                      void perform({ action: 'archive', version: detail.thread.version })
-                    }
-                  >
-                    Archive
-                  </Button>
-                </>
-              )}
-            </header>
-            {detail?.failure && (
-              <p className="inline-error thread-error" role="alert">
-                {detail.failure}
-              </p>
-            )}
-            {detail?.task && (
-              <div className="thread-task-context">
-                <Icon name="flag" size={16} />
-                <span>{detail.task.title}</span>
-                <Status state={detail.task.state} />
-              </div>
-            )}
-            <div
-              className="conversation-messages thread-messages"
-              role="log"
-              aria-label="Thread messages"
-            >
-              {messages.map((message) => (
-                <article className="conversation-message" key={message.id}>
-                  <Avatar name={message.name} size="small" />
-                  <div>
-                    <strong>{message.name}</strong>
-                    <p>{message.body}</p>
-                  </div>
-                </article>
-              ))}
-              {!messages.length && (
-                <div className="conversation-empty">
-                  <Icon name="message" size={28} />
-                  <p>
-                    {selected
-                      ? 'Give Codex a clear next step.'
-                      : loaded
-                        ? 'Choose a thread or start a new one.'
-                        : 'Loading conversations…'}
-                  </p>
-                </div>
-              )}
-              {running && (
-                <p className="thread-running" role="status">
-                  <Icon name="loading" size={16} />
-                  {detail?.activity ?? 'Preparing the task'}
-                </p>
-              )}
-              <div ref={latest} />
-            </div>
-            {detail && (
-              <form
-                className="conversation-reply"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void send(true);
-                }}
+        <header className="thread-heading">
+          <div>
+            <h3>{detail?.thread.title ?? 'New conversation'}</h3>
+          </div>
+          {detail && (detail.thread.createdBy === userId || project.review) && (
+            <>
+              <Button
+                variant="ghost"
+                disabled={busy || running}
+                onClick={() => void perform({ action: 'archive', version: detail.thread.version })}
               >
-                <label className="sr-only" htmlFor={`thread-message-${detail.thread.id}`}>
-                  Instructions or message
-                </label>
-                <textarea
-                  id={`thread-message-${detail.thread.id}`}
-                  rows={3}
-                  required
-                  maxLength={8000}
-                  placeholder="Describe the next step…"
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  disabled={busy || !project.contribute}
-                />
-                <div className="thread-actions">
-                  <Button
-                    type="button"
-                    onClick={() => void send(false)}
-                    icon="message"
-                    busy={busy}
-                    disabled={!project.contribute || !text.trim()}
-                  >
-                    Save note
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    icon="play"
-                    busy={busy}
-                    disabled={!canRun || text.trim().length < 1}
-                    onClick={() => void send(true)}
-                  >
-                    {!detail.task
-                      ? 'Create task & start work'
-                      : detail.task.state === 'todo'
-                        ? 'Start work'
-                        : 'Run next turn'}
-                  </Button>
-                </div>
-              </form>
-            )}
-          </>
+                Archive
+              </Button>
+            </>
+          )}
+        </header>
+        {detail?.failure && (
+          <p className="inline-error thread-error" role="alert">
+            {detail.failure}
+          </p>
         )}
+        {detail?.task && (
+          <div className="thread-task-context">
+            <Icon name="flag" size={16} />
+            <span>{detail.task.title}</span>
+            <Status state={detail.task.state} />
+          </div>
+        )}
+        <div
+          className="conversation-messages thread-messages"
+          role="log"
+          aria-label="Thread messages"
+        >
+          {messages.map((message) => (
+            <article className="conversation-message" key={message.id}>
+              <Avatar name={message.name} size="small" />
+              <div>
+                <strong>{message.name}</strong>
+                <p>{message.body}</p>
+              </div>
+            </article>
+          ))}
+          {!messages.length && (
+            <div className="conversation-empty">
+              <Icon name="message" size={28} />
+              <p>
+                {selected
+                  ? 'Give Codex a clear next step.'
+                  : loaded
+                    ? 'What would you like to work on?'
+                    : 'Loading conversations…'}
+              </p>
+            </div>
+          )}
+          {running && (
+            <p className="thread-running" role="status">
+              <Icon name="loading" size={16} />
+              {detail?.activity ?? 'Preparing the task'}
+            </p>
+          )}
+          <div ref={latest} />
+        </div>
+        <form
+          className="conversation-reply"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void send(true);
+          }}
+        >
+          <label className="sr-only" htmlFor={`thread-message-${selected ?? 'new'}`}>
+            Instructions or message
+          </label>
+          <textarea
+            id={`thread-message-${selected ?? 'new'}`}
+            rows={3}
+            required
+            maxLength={8000}
+            placeholder="Describe the next step…"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            disabled={busy || !project.contribute}
+          />
+          <div className="thread-toolbar">
+            <ModelPicker
+              models={models}
+              value={detail ? detail.thread.model : model}
+              onChange={changeModel}
+              disabled={
+                busy ||
+                running ||
+                !project.contribute ||
+                (!!selected && (!detail || (detail.thread.createdBy !== userId && !project.review)))
+              }
+            />
+            <div className="thread-actions">
+              <Button
+                type="button"
+                onClick={() => void send(false)}
+                icon="message"
+                busy={busy}
+                disabled={!project.contribute || !text.trim() || (!!selected && !detail)}
+              >
+                Save note
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                icon="play"
+                busy={busy}
+                disabled={!canRun || !text.trim() || (!!selected && !detail)}
+                onClick={() => void send(true)}
+              >
+                {!(detail?.task ?? taskId)
+                  ? 'Create task & start work'
+                  : !detail?.task || detail.task.state === 'todo'
+                    ? 'Start work'
+                    : 'Run next turn'}
+              </Button>
+            </div>
+          </div>
+        </form>
         {error && (
           <p className="inline-error thread-error" role="alert">
             {error}

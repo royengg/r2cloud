@@ -26,13 +26,11 @@ export function ThreadPanel({
   project,
   taskId,
   userId,
-  legacy = [],
   initialMessage = '',
 }: {
   project: Project;
   taskId?: string;
   userId: string;
-  legacy?: Comment[];
   initialMessage?: string;
 }) {
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -149,7 +147,7 @@ export function ThreadPanel({
     )
       setText('');
   }
-  const messages = detail?.messages ?? (!selected && !editing ? legacy : []);
+  const messages = detail?.messages ?? [];
   return (
     <section className="thread-panel" aria-label="Agent conversations">
       <nav className="thread-navigation" aria-label="Conversation threads">
@@ -157,20 +155,6 @@ export function ThreadPanel({
           New thread
         </Button>
         <div className="thread-list">
-          {legacy.length > 0 && (
-            <button
-              type="button"
-              aria-pressed={!selected && !editing}
-              disabled={busy}
-              onClick={() => {
-                setSelected(null);
-                setDetail(null);
-                setEditing(false);
-              }}
-            >
-              Earlier messages
-            </button>
-          )}
           {threads.map((thread) => (
             <button
               key={thread.id}
@@ -191,7 +175,7 @@ export function ThreadPanel({
         </div>
       </nav>
       <div className="thread-content">
-        {editing || (!selected && !threads.length && loaded && !legacy.length) ? (
+        {editing || (!selected && !threads.length && loaded) ? (
           <form
             className="thread-settings"
             onSubmit={(e) => {

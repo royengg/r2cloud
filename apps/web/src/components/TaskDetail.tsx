@@ -270,12 +270,7 @@ export function TaskDetail({
           </>
         )}
         {view === 'conversation' && (
-          <ThreadPanel
-            project={project}
-            taskId={task.id}
-            userId={userId}
-            legacy={comments.filter((c) => !c.threadId)}
-          />
+          <ThreadPanel project={project} taskId={task.id} userId={userId} />
         )}
         {view === 'activity' && (
           <section className="activity-section">

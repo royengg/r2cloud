@@ -2,16 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { Button, IconButton, Modal } from './ui';
 import { Icon } from './Icon';
 import { ThreadPanel } from './ThreadPanel';
-import type { Comment, Project } from '../lib/types';
-export function Composer({
-  project,
-  userId,
-  comments,
-}: {
-  project: Project;
-  userId: string;
-  comments: Comment[];
-}) {
+import type { Project } from '../lib/types';
+export function Composer({ project, userId }: { project: Project; userId: string }) {
   const [text, setText] = useState('');
   const [expanded, setExpanded] = useState(false);
   function open(event: FormEvent) {
@@ -74,7 +66,7 @@ export function Composer({
               onClick={() => setExpanded(false)}
             />
           </header>
-          <ThreadPanel project={project} userId={userId} legacy={comments} initialMessage={text} />
+          <ThreadPanel project={project} userId={userId} initialMessage={text} />
         </Modal>
       )}
     </div>

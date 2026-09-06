@@ -295,14 +295,7 @@ export function App() {
               {w.error && <Button onClick={() => location.reload()}>Reload workspace</Button>}
             </div>
           )}
-          {project && (
-            <Composer
-              key={w.projectId}
-              project={project}
-              userId={w.identity.user.id}
-              comments={w.snapshot?.comments.filter((c) => !c.task_id && !c.threadId) ?? []}
-            />
-          )}
+          {project && <Composer key={w.projectId} project={project} userId={w.identity.user.id} />}
         </main>
       </div>
       {task && project && (
@@ -311,7 +304,7 @@ export function App() {
           task={task}
           project={project}
           userId={w.identity.user.id}
-          comments={w.snapshot!.comments.filter((c) => c.task_id === task.id)}
+          comments={w.snapshot!.comments.filter((c) => c.task_id === task.id && c.threadId)}
           events={w.snapshot!.events.filter((e) => e.task_id === task.id)}
           busy={w.busy}
           error={w.error}

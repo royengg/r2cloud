@@ -405,7 +405,24 @@ export async function snapshot(actor: Actor, projectId: string) {
           OR: rows.map((task) => ({ task_id: task.id, generation: task.generation })),
         },
       });
-      const currentRuns = new Map(runs.map((run) => [run.task_id, run]));
+      const threadIds = runs.flatMap((run) => {
+        const thread = (run.manifest as unknown as RunGrant['config']).thread;
+        return thread ? [thread.id] : [];
+      });
+      const threads = await db.conversationThread.findMany({
+        where: { projectId, id: { in: threadIds } },
+        select: { id: true, title: true },
+      });
+      const threadNames = new Map(threads.map((thread) => [thread.id, thread.title]));
+      const currentRuns = new Map(
+        runs.map((run) => {
+          const thread = (run.manifest as unknown as RunGrant['config']).thread;
+          return [
+            run.task_id,
+            { ...run, thread_title: thread ? (threadNames.get(thread.id) ?? null) : null },
+          ];
+        }),
+      );
       const tasks = rows.map(({ claims, candidates, ...task }) => {
         const claim = claims[0];
         const candidate = candidates && {

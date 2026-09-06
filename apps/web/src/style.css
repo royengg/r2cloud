@@ -2869,3 +2869,40 @@ body[data-keyboard] .account-menu {
     flex: 1;
   }
 }
+
+.card-agent-running {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  margin-block: -4px 13px;
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-hover);
+  font-size: var(--text-caption);
+}
+.card-agent-label,
+.card-agent-thread {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.card-agent-label {
+  font-weight: 600;
+}
+.card-agent-thread {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card-agent-thread .icon {
+  margin-inline-end: 7px;
+  vertical-align: middle;
+}
+.card-agent-label .icon-codex {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+}

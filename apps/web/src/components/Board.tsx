@@ -1,3 +1,4 @@
+import { CodexLogo } from './CodexLogo';
 import { useState } from 'react';
 import { type Task, columnFor } from '../lib/types';
 import { Icon } from './Icon';
@@ -114,6 +115,12 @@ export function Board({
   );
 }
 function TaskCard({ task, index, onSelect }: { task: Task; index: number; onSelect: () => void }) {
+  const activeRun =
+    task.run && !task.run.stopped_at && ['queued', 'running'].includes(task.run.state);
+  const model =
+    task.run?.manifest.thread?.model
+      ?.replace(/^gpt-/, 'GPT-')
+      .replace(/-([a-z])/g, (_, letter: string) => `-${letter.toUpperCase()}`) ?? 'Codex';
   const done = task.candidate?.evidence.checks.filter((c) => c.status === 'passed').length ?? 0;
   return (
     <button className="task-card" onClick={onSelect}>
@@ -129,7 +136,24 @@ function TaskCard({ task, index, onSelect }: { task: Task; index: number; onSele
         <span className="task-number">{String(index + 1).padStart(2, '0')}</span>
       </div>
       <h3>{task.title}</h3>
-      {task.state !== 'todo' && <Status state={task.state} />}
+      {activeRun ? (
+        <div className="card-agent-running">
+          <span className="card-agent-label">
+            <CodexLogo />
+            <span>
+              {model} · {task.run?.state === 'queued' ? 'Queued' : 'Running'}
+            </span>
+          </span>
+          {task.run?.thread_title && (
+            <span className="card-agent-thread" title={task.run.thread_title}>
+              <Icon name="message" size={13} />
+              {task.run.thread_title}
+            </span>
+          )}
+        </div>
+      ) : (
+        task.state !== 'todo' && <Status state={task.state} />
+      )}
       <div className="task-card-bottom">
         <span className="task-assignee">
           {task.owner_name ? (
@@ -153,14 +177,14 @@ function TaskCard({ task, index, onSelect }: { task: Task; index: number; onSele
           <Icon name="complete" size={15} />
           {done}/{task.criteria.length}
         </span>
-        {task.run && (
+        {task.run && !activeRun && (
           <span className="agent-dot" title="Agent implementation">
-            <Icon name="sparkles" size={16} />
+            <CodexLogo />
             <span className="sr-only">Agent</span>
           </span>
         )}
       </div>
-      {task.state === 'building' && (
+      {activeRun && task.run?.state === 'running' && (
         <div className="run-indicator">
           <span />
         </div>

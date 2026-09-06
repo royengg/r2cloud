@@ -25,7 +25,13 @@ export type Task = {
   owner_id: string | null;
   run: {
     state: string;
-    manifest: { mode?: string; skills: { id: string; version: string }[] };
+    stopped_at?: string | null;
+    thread_title?: string | null;
+    manifest: {
+      mode?: string;
+      thread?: { id: string; model: string | null };
+      skills: { id: string; version: string }[];
+    };
   } | null;
   candidate: { id: string; digest: string; manifest: CandidateManifest; evidence: Evidence } | null;
   publication: { pr_number: number; url: string } | null;

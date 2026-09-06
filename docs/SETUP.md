@@ -1,63 +1,99 @@
-# Account and repository setup
+# Setup
 
-## GitHub product sign-in
+The app runs locally; hosted production deployment is not included. The managed coding pilot additionally requires configured GitHub, Codex and Vercel connections. See [status](STATUS.md) for current limits.
 
-Better Auth 1.7.2 runs inside Express, using the Prisma adapter and Postgres sessions. GitHub is the only enabled sign-in provider. Email/password sign-in and automatic account linking are disabled. Product sign-in requests only `read:user` and `user:email`; client requests for repository scopes are rejected.
+## App and database
 
-## Local setup
+Use Bun 1.4.2, the runtime and package manager pinned by the repository. Copy `.env.example` to an ignored `.env` and configure:
 
-Create a dedicated GitHub OAuth app when ready to enable live sign-in. Set its homepage to the exact frontend origin and callback to `<origin>/api/auth/callback/github`. Put `BETTER_AUTH_URL`, a dedicated random `BETTER_AUTH_SECRET` of at least 32 characters, `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` in the ignored project `.env`. See [the configuration example](../.env.example). Run migrations and restart `bun run api` and `bun run web`. For the existing Vite setup, the origin is `http://127.0.0.1:5173`; an approved tunnel needs the exact HTTPS URL in both `BETTER_AUTH_URL` and `R2_DEV_ORIGIN`. A changing Quick Tunnel URL requires updating the OAuth app callback too.
+- `DATABASE_URL`: the application’s Postgres connection; use Neon’s pooled URL.
+- `DIRECT_URL`: the non-pooled connection for migrations.
+- `BETTER_AUTH_URL`: the exact frontend origin, initially `http://127.0.0.1:5173`.
+- `BETTER_AUTH_SECRET`: a dedicated random secret of at least 32 characters.
+- `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`: the product sign-in OAuth app.
 
-Partial credentials fail startup. With no credentials, the product displays an unavailable GitHub sign-in screen and rejects legacy fixture sessions. Fixture authentication is only available to explicitly configured test servers; the product has no participant-picker screen. Product OAuth credentials are configured in the local environment; the automated OAuth checks use mocked GitHub exchanges.
+```sh
+bun install --frozen-lockfile
+bun run db:generate
+bun run db:migrate
+```
 
-## Identity and permissions
+Start these in separate terminals:
 
-A verified GitHub identity maps by stable identity ID to one human product user, never by matching a fixture user's email. A session grants no existing organisation, repository or AI access. New users can create a workspace and first project; its creator becomes owner and initial reviewer. Creation is atomic and idempotent. The project initially has no repository or provider connection, so starting code work is blocked.
+```sh
+bun run api
+bun run web
+```
 
-Existing checked domain services remain the authority for membership and contributor/reviewer/merge permissions. Better Auth's organisation plugin is deliberately not enabled, avoiding a second membership authority. Project invitations, recipient acceptance and versioned permission administration use that same authority; see [team and repository setup](SETUP.md#team-and-repository-setup). Publication and merge still require separate checked approval actions.
+Open `http://127.0.0.1:5173`. Express listens on loopback port 4310. Stop processes with Ctrl+C. Missing database configuration fails startup; there is no local Postgres fallback. Use the checked migrations rather than `prisma db push`.
 
-A GitHub OAuth sign-in app is separate from the repository GitHub App. Board membership does not share an AI account. OAuth tokens are encrypted at rest using the authentication secret; secret management and rotation require deployment configuration.
+```sh
+bun run typecheck
+bun run build
+bun run design:lint
+```
 
-## Session boundary
+Tests and helper scripts are local-only at the repository owner’s request. A fresh clone does not contain the test suite or private dev launcher. Local tests explicitly select a disposable database schema and must never run against the product database.
 
-Auth routes mount before Express's JSON parser. State-changing auth requests require the exact configured Origin. Cookies are HttpOnly, SameSite=Lax and Secure on HTTPS; database sessions last eight hours. Cookie caching is disabled, so server-side revocation applies to subsequent requests. Socket.IO rechecks session validity and project access. Signing out does not release task ownership.
+## GitHub sign-in
 
-Rate limits are stored in Postgres. The API overwrites its internal client-address header with the actual socket address, ignoring spoofed forwarding headers. Requests through a local proxy currently share that proxy's rate bucket. Before production, configure a specific trusted proxy policy and test it; do not enable unrestricted trust of forwarded IP headers.
+Create a GitHub OAuth app with the frontend origin as its homepage and `<origin>/api/auth/callback/github` as its callback. This registration provides sign-in only; it does not connect repositories.
 
-## Verification and remaining work
+For a temporary HTTPS tunnel, forward Vite’s loopback port 5173. Set both `BETTER_AUTH_URL` and `R2_DEV_ORIGIN` to that exact HTTPS origin, update the OAuth callback, then restart the app. Wildcard tunnel origins are not accepted. A replacement tunnel URL requires updating these values again.
 
-HTTP/Postgres tests exercise the actual Better Auth implementation with mocked GitHub token/profile/email endpoints: callback state, verified identity, scope restrictions, encrypted token storage, session revocation, socket revocation, rate limits and isolated workspace creation. These tests never contact GitHub. The browser script intercepts the external authorization page and is also a fixture, not a live OAuth test.
+The API requests profile/email access, uses database sessions and enforces exact origins. New users create a workspace and project or accept an invitation after sign-in. Invitations are visible in the product; the app does not send invitation emails. Project administrators grant contribution, publication-review and merge permissions separately.
 
-The last full browser journey passed with eight axe accessibility audits, including mobile team settings, repository selection and invitation acceptance. GitHub exchanges are mocked; product sessions, workspace/project creation, task creation and sign-out use the real application. Live GitHub callback/cookie behavior, approved deployment proxy settings, live repository connections and production hardening remain unverified.
+Production still needs an explicitly trusted proxy policy, independent process credentials, database-role separation, secret rotation and deployment hardening.
 
-## References
+## Repository connection
 
-Implementation checked against official [Express integration](https://better-auth.com/docs/integrations/express), [Prisma adapter](https://better-auth.com/docs/adapters/prisma), [GitHub authentication](https://better-auth.com/docs/authentication/github), [session management](https://better-auth.com/docs/concepts/session-management) and [database models](https://better-auth.com/docs/concepts/database) on 2026-09-05.
+Register a separate GitHub App. Configure its callback as `<BETTER_AUTH_URL>/api/repository-callback`. Discovery needs repository metadata and contents read access. Future GitHub writes belong to the isolated publisher integration.
 
-## Team and repository setup
+Add `R2_GITHUB_APP_CLIENT_ID` and `R2_GITHUB_APP_SLUG` to `.env`. Put `R2_GITHUB_APP_CLIENT_SECRET` only in a separate ignored `.env.broker`, restricted to its process. Start the discovery broker:
 
-## Product flow
+```sh
+bun --env-file=.env --env-file=.env.broker apps/api/src/processes/connections.ts
+```
 
-An owner opens the participant button to manage project access. They create an invitation for a GitHub sign-in email and choose contribution, publication review and merge-authorisation permissions independently. The recipient sees an invitation inbox after GitHub sign-in, reviews those permissions and explicitly joins. No email is sent: the sender asks the recipient to sign in. Invites expire after seven days and can be revoked. Dismissed invitations remain accessible from onboarding or the board.
+The API refuses to start if it inherits this App secret. Do not put it in the shared `.env`.
 
-Project access changes use expected versions. Removing access stops future checked commands but preserves outstanding ownership/execution records. The last human reviewer cannot be removed. Workspace administrator promotion and ownership transfer are separate remaining work.
+In **Connections**, a project administrator authorises the App, selects a verified repository and confirms attachment. The broker checks the signed-in GitHub identity and repository access; client-supplied repository names or installation IDs do not establish access. Empty repositories need an initial commit. The current discovery list is bounded; selected-repository installations keep it within the pilot limit.
 
-In Connections, a project administrator authorizes the repository GitHub App, selects a verified repository and confirms attachment. If the App has no suitable installation, a link opens its installation settings; reconnecting refreshes choices. Empty repositories need an initial commit. The pilot offers at most 20 administered repositories and requires selected-repository installations when larger lists exceed its bounds.
+Save repository execution settings in the same panel: directory, install/dev/test commands, port, health path and limits. Saving settings does not start a sandbox. The managed coding pilot currently imports public repositories only. Preview settings are stored, but live previews are not yet served.
 
-## GitHub configuration
+## Personal Codex connection
 
-Product sign-in's OAuth app and the repository GitHub App are distinct registrations. Configure the repository App's callback as `<BETTER_AUTH_URL>/api/repository-callback`. Its client ID and slug belong in the normal project `.env` as `R2_GITHUB_APP_CLIENT_ID` and `R2_GITHUB_APP_SLUG`. Keep its client secret only in ignored `.env.broker`, with `R2_GITHUB_APP_CLIENT_ID`, `R2_GITHUB_APP_CLIENT_SECRET` and `BETTER_AUTH_URL`. Start it separately with `bun --env-file=.env.broker apps/api/src/processes/connections.ts`. The App should have repository metadata and contents read access for discovery. Future publication permissions belong to the isolated publisher path.
+Set `R2_CODEX_LOGIN_ENABLED=true` in `.env` only while the login broker is available. Put these in a separate ignored `.env.codex-broker` with file permissions 0600:
 
-Keep the App secret out of the shared `.env` and API/frontend environment variables. This checkout has no automatic broker launcher. The standalone API fails startup if the App secret is present. Production deployment must assign separate credentials and least-privilege database roles per process; development shares a private database role and is not a claim of production process isolation.
+- `R2_CODEX_BINARY`: absolute path to the native Linux Codex 0.153.2 executable.
+- `R2_CODEX_VAULT_KEY`: a random 32-byte hexadecimal encryption key.
+- `R2_CODEX_BROKER_DIR`: optional private storage path; defaults to `.local/codex-broker`.
 
-Authorization uses a random state bound to the authenticated product actor and project, plus PKCE. The broker exchanges the code and verifies `/user` against the stable GitHub identity used for product sign-in. It then lists installations and repositories accessible to that GitHub App user token, restricting choices to repository administrators. Callback installation IDs and client-supplied repository names are never trusted.
+```sh
+bun --env-file=.env --env-file=.env.codex-broker apps/api/src/processes/codex-login.ts
+```
 
-Only verified repository metadata leaves the broker. Access and refresh tokens are not stored in the database or returned to the API/browser. Temporary codes/verifiers are wiped when claimed, and expired queued requests are cleaned by the broker. Uncertain code exchange is not retried: reconnecting creates new authorization. Verified choices expire after ten minutes; attachment checks current product administrator access and supports duplicate confirmation safely. Repository permissions and current refs must be revalidated again before live execution/publication.
+The API refuses to inherit the vault key. In **Connections**, use the Codex account button and complete the displayed device-code sign-in. Account access is personal and project-scoped. It is not shared through board membership. The broker runs an authentication-only process and stores credentials encrypted; it never opens a repository.
 
-## Verification and remaining gates
+Expired credentials require reconnection. Renewable worker authentication and final hosted account/billing arrangements remain unfinished. API-key billing is not an automatic fallback.
 
-Tests use real Postgres, Better Auth and HTTP/Socket.IO with mocked GitHub endpoints. The browser journey covers repository selection and invitation acceptance. No live repository App authorization, discovery or attachment has been tested. Configure actual App credentials and a test installation to perform that validation. No GitHub write operations are performed by discovery.
+## Managed execution worker
 
-Repository setup-command profiles are implemented in the API; their UI remains unfinished. Remaining integration work includes revocation webhooks and continuous repository permission refresh, the Codex credential broker and Vercel supervisor, private artifact/preview infrastructure, the isolated publisher, verified merge facts and handoff recovery.
+Configure an existing Vercel Hobby account/project and a compatible digest-pinned sandbox image. The worker verifies Codex 0.147.0 inside that image. It does not provision paid resources or extend sandbox lifetimes.
 
-Sources checked on 2026-09-05: [GitHub setup URL security](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/about-the-setup-url), [GitHub App user access-token flow and PKCE](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app), and [installation/repository access endpoints](https://docs.github.com/en/rest/apps/installations).
+Keep these in an ignored `.env.managed`, restricted to the worker:
+
+- `R2_EXECUTION_PROJECT_ID`: the product project this worker may execute for.
+- `R2_VERCEL_TOKEN`, `R2_VERCEL_TEAM_ID`, `R2_VERCEL_PROJECT_ID`: scoped Vercel access.
+- `R2_VERCEL_IMAGE`: the compatible digest-pinned image.
+- `R2_CODEX_VAULT_KEY` and, if customised, `R2_CODEX_BROKER_DIR`: the same vault configuration used by the login broker.
+
+```sh
+bun --env-file=.env --env-file=.env.managed apps/api/src/processes/managed-workflow.ts
+```
+
+The configured pilot uses Paris (`cdg1`), two vCPUs, a two-minute idle timeout and a ten-minute total sandbox limit. It requires Hobby eligibility and has no paid-plan, region-failover or API-key fallback. Database hosting is independent of the sandbox region.
+
+Open a project or task thread and send a message. Conversation starts a lightweight runtime; repository checkout and dependency installation wait for a checked implementation grant. Approve the named task inline to begin code work. Follow-up messages reuse the warm runtime where permitted. Stop and uncertain outcomes retain ownership until execution is confirmed quiescent or stopped.
+
+Do not start the fixture workflow/publisher as if it were the live integration. Authenticated previews, private-repository credential custody, live publication and verified merge reconciliation remain unfinished. [Architecture](ARCHITECTURE.md) explains the boundaries; [status](STATUS.md) records what has actually been validated.

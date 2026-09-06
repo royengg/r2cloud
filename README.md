@@ -1,52 +1,31 @@
-# R2Cloud
+# r2cloud
 
-A shared product board where people describe outcomes, start coding work, review evidence, and approve changes. A Bun workspace monorepo: React/Vite, Express, Socket.IO, Prisma, and Neon-compatible Postgres.
+A shared workspace for turning product ideas into working software with Codex.
 
-**Development slice, not a deployed service.** External cloud execution and publication are currently tested with local fixtures; the product does not run simulated agents. It does not call a model, clone repositories, push code, or merge real PRs. Managed integrations fail closed until configured.
+Describe an outcome, organise it on your board, and work with an agent in a conversation. Keep your team’s tasks, feedback, and review decisions together.
 
-## Local development
+**Early preview.** Shared boards, GitHub sign-in, repository connections, and Codex conversations are available. Managed coding runs work in the configured pilot. Live browser previews, publishing pull requests, and verified merge updates are still being built.
 
-Install Bun 1.4.2 (the pinned lockfile requires a compatible Bun version), then:
+## How it works
 
-```bash
-bun install --frozen-lockfile
-bun run db:generate
-```
+1. **Create a workspace.** Start a project or join your team’s invitation after signing in with GitHub.
+2. **Describe the outcome.** Add tasks with priorities and acceptance criteria to a simple Todo, Ongoing, and Completed board.
+3. **Connect your tools.** Choose a GitHub repository and link your personal Codex account separately.
+4. **Work in a thread.** Ask questions, explore the codebase, or plan changes. Follow streamed replies and activity, choose a model, and answer questions inline.
+5. **Start and review work.** Approve implementation of a specific task, then inspect the reported changes and test evidence. Questions alone do not start code changes.
 
-For a running app, configure `DATABASE_URL` (and optionally `DIRECT_URL` for migrations) in an ignored `.env`, using [.env.example](.env.example). Supply an existing Postgres database, then run `bun run db:migrate`. The application requires an explicit database URL; it does not start or fall back to local Postgres.
+Each task has one implementation owner. Agents work in isolated cloud sandboxes and cannot push or merge your code. Publication and merging require separate human approval; a finished agent reply does not make a task Completed.
 
-Start `bun run api` and `bun run web` in separate terminals. Open `http://127.0.0.1:5173`. Configure GitHub OAuth using [authentication setup](docs/SETUP.md); without it, sign-in is visibly unavailable and legacy demo cookies are rejected. New accounts create their workspace and first project, then land on an empty board. No seed data or simulated worker starts automatically.
+## Current limits
 
-The API binds loopback port 4310. The fixture preview entry point uses 4311. Stop each process with Ctrl+C.
+The coding pilot supports one configured project and public repositories. It uses your connected Codex subscription and Vercel Hobby sandbox capacity. Sandboxes stay available for quick follow-ups, stop after two minutes idle, and have a ten-minute total limit.
 
-```bash
-bun run typecheck
-bun run build
-bun run design:lint
-```
+Private repository execution, live previews, and the complete review-to-merge journey are not available yet. See [current capabilities and remaining work](docs/STATUS.md).
 
-Tests and development scripts are local-only at the user’s request. In the original workspace, `bun run test` runs the private Postgres and mocked-provider suites. A fresh clone does not include those files; verification results and limits are recorded in [status](docs/STATUS.md).
+## Run it yourself
 
-For an explicitly authorised temporary UI tunnel, set `R2_DEV_ORIGIN` to its exact HTTPS origin and `R2_PREVIEW_ORIGIN` to a different HTTPS tunnel forwarding the fixture preview on port 4311. The app origin forwards Vite on port 5173. No wildcard tunnel origins are accepted. The tunnel shows the product sign-in screen. Live OAuth requires matching the callback and trusted origin to that exact URL. Vite blocks project-private toolchain/data directories. Stop the tunnel processes when review ends.
+r2cloud currently requires your own development setup, GitHub app registrations, Postgres database, and provider connections. Follow the [setup guide](docs/SETUP.md) to run the app and configure the coding pilot.
 
-## Structure
+Built with React, Vite, Express, Prisma, Neon Postgres, Socket.IO, and Bun workspaces.
 
-```text
-apps/web             React + Vite
-apps/api             Express + Socket.IO; API/worker/publisher entry points
-packages/core        Checked task commands and durable workflow
-packages/database    Prisma schema, SQL migrations and client
-packages/adapters    Codex and managed-provider seams; labelled fixtures
-packages/contracts   Shared domain schemas and integration contracts
-```
-
-Bun 1.4.2 is the runtime and package manager; `bun.lock` is the only project lockfile. There is no Turborepo. Prisma is pinned to stable 7.10.0 across CLI/client/adapter. Use the pooled Neon `DATABASE_URL` for application connections and `DIRECT_URL` for Prisma migrations. The development app is connected to Neon; credentials stay in the ignored environment file. Never use `prisma db push` to replace the checked SQL migrations: they preserve ownership constraints and the immutable-candidate trigger.
-
-## Documents
-
-- [Implementation status and remaining work](docs/STATUS.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Product decisions](docs/DECISIONS.md)
-- [Account and repository setup](docs/SETUP.md)
-- [Execution and sandbox integration](docs/EXECUTION-CONNECTIONS.md)
-- [Design system](DESIGN.md) and [asset sources](docs/DESIGN-SOURCES.md)
+[Architecture](docs/ARCHITECTURE.md) · [Design system](DESIGN.md) · [Design sources and attribution](docs/DESIGN-SOURCES.md)

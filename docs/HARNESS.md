@@ -1,14 +1,6 @@
-# Unified agent harness
+# Harness source research
 
-Research and implementation design, 6 September 2026. This document separates observed upstream behavior from the proposed r2cloud implementation. The unified harness is not implemented yet.
-
-## Decision
-
-Use one persistent thread and the native Codex agent loop for conversation, exploration, planning, questions and implementation. Do not add a separate conversational agent, chat endpoint, intent-classification model, or mandatory “chat versus code” choice.
-
-The model decides how to respond and which tools to request. The backend decides whether each requested operation is permitted. A message is not automatically a coding task, an implementation claim, or a publication approval.
-
-Multiple threads may reference the same task. Each retains its own conversation, while the task retains one implementation owner and one active execution.
+Historical source review from 6 September 2026. This explains the upstream patterns behind the implemented harness; it is not an outstanding implementation plan. See [architecture](ARCHITECTURE.md) for the current design and [status](STATUS.md) for validation and remaining work.
 
 ## Research scope
 
@@ -69,102 +61,11 @@ Previews are a separate HTTP/WebSocket proxy to a running application; a convers
 
 **Adopt:** scoped board tools, inline question/plan interactions and preview lifecycle. Preserve our stricter ownership and publication boundaries.
 
-## The r2cloud user flow
+## How this informs r2cloud
 
-1. Open a project or task thread, choose the model in the composer and send a message.
-2. Resume that thread's Codex session, or create it on first use. Supply the current project identity, selected task, enabled skills and scoped tools.
-3. Codex can answer directly, fetch board facts, explain status, explore the repository, propose task decomposition, or ask a focused question. “Hello” produces a reply; “What is blocked?” reads the board. Neither starts implementation.
-4. For “Implement this task,” Codex requests the checked task-execution tool. Explicit bounded implementation instructions can supply authorization; uncertain scope or an unapproved proposed plan produces an inline confirmation. Do not ask again when the same action is already authorized.
-5. The backend checks the initiating person's permissions, exact task/version, dependencies, owner and limits. It records the claim and execution intent atomically before granting writable repository access.
-6. Stream progress, tool activity, file changes and test results into the same thread. The task card displays the linked agent's actual state. Stop, clarification and plan responses remain in that thread.
-7. Start the configured dev service when a preview is needed. Show “Try the preview” only after health and access checks. Keep agent browser state separate from human preview sessions.
-8. A no-change answer returns the session to idle. Actual changes can produce immutable evidence and a candidate for review. A finished turn does not itself create a candidate or complete a task.
-9. Review feedback continues in the same thread. Publication and merge remain separate, exact human authorizations; verified merge is the only coding-task completion signal.
+Use one persistent native agent session with project-scoped tools, structured streamed events and inline decisions. The model chooses how to respond; checked backend services grant task implementation authority. Shared writable environments and broad local permissions do not satisfy r2cloud’s ownership and publication boundaries.
 
-There is one conversational surface and one harness. Session, task, execution and publication remain different domain records because they have different lifetimes and permissions.
-
-## Runtime and permission design
-
-Codex subscription execution needs a Codex process. Under managed-cloud execution, the proposed runtime therefore starts in a small Vercel sandbox on the first message, even for conversation. Repository checkout, dependency installation and browser services are lazy operations, not prerequisites for saying hello. Do not imply that conversation is free of model usage or sandbox time.
-
-One active provider writer owns a thread. Persist the provider thread handle and supported session state before stopping its runtime. Restore only after the old writer is confirmed stopped or isolated. Session persistence must exclude credentials and must be tested against the pinned Codex version; importing chat text into a fresh thread is not native resume.
-
-Before a task grant, repository access is absent or read-only. The checked execution operation must establish the writable environment and exact task generation. Change provider working-directory and sandbox permissions at a supported lifecycle boundary. Do not assume a tool response can silently change a running turn's sandbox policy. This transition requires a compatibility test on the pilot runtime.
-
-Keep a session's conversation available when a sandbox expires. Preserve work and evidence independently. Resource limits still apply while a person is reviewing; waiting must not silently extend a paid run or start another writer.
-
-Initial product tools:
-
-| Tool responsibility                                                     | Policy                                                                                                                    |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Read project context, list/search tasks, read task details/dependencies | Derive project from execution identity; never trust a caller-supplied organisation ID. Return bounded, versioned results. |
-| Propose or create tasks / revise acceptance criteria                    | Separate suggestion from mutation; apply contributor authorization and expected versions.                                 |
-| Request task implementation                                             | Acquire the existing authoritative claim, persist durable intent and apply time/concurrency/budget limits.                |
-| Report progress/blockers, attach evidence, request review               | Require current task execution identity and generation.                                                                   |
-| Start/inspect preview                                                   | Restrict to the granted execution, approved service and port.                                                             |
-| Request publication                                                     | Create a review request only. No push/merge credentials or approval authority go to the agent.                            |
-
-Use one checked service behind native dynamic tools or MCP. Choose the transport supported by the pinned runtime after protocol verification. Do not implement a second set of permissions inside MCP handlers.
-
-A board snapshot can seed context, but tools must refresh facts. Board changes during a turn are not automatic authorization to act on those changes. Other threads' conversations are not shared implicitly.
-
-## Streaming and recovery contract
-
-Persist a timeline with stable thread, turn and item IDs plus ordered sequence numbers. Normalize assistant text, exposed reasoning summaries, progress plans, tool start/result, questions, approvals, errors and turn settlement. Render Markdown, compact tool summaries and inline decision cards, with technical details expandable.
-
-The bridge must forward bidirectional RPC requests and every supported event category. Persist bounded/coalesced increments, flush completion, then broadcast through project-authorized Socket.IO subscriptions. Consumers catch up from their last applied cursor or reload a snapshot. Do not write every token as a separate database transaction, and do not overwrite all progress with the latest delta.
-
-Persist pending questions/approvals and bind responses to request IDs, actor scope and current execution. A disconnect is not approval, cancellation or completion. Steer an active turn only if the provider supports it; otherwise queue input explicitly. An ambiguous turn-start result must be reconciled, not blindly retried.
-
-## Current code gaps
-
-| Existing implementation                                                                                                            | Required change                                                                                                   |
-| ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `core/threads.ts` turns “run” into task creation/claim before Codex sees the message.                                              | Submit a native agent turn first; task tools request implementation only when needed.                             |
-| `vercel-execution.ts` installs dependencies before any response, calls `thread/start` per run and always checks/exports afterward. | Session runtime with lazy repository setup; native reuse/resume; candidate lifecycle triggered by actual changes. |
-| `vercel-codex-transport.ts` overwrites progress/message files, reads a final reply and rejects inbound server requests.            | Ordered event transport with question, approval and tool-call round trips.                                        |
-| Harness capabilities advertise streaming, but the managed path does not deliver live deltas to the UI.                             | Capability reporting backed by end-to-end behavior and version probes.                                            |
-| `ThreadPanel.tsx` polls every two seconds and renders final comment paragraphs.                                                    | A typed live timeline with Markdown, inline questions/plans, stop and reconnect support.                          |
-| Thread history is copied into each fresh execution with a hard context cap.                                                        | Durable native provider handle plus supported compaction and separately paginated UI history.                     |
-| No agent-facing board context/tools in the managed runtime.                                                                        | Project-scoped read and checked mutation tools.                                                                   |
-| Preview is explicitly unavailable.                                                                                                 | Lazy dev service, authenticated separate-origin gateway, isolated browser and immutable evidence.                 |
-
-The existing claim constraints, policy checks, receipts, jobs, sandbox identity, credential boundary and approval-bound publication model remain useful. Replace the orchestration around them rather than rebuilding the entire backend.
-
-## Implementation order and acceptance
-
-1. **Session and timeline foundation.** Persist native session/turn/item identities independently of tasks. Replace lossy bridge output with sequenced events and a real request-response path. Verify a streaming greeting creates no task, claim, checkout, checks or candidate.
-2. **Single composer and live timeline.** One Send action, per-thread model, Markdown and tool status, inline questions/plan approval, stop and queue/steer. Verify reconnect during streaming has no duplicated or missing messages.
-3. **Board tools and task grants.** Verify “What is blocked?” reads only this project; explicit implementation obtains exactly one claim; stale task versions and competing threads fail truthfully; plan rejection starts no work.
-4. **Persistent isolated execution.** Verify the same thread continues after clarification and correction. Test sandbox expiry, interrupted startup, credential revocation and stop ambiguity before allowing replacement. No-change turns produce no candidate.
-5. **Preview, evidence and publication.** Verify service health, scoped preview access and independent browser state. Bind review evidence to immutable changes and preserve separate publication/merge authorization.
-
-Do not postpone invariant tests until the UI appears complete. Keep tests and source-review scratch files local under the existing repository policy.
-
-## Implementation progress — 6 September 2026
-
-| Increment                  | Current result                                                                                                                                                                                                                                                                      |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Durable native turns       | `AgentTurn` owns queued/running/waiting/terminal state independently of implementation runs. A partial unique index prevents competing turns in one thread.                                                                                                                         |
-| Session and streaming      | Codex 0.147.0 `thread/start` dynamic tools and `thread/resume` rollout paths were verified in real Vercel execution. Ordered bridge batches feed persisted timeline items; real replies and reasoning summaries are rendered without exposing raw reasoning.                        |
-| Board and repository tools | Project context, paged task search, task details, bounded public repository reads, inline questions, approved task creation and checked implementation grants. No classifier or second conversation harness.                                                                        |
-| Ownership and recovery     | Claim/version/dependency/limit checks commit before checkout. The native turn worker owns durable execution intent. No replacement until cloud stop is confirmed. Interruptions attempt artifact preservation after process quiescence; a vanished VM can still lose unsaved edits. |
-| Product UI                 | One Send action, inline decisions, Markdown replies, expandable technical activity, per-thread model picker, Stop, board activity and reconnect snapshots.                                                                                                                          |
-| Preview/publication        | Still unfinished: authenticated live preview service, browser evidence, GitHub credential custody/publisher and real merge reconciliation. Existing immutable candidate and approval policies remain in force.                                                                      |
-
-Next integration sequence:
-
-1. Validate the checked `start_task` path against the selected test repository, including a correction and interrupted export. Do not publish the resulting candidate automatically.
-2. Add a separately authenticated preview runtime tied to a candidate and approved dev command/port. Preserve its independent expiry; never extend the implementation writer while waiting for review. Add isolated browser inspection and immutable screenshots.
-3. Connect the isolated publisher to scoped GitHub App credentials, then validate approval-bound publication and uncertain-response reconciliation before a separately authorised merge test.
-
-Native checkpoints remain on the backend, never in thread API responses. Experimental protocol fields are pinned to the tested CLI version. Runtime setup and model credentials are identical for messages and coding; repository files arrive only after the checked implementation operation. Public read-only repository inspection uses scoped backend tools and does not acquire a claim.
-
-## Compatibility limits
-
-Upstream HEAD is not the pilot's installed protocol. r2cloud currently pins Codex 0.147.0 in Vercel; its local account broker has used a newer version. Native session restore, dynamic tools, plan/question events, model switching and turn steering must be probed on the actual execution version. Do not copy new APIs from HEAD and assume the pilot supports them.
-
-The research above does not validate hosted entitlement, resource renewal, cross-sandbox session portability, production previews or GitHub publication. Those require separate implementation and real checks.
+The pilot execution image pins Codex 0.147.0, independently of the upstream revisions reviewed here. Protocol changes require verification against the installed version. The research itself does not establish account entitlement or validate previews and publication.
 
 [codex-loop]: https://github.com/openai/codex/blob/ac192cd7937b0d73edc6dffe009940ae53782dd4/codex-rs/core/src/session/turn.rs
 [codex-protocol]: https://github.com/openai/codex/blob/ac192cd7937b0d73edc6dffe009940ae53782dd4/codex-rs/app-server/README.md
@@ -196,13 +97,3 @@ The research above does not validate hosted entitlement, resource renewal, cross
 [vk-issues]: https://github.com/BloopAI/vibe-kanban/blob/4deb7eca8f381f7cbc1f9d15515a9ab8f8009053/crates/mcp/src/task_server/tools/remote_issues.rs
 [vk-workspace]: https://github.com/BloopAI/vibe-kanban/blob/4deb7eca8f381f7cbc1f9d15515a9ab8f8009053/crates/mcp/src/task_server/tools/task_attempts.rs
 [vk-preview]: https://github.com/BloopAI/vibe-kanban/blob/4deb7eca8f381f7cbc1f9d15515a9ab8f8009053/crates/server/src/routes/preview.rs
-
-## Warm runtime implementation
-
-A durable `AgentRuntime` owns the sandbox independently of individual `AgentTurn` records. One live runtime per thread and the existing one-active-turn constraint prevent competing sessions. The worker keeps the native transport in memory for consecutive turns, translates its cumulative event cursor into each turn’s sequence, and checkpoints native history in Postgres. A restart never adopts an uncertain live process: a worker first confirms retirement, then restores conversation state in a replacement. Recorded stop proof also recovers a crash before turn completion.
-
-The pilot retains idle runtimes for two minutes within a fixed ten-minute total lifespan. There is no resource renewal. Idle runtimes count toward organisation concurrency, and actor/provider-connection changes require retirement. Cleanup runs every five seconds and checks access, archive state, expiry and stale leases. The provider’s hard lifetime bounds an unavailable worker.
-
-At implementation handoff, all agent processes stop before candidate export. Check commands are also quiesced afterward. The checkout and its parent become root-owned and read-only before the task enters review. A subsequent checked grant validates the retained HEAD and clean worktree, then restores ownership from the leaves upward. This preserves dependencies while preventing review-time writes to the candidate checkout. Codex restarts from its checkpoint inside the retained sandbox after this boundary. Ordinary conversation turns keep the native process running.
-
-Real verification covered two conversation turns sharing one sandbox and native identity, project-context tools, remembered context and confirmed idle cleanup. The new warm coding/correction sequence has local database and mocked-provider tests; live coding, previews and publication are separate remaining checks.

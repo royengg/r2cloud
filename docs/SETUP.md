@@ -58,6 +58,6 @@ Only verified repository metadata leaves the broker. Access and refresh tokens a
 
 Tests use real Postgres, Better Auth and HTTP/Socket.IO with mocked GitHub endpoints. The browser journey covers repository selection and invitation acceptance. No live repository App authorization, discovery or attachment has been tested. Configure actual App credentials and a test installation to perform that validation. No GitHub write operations are performed by discovery.
 
-Remaining integration work includes repository setup-command profiles, revocation webhooks and continuous repository permission refresh, the Codex credential broker and Vercel supervisor, private artifact/preview infrastructure, the isolated publisher, verified merge facts and handoff recovery.
+Repository setup-command profiles are implemented in the API; their UI remains unfinished. Remaining integration work includes revocation webhooks and continuous repository permission refresh, the Codex credential broker and Vercel supervisor, private artifact/preview infrastructure, the isolated publisher, verified merge facts and handoff recovery.
 
 Sources checked on 2026-09-05: [GitHub setup URL security](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/about-the-setup-url), [GitHub App user access-token flow and PKCE](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app), and [installation/repository access endpoints](https://docs.github.com/en/rest/apps/installations).

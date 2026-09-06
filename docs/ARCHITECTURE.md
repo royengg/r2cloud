@@ -49,18 +49,18 @@ The additions to the sketch are the workflow worker, durable job processing, exe
 
 ## 3. Proposed stack and deployment
 
-| Component              | Initial choice                                                   | Reason and boundary                                                                                       |
-| ---------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Website                | React, TypeScript, Vite                                          | A board-centric application with rich client interaction; no need to couple agent execution to rendering. |
-| HTTP backend           | Express, TypeScript, schema validation                           | Fits the sketch. Keep routes thin and domain transactions explicit.                                       |
-| Realtime               | Socket.IO over WebSockets; HTTP for durable commands             | Board updates, agent progress, presence; terminal transport later if needed.                              |
-| Database               | Prisma ORM on Postgres; Neon selected for managed hosting        | Transactions, constraints, relational permissions, row security, durable jobs.                            |
-| Workflow               | Persisted state machine and Postgres jobs/outbox                 | Restart recovery and retries without an additional queue service initially.                               |
-| Execution              | Managed sandbox provider behind an adapter                       | Avoid building a VM fleet before proving the product. Vendor selection remains open.                      |
-| Preview automation     | Playwright inside each execution environment                     | Browser checks, screenshots, traces, console/network evidence.                                            |
-| Artifacts              | Private S3-compatible object storage                             | Large logs and snapshots should not inflate transactional tables.                                         |
-| Repository integration | GitHub App plus verified webhooks                                | Selected repository access and server-side publication.                                                   |
-| Initial agent          | Codex adapter; one additional provider after the workflow passes | A working provider seam is more useful than many superficial integrations.                                |
+| Component              | Initial choice                                                   | Reason and boundary                                                                                             |
+| ---------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Website                | React, TypeScript, Vite                                          | A board-centric application with rich client interaction; no need to couple agent execution to rendering.       |
+| HTTP backend           | Express, TypeScript, schema validation                           | Fits the sketch. Keep routes thin and domain transactions explicit.                                             |
+| Realtime               | Socket.IO over WebSockets; HTTP for durable commands             | Board updates, agent progress, presence; terminal transport later if needed.                                    |
+| Database               | Prisma ORM on Postgres; Neon selected for managed hosting        | Transactions, constraints, relational permissions, row security, durable jobs.                                  |
+| Workflow               | Persisted state machine and Postgres jobs/outbox                 | Restart recovery and retries without an additional queue service initially.                                     |
+| Execution              | Managed sandbox provider behind an adapter                       | Avoid building a VM fleet before proving the product. Vercel Sandbox is selected; the supervisor is unfinished. |
+| Preview automation     | Playwright inside each execution environment                     | Browser checks, screenshots, traces, console/network evidence.                                                  |
+| Artifacts              | Private S3-compatible object storage                             | Large logs and snapshots should not inflate transactional tables.                                               |
+| Repository integration | GitHub App plus verified webhooks                                | Selected repository access and server-side publication.                                                         |
+| Initial agent          | Codex adapter; one additional provider after the workflow passes | A working provider seam is more useful than many superficial integrations.                                      |
 
 The API and worker require a hosting arrangement that supports their connection and lifetime needs. An ordinary short-lived HTTP function must not own an hours-long agent process. Keep API/worker and Postgres in one region initially. Set transaction-local tenant context on pooled connections; never rely on a session-level lock or tenant setting surviving a pool checkout.
 
@@ -111,13 +111,13 @@ An organisation administrator explicitly maps installed repositories to projects
 
 ## 5. Three separate connection flows
 
-1. **Product sign-in:** browser login establishes the person's identity and organisation membership. GitHub browser sign-in can be supported, alongside email or later SSO, so every PM does not need to learn `gh`.
+1. **Product sign-in:** browser login establishes the person's identity and organisation membership. GitHub-only sign-in uses Better Auth; PMs do not need `gh`.
 2. **Repository connection:** an administrator installs the GitHub App for selected repositories and maps them to projects. Sign-in and installation are separate grants.
-3. **AI connection:** the credential owner authorises a separately scoped provider connection; BYOK is a proposed default and paired local authentication is deferred. The UI identifies who can use it, which projects it covers, and who pays.
+3. **AI connection:** the credential owner authorises a separately scoped provider connection; a personal Codex subscription is the pilot path and paired local authentication is deferred. The UI identifies who can use it, which projects it covers, and who pays.
 
 For Codex, the app-server protocol supplies a structured integration surface for threads, turns, streamed events and permission requests. Run it behind the runner adapter using its documented local transport; pin the CLI/protocol version. Codex supports subscription authentication and API-key authentication, but that does not make their billing or account permissions interchangeable. [Codex app server](https://learn.chatgpt.com/docs/app-server), [authentication](https://learn.chatgpt.com/docs/auth).
 
-Managed cloud execution and Codex are confirmed for launch. Cloud BYOK is a proposed credential default only. A connected runner is a future extension for local accounts and private environments. Authenticate a local account through the provider-supported flow; do not upload someone's entire home directory or credential cache to the SaaS. Provider-specific support for hosted subscription sessions, delegated use, and organisation policies must be verified before offering those combinations. Do not promise that every provider accepts the same credential mode.
+Managed cloud execution and Codex are confirmed for launch. Personal Codex device login is the proposed pilot credential flow; API-key billing is not an automatic fallback. A connected runner is a future extension for local accounts and private environments. Authenticate a local account through the provider-supported flow; do not upload someone's entire home directory or credential cache to the SaaS. Provider-specific support for hosted subscription sessions, delegated use, and organisation policies must be verified before offering those combinations. Do not promise that every provider accepts the same credential mode.
 
 GitHub CLI is an optional tool inside a managed environment. It does not authenticate users to this product. Any `gh` available to an agent must have read-only or narrowly brokered capabilities; a pre-existing personal write token would defeat the publication guarantee.
 
@@ -315,7 +315,7 @@ Important adversarial acceptance scenarios:
 11. Malicious repo scripts/skills/preview content attempt to access host credentials or another tenant: isolation blocks the access.
 12. Two browser clients reconnect with different cursors: both converge on authoritative task state.
 
-These are requirements for future implementation tests, not tests run during this design-only task.
+Some scenarios are covered by local database and mocked-provider tests. See [status](STATUS.md) for current verification; real cloud isolation and publication remain unvalidated.
 
 ## 14. Operations, costs and unresolved limits
 
@@ -325,7 +325,7 @@ Set organisation and run budgets, maximum concurrent sandboxes, wall-time/tool-c
 
 Back up Postgres, exercise restoration, retain immutable approved artifacts, and reconcile active claims/runs/publications on service startup. Use retention and garbage collection that checks active references before deleting a sandbox snapshot. An abandoned preview should stop consuming compute without discarding unreviewed work.
 
-Open feasibility work: sandbox provider and residency choice; supported repository stacks and services; final hosted provider credential/billing arrangement; whether human editing is needed at launch; permission for delegated personal credentials; initial user/concurrency budget; and production hosting. Coding completion is confirmed as verified PR merge; deployment remains separate. No timeline or hosting-cost quote is justified before these are resolved and the Stage 0 spike is measured.
+Open feasibility work: production residency and Vercel supervisor integration; supported repository stacks and services; final hosted provider credential/billing arrangement; whether human editing is needed at launch; permission for delegated personal credentials; initial user/concurrency budget; and production hosting. Coding completion is confirmed as verified PR merge; deployment remains separate. No timeline or hosting-cost quote is justified before these are resolved and the Stage 0 spike is measured.
 
 ## API source layout
 

@@ -3,25 +3,25 @@ version: alpha
 name: R2Cloud — Open Day
 description: A warm, visual product workspace with soft colors and a clear review journey.
 colors:
-  canvas: "#F8F7F4"
-  surface: "#FFFFFF"
-  surface-muted: "#F0EFEC"
-  text-primary: "#35333E"
-  text-secondary: "#686572"
-  border: "#D9D7D2"
-  primary: "#75608F"
-  accent-hover: "#634E7C"
-  accent-soft: "#EEEAF6"
-  on-accent: "#FFFFFF"
-  todo-soft: "#EEF3FA"
-  todo-ink: "#526886"
-  ongoing-soft: "#FBEEE2"
-  ongoing-ink: "#8B6239"
-  completed-soft: "#ECF3EB"
-  completed-ink: "#52715B"
-  danger-soft: "#F9E7E6"
-  danger-ink: "#A34442"
-  focus: "#67508A"
+  canvas: '#F8F7F4'
+  surface: '#FFFFFF'
+  surface-muted: '#F0EFEC'
+  text-primary: '#35333E'
+  text-secondary: '#686572'
+  border: '#D9D7D2'
+  primary: '#75608F'
+  accent-hover: '#634E7C'
+  accent-soft: '#EEEAF6'
+  on-accent: '#FFFFFF'
+  todo-soft: '#EEF3FA'
+  todo-ink: '#526886'
+  ongoing-soft: '#FBEEE2'
+  ongoing-ink: '#8B6239'
+  completed-soft: '#ECF3EB'
+  completed-ink: '#52715B'
+  danger-soft: '#F9E7E6'
+  danger-ink: '#A34442'
+  focus: '#67508A'
 typography:
   title:
     fontFamily: Plus Jakarta Sans
@@ -63,50 +63,50 @@ spacing:
   section: 32px
 components:
   workspace:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.text-primary}"
+    backgroundColor: '{colors.canvas}'
+    textColor: '{colors.text-primary}'
   sidebar:
-    backgroundColor: "{colors.surface-muted}"
-    textColor: "{colors.text-secondary}"
+    backgroundColor: '{colors.surface-muted}'
+    textColor: '{colors.text-secondary}'
   button-secondary:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.text-primary}"
+    backgroundColor: '{colors.canvas}'
+    textColor: '{colors.text-primary}'
   separator:
-    backgroundColor: "{colors.border}"
+    backgroundColor: '{colors.border}'
   focus-ring:
-    backgroundColor: "{colors.focus}"
+    backgroundColor: '{colors.focus}'
   button-primary-hover:
-    backgroundColor: "{colors.accent-hover}"
-    textColor: "{colors.on-accent}"
+    backgroundColor: '{colors.accent-hover}'
+    textColor: '{colors.on-accent}'
   selected-navigation:
-    backgroundColor: "{colors.accent-soft}"
-    textColor: "{colors.primary}"
+    backgroundColor: '{colors.accent-soft}'
+    textColor: '{colors.primary}'
   todo-column:
-    backgroundColor: "{colors.todo-soft}"
-    textColor: "{colors.todo-ink}"
+    backgroundColor: '{colors.todo-soft}'
+    textColor: '{colors.todo-ink}'
   ongoing-column:
-    backgroundColor: "{colors.ongoing-soft}"
-    textColor: "{colors.ongoing-ink}"
+    backgroundColor: '{colors.ongoing-soft}'
+    textColor: '{colors.ongoing-ink}'
   completed-column:
-    backgroundColor: "{colors.completed-soft}"
-    textColor: "{colors.completed-ink}"
+    backgroundColor: '{colors.completed-soft}'
+    textColor: '{colors.completed-ink}'
   error:
-    backgroundColor: "{colors.danger-soft}"
-    textColor: "{colors.danger-ink}"
+    backgroundColor: '{colors.danger-soft}'
+    textColor: '{colors.danger-ink}'
   button-primary:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-accent}"
-    rounded: "{rounded.control}"
+    backgroundColor: '{colors.primary}'
+    textColor: '{colors.on-accent}'
+    rounded: '{rounded.control}'
     padding: 12px
   task-card:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.text-primary}"
-    rounded: "{rounded.card}"
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.text-primary}'
+    rounded: '{rounded.card}'
     padding: 16px
   composer:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.text-primary}"
-    rounded: "{rounded.panel}"
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.text-primary}'
+    rounded: '{rounded.panel}'
     padding: 24px
 ---
 

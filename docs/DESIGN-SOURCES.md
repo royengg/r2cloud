@@ -7,7 +7,7 @@ The user requested these sources and a complete frontend rebuild on 5 September 
 - [Jakub Krehel — interface skills](https://github.com/jakubkrehel/skills/tree/267330e1adfc66a718fb65fa6918c1f06d0a689e/skills): accessibility, layout, writing, typography, color and UI polish. Applied the better-interface domain guidance and relevant font, surface and icon references.
 - [Hugeicons React](https://hugeicons.com/docs/integrations/react/overview): shared HugeiconsIcon renderer with individually imported free Stroke Rounded icons.
 
-The requested skills were installed into the project's ignored `.agents/skills` directory using the skill-installer helper; they are available for later turns and were read in this turn. Upstream skill text is not republished in this repository. The root DESIGN.md is original project guidance.
+The requested skills were installed into the project's ignored `.agents/skills` directory using the skill-installer helper; they were used for the initial interface design and remain available locally. Upstream skill text is not republished in this repository. The root DESIGN.md is original project guidance.
 
 The first user attachment supplies the board/composer layout. The second supplies a sidebar hierarchy example only. The light visual system is an original implementation of the user's soft, colorful, rounded brief.
 

@@ -10,3 +10,8 @@ dist/
 .agents/skills/
 
 /scripts/
+
+/tests/
+**/__tests__/
+**/*.test.*
+**/*.spec.*

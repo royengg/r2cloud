@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2023",
-    "lib": [
-      "ES2023",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
@@ -16,18 +12,7 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": [
-      "node",
-      "vite/client",
-      "bun"
-    ]
+    "types": ["node", "vite/client", "bun"]
   },
-  "include": [
-    "apps",
-    "packages",
-    "scripts",
-    "tests",
-    "vite.config.ts",
-    "prisma.config.ts"
-  ]
+  "include": ["apps", "packages", "vite.config.ts", "prisma.config.ts"]
 }

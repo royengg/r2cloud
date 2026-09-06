@@ -16,15 +16,20 @@ Product GitHub OAuth is configured locally. Repository App discovery, Codex and 
 ## Next implementation steps
 
 1. Durable personal Codex login coordinator, encrypted credential custody, revocation and Connections UI.
-2. Complete Vercel supervisor with read-only repository import, Codex transport, limits and worker wiring.
+2. Complete Vercel supervisor with read-only repository import, Codex transport, free-quota enforcement and worker wiring. Replace the fixed 15-minute/$3 task-start allowance with the approved pilot limits before enabling real runs.
 3. Private artifact storage and authenticated preview gateway with immutable review evidence.
 4. Real GitHub publisher, required-check enforcement, reconciliation and verified merge facts.
-5. Confirmed-stop handoff/recovery UI and production isolation, session/proxy and operational hardening.
+5. Confirmed-stop handoff/recovery, execution-profile and skill-management UI, and explicit batch controls.
+6. Production isolation, trusted proxy policy, repository revocation/refresh and cross-organisation coordination, retention and pagination. Board snapshots currently include all project tasks/comments; Socket.IO polls per connection.
 
 Pilot policy: one tester on their own repositories, free-only Vercel usage ($0 paid authorization), Paris (`cdg1`), with account eligibility checked before creating resources. Region selection and limits are detailed in [execution setup](EXECUTION-CONNECTIONS.md).
 
 ## Verification
 
-Latest backend increment: 55 local tests passed (264 assertions), Prisma migration/generation and TypeScript/Vite build passed. The last full authentication browser journey passed eight axe audits; the fixture task-to-merge journey passed seven. Later UI changes had focused component checks, not a repeated full browser audit. No real cloud/Codex/GitHub publication end-to-end check has run.
+Audit of `8f7d1ff` (2026-09-06): Prisma model queries, interactive transactions and the isolated SQL locking helper were retained. The board now selects current execution generations without an in-memory distinct over run history. SQL migrations still enforce exclusive claims/executions and candidate immutability. No applied migration was changed.
 
-The earlier Postgres/browser tests, scripts, screenshots and historical research/verification documents are local-only. Focused regression tests now live in tracked `tests/`. The archive is in `.local/docs-archive/20260905`. Historical test results are evidence of those revisions, not claims that later changes were retested.
+57 local tests passed (269 assertions) using private Postgres, HTTP/Socket.IO and mocked external providers. An additional client regression checks that a pending snapshot cannot restore a board after access revocation. Prisma validation and the TypeScript/Vite build passed. The authentication browser journey passed eight axe audits using single-page legacy mode after Chromium crashed in axe’s extra-page mode. GitHub OAuth exchanges in that journey are mocked. No real cloud/Codex/GitHub publication end-to-end check has run.
+
+The cleanup removed unused styles/icons, corrected stale setup claims, restored local-only test exclusions and kept local test helpers out of the product typecheck. Shared repository types live in contracts, so the frontend does not import a server adapter.
+
+Tests, scripts, screenshots and historical research remain local-only. The archive is in `.local/docs-archive/20260905`. Existing docs cover architecture, decisions, setup, integration readiness and required design/license provenance; no additional audit document is needed.

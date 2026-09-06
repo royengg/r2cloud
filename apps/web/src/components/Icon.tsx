@@ -20,7 +20,6 @@ import {
   Globe02Icon,
   InformationCircleIcon,
   Link01Icon,
-  Menu01Icon,
   Message01Icon,
   MoreHorizontalIcon,
   Notification01Icon,
@@ -32,7 +31,6 @@ import {
   SparklesIcon,
   UserGroupIcon,
   UserIcon,
-  ViewIcon,
   Loading03Icon,
 } from '@hugeicons/core-free-icons';
 const icons = {
@@ -57,7 +55,6 @@ const icons = {
   globe: Globe02Icon,
   info: InformationCircleIcon,
   link: Link01Icon,
-  menu: Menu01Icon,
   message: Message01Icon,
   more: MoreHorizontalIcon,
   attention: Notification01Icon,
@@ -68,7 +65,6 @@ const icons = {
   sparkles: SparklesIcon,
   people: UserGroupIcon,
   person: UserIcon,
-  view: ViewIcon,
   loading: Loading03Icon,
 };
 export type IconName = keyof typeof icons;

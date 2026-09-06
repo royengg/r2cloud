@@ -2937,3 +2937,91 @@ body[data-keyboard] .account-menu {
     }
   }
 }
+
+.agent-message {
+  padding: 12px 0;
+  min-width: 0;
+}
+.agent-message p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+  margin: 8px 0;
+}
+.agent-activity {
+  padding: 8px 0;
+  color: var(--color-text-secondary);
+}
+.agent-activity summary {
+  cursor: pointer;
+}
+.agent-activity pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow: auto;
+  font-size: 12px;
+}
+.agent-request {
+  border-radius: 20px;
+  padding: 20px;
+  background: var(--color-surface-muted);
+  display: grid;
+  gap: 12px;
+}
+.agent-request label {
+  display: grid;
+  gap: 8px;
+}
+.agent-request button[aria-pressed] {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 10px;
+  text-align: left;
+}
+.agent-request button[aria-pressed='true'] {
+  background: var(--color-accent-soft);
+}
+.agent-message pre {
+  overflow: auto;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--color-surface-muted);
+}
+.agent-message code {
+  font-size: 0.9em;
+}
+.agent-message h1,
+.agent-message h2,
+.agent-message h3 {
+  font-size: 1em;
+  margin-top: 16px;
+}
+.agent-request fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.agent-request legend {
+  margin-bottom: 8px;
+}
+.agent-request {
+  animation: agent-appear 180ms ease-out;
+}
+@keyframes agent-appear {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-request {
+    animation: none;
+  }
+}

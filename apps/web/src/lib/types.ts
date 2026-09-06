@@ -23,6 +23,7 @@ export type Task = {
   generation: number;
   owner_name: string | null;
   owner_id: string | null;
+  agent?: { state: string; threadTitle: string; model: string | null; count: number } | null;
   run: {
     state: string;
     stopped_at?: string | null;

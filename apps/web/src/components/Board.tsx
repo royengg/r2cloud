@@ -116,9 +116,10 @@ export function Board({
 }
 function TaskCard({ task, index, onSelect }: { task: Task; index: number; onSelect: () => void }) {
   const activeRun =
-    task.run && !task.run.stopped_at && ['queued', 'running'].includes(task.run.state);
+    task.agent ||
+    (task.run && !task.run.stopped_at && ['queued', 'running'].includes(task.run.state));
   const model =
-    task.run?.manifest.thread?.model
+    (task.agent?.model ?? task.run?.manifest.thread?.model)
       ?.replace(/^gpt-/, 'GPT-')
       .replace(/-([a-z])/g, (_, letter: string) => `-${letter.toUpperCase()}`) ?? 'Codex';
   const done = task.candidate?.evidence.checks.filter((c) => c.status === 'passed').length ?? 0;
@@ -141,13 +142,21 @@ function TaskCard({ task, index, onSelect }: { task: Task; index: number; onSele
           <span className="card-agent-label">
             <CodexLogo />
             <span>
-              {model} · {task.run?.state === 'queued' ? 'Queued' : 'Running'}
+              {model} ·{' '}
+              {task.agent?.state === 'waiting'
+                ? 'Needs your reply'
+                : (task.agent?.state ?? task.run?.state) === 'queued'
+                  ? 'Queued'
+                  : 'Running'}
             </span>
           </span>
-          {task.run?.thread_title && (
-            <span className="card-agent-thread" title={task.run.thread_title}>
+          {(task.agent?.threadTitle ?? task.run?.thread_title) && (
+            <span
+              className="card-agent-thread"
+              title={task.agent?.threadTitle ?? task.run?.thread_title ?? undefined}
+            >
               <Icon name="message" size={13} />
-              {task.run.thread_title}
+              {task.agent?.threadTitle ?? task.run?.thread_title}
             </span>
           )}
         </div>
@@ -184,7 +193,7 @@ function TaskCard({ task, index, onSelect }: { task: Task; index: number; onSele
           </span>
         )}
       </div>
-      {activeRun && task.run?.state === 'running' && (
+      {activeRun && (task.agent?.state ?? task.run?.state) === 'running' && (
         <div className="run-indicator">
           <span />
         </div>

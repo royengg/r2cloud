@@ -4,6 +4,9 @@ import type { Project, Comment } from '../lib/types';
 import { api } from '../lib/api';
 import { Avatar, Button, Status } from './ui';
 import { Icon } from './Icon';
+import { io } from 'socket.io-client';
+import type { AgentTimeline as Timeline } from '@r2cloud/contracts/agent';
+import { AgentTimeline } from './AgentTimeline';
 import { ModelPicker } from './ModelPicker';
 type Thread = {
   id: string;
@@ -36,12 +39,14 @@ export function ThreadPanel({
   const [threads, setThreads] = useState<Thread[]>([]);
   const [models, setModels] = useState<CodexModel[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
+  const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [model, setModel] = useState<string | null>(null);
   const [text, setText] = useState(initialMessage);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [loaded, setLoaded] = useState(false);
+  const following = useRef(true);
   const latest = useRef<HTMLDivElement>(null);
   const version = useRef(0);
   const path = `/projects/${project.id}/threads`;
@@ -53,34 +58,59 @@ export function ThreadPanel({
       try {
         const list = await api<{ threads: Thread[]; models: CodexModel[] }>(path);
         const current = selected ? await api<Detail>(`${path}/${selected}`) : null;
+        const stream = selected ? await api<Timeline>(`${path}/${selected}/timeline`) : null;
         if (!disposed && generation === version.current) {
           setThreads(list.threads.filter((t) => !taskId || t.taskId === taskId));
           setModels(list.models);
           setDetail(current);
+          setTimeline(stream);
           setLoaded(true);
         }
       } catch (e) {
         if (!disposed && generation === version.current) setError((e as Error).message);
       } finally {
-        if (!disposed) timer = setTimeout(() => void load(), 2000);
+        if (!disposed) timer = setTimeout(() => void load(), 5000);
       }
     }
     setDetail(null);
+    setTimeline(null);
+    const socket = io({ auth: { projectId: project.id }, withCredentials: true });
+    socket.on('snapshot-required', () => {
+      clearTimeout(timer);
+      void load();
+    });
+    socket.on('access-ended', () => {
+      setTimeline(null);
+      setDetail(null);
+    });
     void load();
     return () => {
       disposed = true;
+      socket.disconnect();
       clearTimeout(timer);
       version.current++;
     };
   }, [path, taskId, selected]);
   useEffect(() => {
-    latest.current?.scrollIntoView({ block: 'nearest' });
-  }, [detail?.messages.length, selected]);
-  const running = !!detail?.run && !detail.run.stopped_at;
-  const canRun =
-    !!project.contribute &&
-    (!detail?.task || ['todo', 'review', 'blocked'].includes(detail.task.state)) &&
-    !running;
+    if (following.current) latest.current?.scrollIntoView({ block: 'nearest' });
+  }, [detail?.messages.length, selected, timeline?.cursor]);
+  const running =
+    (!!timeline && ['queued', 'running', 'waiting', 'unknown'].includes(timeline.state)) ||
+    (!!detail?.run && !detail.run.stopped_at);
+  const canRun = !!project.contribute && !running;
+  async function control(body: unknown) {
+    if (!selected || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api(`${path}/${selected}/control`, body);
+      setTimeline(await api<Timeline>(`${path}/${selected}/timeline`));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function perform(body: unknown, target = selected) {
     if (busy) return;
     setBusy(true);
@@ -115,8 +145,8 @@ export function ThreadPanel({
     setText('');
     setError('');
   }
-  async function send(run: boolean) {
-    if (busy || !text.trim() || (selected && !detail)) return;
+  async function send() {
+    if (busy || running || !text.trim() || (selected && !detail)) return;
     setBusy(true);
     setError('');
     version.current++;
@@ -134,17 +164,12 @@ export function ThreadPanel({
         current = await api<Detail>(`${path}/${created.id}`);
         setDetail(current);
       }
-      await api(
-        `${path}/${current.thread.id}`,
-        run
-          ? {
-              action: 'run',
-              version: current.thread.version,
-              taskVersion: current.task?.version,
-              body: text,
-            }
-          : { action: 'message', body: text },
-      );
+      await api(`${path}/${current.thread.id}`, {
+        action: 'run',
+        version: current.thread.version,
+        body: text,
+      });
+      setTimeline(await api<Timeline>(`${path}/${current.thread.id}/timeline`));
       setText('');
       const updated = await api<Detail>(`${path}/${current.thread.id}`);
       const list = await api<{ threads: Thread[]; models: CodexModel[] }>(path);
@@ -226,19 +251,31 @@ export function ThreadPanel({
         )}
         <div
           className="conversation-messages thread-messages"
+          onScroll={(event) => {
+            const box = event.currentTarget;
+            following.current = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+          }}
           role="log"
           aria-label="Thread messages"
         >
-          {messages.map((message) => (
-            <article className="conversation-message" key={message.id}>
-              <Avatar name={message.name} size="small" />
-              <div>
-                <strong>{message.name}</strong>
-                <p>{message.body}</p>
-              </div>
-            </article>
-          ))}
-          {!messages.length && (
+          {!timeline?.items.length &&
+            messages.map((message) => (
+              <article className="conversation-message" key={message.id}>
+                <Avatar name={message.name} size="small" />
+                <div>
+                  <strong>{message.name}</strong>
+                  <p>{message.body}</p>
+                </div>
+              </article>
+            ))}
+          {timeline && (
+            <AgentTimeline
+              timeline={timeline}
+              respond={control}
+              disabled={busy || !project.contribute || timeline.actorId !== userId}
+            />
+          )}
+          {!messages.length && !timeline?.items.length && (
             <div className="conversation-empty">
               <Icon name="message" size={28} />
               <p>
@@ -253,7 +290,11 @@ export function ThreadPanel({
           {running && (
             <p className="thread-running" role="status">
               <Icon name="loading" size={16} />
-              {detail?.activity ?? 'Preparing the task'}
+              {timeline?.state === 'waiting'
+                ? 'Waiting for your response'
+                : timeline?.state === 'queued'
+                  ? 'Starting Codex'
+                  : 'Codex is working'}
             </p>
           )}
           <div ref={latest} />
@@ -262,7 +303,7 @@ export function ThreadPanel({
           className="conversation-reply"
           onSubmit={(e) => {
             e.preventDefault();
-            void send(true);
+            void send();
           }}
         >
           <label className="sr-only" htmlFor={`thread-message-${selected ?? 'new'}`}>
@@ -291,29 +332,24 @@ export function ThreadPanel({
               }
             />
             <div className="thread-actions">
-              <Button
-                type="button"
-                onClick={() => void send(false)}
-                icon="message"
-                busy={busy}
-                disabled={!project.contribute || !text.trim() || (!!selected && !detail)}
-              >
-                Save note
-              </Button>
-              <Button
-                type="button"
-                variant="primary"
-                icon="play"
-                busy={busy}
-                disabled={!canRun || !text.trim() || (!!selected && !detail)}
-                onClick={() => void send(true)}
-              >
-                {!(detail?.task ?? taskId)
-                  ? 'Create task & start work'
-                  : !detail?.task || detail.task.state === 'todo'
-                    ? 'Start work'
-                    : 'Run next turn'}
-              </Button>
+              {running ? (
+                <Button
+                  type="button"
+                  disabled={busy || timeline?.actorId !== userId}
+                  onClick={() => void control({ action: 'stop' })}
+                >
+                  Stop
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  variant="primary"
+                  busy={busy}
+                  disabled={!canRun || !text.trim() || (!!selected && !detail)}
+                >
+                  Send
+                </Button>
+              )}
             </div>
           </div>
         </form>

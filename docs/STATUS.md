@@ -5,6 +5,7 @@ The project-scoped Vercel/Codex pilot worker is implemented and running locally.
 ## Implemented
 
 - Bun workspaces with React/Vite, Express, Prisma/Postgres and Socket.IO.
+- Neon Postgres 17.11 in AWS Oregon (`us-west-2`), using a pooled application URL and direct migration URL. Database configuration is explicit; production code has no local Postgres fallback.
 - GitHub sign-in, workspace onboarding, projects, invitations and separate contribution, publication-review and merge permissions.
 - GitHub App repository discovery and attachment; the pilot project is connected to `royengg/roy`.
 - Personal Codex device login, encrypted credentials and project-scoped disconnect.
@@ -42,5 +43,7 @@ The [harness implementation plan](HARNESS.md) tracks the completed native-sessio
 Local tests cover Postgres/HTTP/Socket.IO invariants and mocked Vercel/Codex execution. Live checks cover Vercel create/stop/remove, the installed Codex 0.147.0 protocol, credential-brokered model access and one subscription-backed connection-check turn without repository edits. An earlier real two-turn check verified native conversation restoration across separate sandboxes. The warm-session check then used the project-context tool and recalled the first message in the same sandbox and native process, without creating a task. The follow-up completed in approximately eight seconds; the cold first turn with a tool call took approximately forty-four seconds, so this is a functional check rather than a controlled latency benchmark. Forced idle expiry confirmed the sandbox stopped. The new checked-tool implementation path has database and mocked-provider coverage; a new live coding/approval/correction journey has not yet been run.
 
 The TypeScript/Vite build and 87 local tests pass. Coverage includes message-only turns, duplicate sends, ordered streaming, inline responses, checked implementation claims, warm session reuse, idle resource accounting, account changes, stale-worker fencing, ambiguous stop recovery, the crash between cloud stop and turn completion, and retained checkout verification. Coding handoff and native process restart within a warm sandbox have mocked-provider coverage. The authentication browser journey passes thirteen axe audits, including inline agent questions. Browser checks required pausing the dev processes to stay within shared-VPS thread resources.
+
+The Neon cutover preserved all 42 public tables and 458 rows, with matching per-table data checksums and 76 indexes. The direct connection validates migration history; the pooled connection serves Prisma board reads and interactive transactions. A private local backup is retained. Local Postgres is used only by isolated test helpers and is not an application fallback.
 
 Tests, scripts, screenshots, CLI authentication and environment files remain local-only. No deployment or GitHub publication has been validated.

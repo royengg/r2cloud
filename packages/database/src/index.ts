@@ -1,17 +1,10 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { resolve } from 'node:path';
-export const schema = process.env.R2_TEST_SCHEMA ?? 'public';
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) throw new Error('DATABASE_URL is required.');
+export const schema = new URL(connectionString).searchParams.get('schema') ?? 'public';
 if (!/^[a-z][a-z0-9_]*$/.test(schema)) throw new Error('Invalid database schema');
-const config = process.env.DATABASE_URL
-  ? { connectionString: process.env.DATABASE_URL, max: 16, connectionTimeoutMillis: 15000 }
-  : {
-      host: resolve('.local/pgsocket'),
-      port: 55439,
-      database: 'postgres',
-      max: 16,
-      options: `-c search_path=${schema}`,
-    };
+const config = { connectionString, max: 16, connectionTimeoutMillis: 15000 };
 export const prisma = new PrismaClient({
   adapter: new PrismaPg(config, { schema }),
   transactionOptions: { maxWait: 15000, timeout: 15000 },

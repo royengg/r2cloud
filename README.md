@@ -13,7 +13,7 @@ bun install --frozen-lockfile
 bun run db:generate
 ```
 
-For a running app, configure `DATABASE_URL` (and optionally `DIRECT_URL` for migrations) in an ignored `.env`, using [.env.example](.env.example). Supply an existing Postgres database, then run `bun run db:migrate`. The Unix-socket fallback is for the original private development environment; this checkout does not include a database launcher.
+For a running app, configure `DATABASE_URL` (and optionally `DIRECT_URL` for migrations) in an ignored `.env`, using [.env.example](.env.example). Supply an existing Postgres database, then run `bun run db:migrate`. The application requires an explicit database URL; it does not start or fall back to local Postgres.
 
 Start `bun run api` and `bun run web` in separate terminals. Open `http://127.0.0.1:5173`. Configure GitHub OAuth using [authentication setup](docs/SETUP.md); without it, sign-in is visibly unavailable and legacy demo cookies are rejected. New accounts create their workspace and first project, then land on an empty board. No seed data or simulated worker starts automatically.
 
@@ -40,7 +40,7 @@ packages/adapters    Codex and managed-provider seams; labelled fixtures
 packages/contracts   Shared domain schemas and integration contracts
 ```
 
-Bun 1.4.2 is the runtime and package manager; `bun.lock` is the only project lockfile. There is no Turborepo. Prisma is pinned to stable 7.10.0 across CLI/client/adapter. Use the pooled Neon `DATABASE_URL` for application connections and `DIRECT_URL` for Prisma migrations. No Neon database has been provisioned or connected. Never use `prisma db push` to replace the checked SQL migrations: they preserve ownership constraints and the immutable-candidate trigger.
+Bun 1.4.2 is the runtime and package manager; `bun.lock` is the only project lockfile. There is no Turborepo. Prisma is pinned to stable 7.10.0 across CLI/client/adapter. Use the pooled Neon `DATABASE_URL` for application connections and `DIRECT_URL` for Prisma migrations. The development app is connected to Neon; credentials stay in the ignored environment file. Never use `prisma db push` to replace the checked SQL migrations: they preserve ownership constraints and the immutable-candidate trigger.
 
 ## Documents
 

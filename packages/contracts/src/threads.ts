@@ -28,7 +28,7 @@ export const threadCommand = z.discriminatedUnion('action', [
       action: z.literal('run'),
       version: z.number().int().positive(),
       taskVersion: z.number().int().positive().optional(),
-      body: z.string().trim().min(3).max(8000),
+      body: z.string().trim().min(1).max(8000),
     })
     .strict(),
 ]);

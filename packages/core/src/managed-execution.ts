@@ -1,6 +1,7 @@
+import { recordAgentMessage } from './agent-messages';
 import { codexModels } from '@r2cloud/contracts/threads';
 import { prisma, json } from '@r2cloud/database';
-import { access, event } from './project-context';
+import { access, event, lockProject } from './project-context';
 import { requireThat, type CandidateManifest } from '@r2cloud/contracts/domain';
 import type { ExecutionControl } from '@r2cloud/adapters/vercel-execution';
 import type { RunGrant, RunResult } from '@r2cloud/contracts/adapters';
@@ -8,6 +9,29 @@ import type { CredentialVault } from '@r2cloud/adapters/credential-vault';
 
 export function executionControl(projectId: string, vault: CredentialVault): ExecutionControl {
   return {
+    async reply(grant, message) {
+      requireThat(grant.projectId === projectId, 403, 'This worker is scoped to another project.');
+      await prisma.$transaction(async (db) => {
+        await lockProject(db, projectId);
+        requireThat(
+          await db.runs.count({
+            where: {
+              id: grant.runId,
+              project_id: projectId,
+              generation: grant.generation,
+              stopped_at: null,
+              claims: { released_at: null, tasks: { generation: grant.generation } },
+            },
+          }),
+          409,
+          'Execution generation changed.',
+        );
+        await recordAgentMessage(db, grant, message);
+        await event(db, projectId, grant.taskId, null, 'Codex replied', {
+          threadId: grant.config.thread?.id,
+        });
+      });
+    },
     async models(grant, models) {
       requireThat(grant.projectId === projectId, 403, 'This worker is scoped to another project.');
       await prisma.executionRuntime.updateMany({

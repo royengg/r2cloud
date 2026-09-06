@@ -25,7 +25,7 @@ export const commandInput = z.discriminatedUnion('action', [
       threadId: z.string().min(1).max(100).optional(),
       threadVersion: z.number().int().positive().optional(),
       version: z.number().int().positive(),
-      feedback: z.string().trim().min(3).max(8000),
+      feedback: z.string().trim().min(1).max(8000),
     })
     .strict(),
   z

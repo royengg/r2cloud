@@ -15,6 +15,8 @@ type Thread = {
   createdBy: string;
 };
 type Detail = {
+  failure?: string | null;
+  activity?: string | null;
   thread: Thread;
   messages: Comment[];
   task: { id: string; title: string; state: string; version: number } | null;
@@ -286,6 +288,11 @@ export function ThreadPanel({
                 </>
               )}
             </header>
+            {detail?.failure && (
+              <p className="inline-error thread-error" role="alert">
+                {detail.failure}
+              </p>
+            )}
             {detail?.task && (
               <div className="thread-task-context">
                 <Icon name="flag" size={16} />
@@ -322,7 +329,7 @@ export function ThreadPanel({
               {running && (
                 <p className="thread-running" role="status">
                   <Icon name="loading" size={16} />
-                  Codex is working on the task
+                  {detail?.activity ?? 'Preparing the task'}
                 </p>
               )}
               <div ref={latest} />
@@ -363,7 +370,7 @@ export function ThreadPanel({
                     variant="primary"
                     icon="play"
                     busy={busy}
-                    disabled={!canRun || text.trim().length < 3}
+                    disabled={!canRun || text.trim().length < 1}
                     onClick={() => void send(true)}
                   >
                     {!detail.task

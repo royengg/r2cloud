@@ -1,3 +1,4 @@
+import { recordAgentMessage } from './agent-messages';
 import { prisma, json, type DB, type jobs } from '@r2cloud/database';
 import { lockRow, nextJob } from '@r2cloud/database/locking';
 import { access, event, lockProject } from './project-context';
@@ -143,25 +144,7 @@ async function finishRun(job: jobs, grant: RunGrant, result: RunResult) {
         evidence: json(result.evidence),
       },
     });
-    if (!m.fixture) {
-      const bot = await db.users.upsert({
-        where: { id: `codex-agent:${grant.projectId}` },
-        create: { id: `codex-agent:${grant.projectId}`, name: 'Codex', kind: 'agent' },
-        update: {},
-      });
-      requireThat(bot.kind === 'agent' && !bot.auth_user_id, 409, 'Invalid agent author identity.');
-      await db.comments.create({
-        data: {
-          id: id(),
-          org_id: grant.orgId,
-          project_id: grant.projectId,
-          task_id: grant.taskId,
-          user_id: bot.id,
-          body: m.summary.slice(0, 8000),
-          threadId: grant.config.thread?.id,
-        },
-      });
-    }
+    if (!m.fixture) await recordAgentMessage(db, grant, m.summary);
     await db.runs.updateMany({
       where: { id: grant.runId, stopped_at: null },
       data: { state: 'stopped', stopped_at: new Date(), stop_proof: result.stopProof },
@@ -395,6 +378,7 @@ async function failure(job: jobs, error: unknown) {
       await db.jobs.update({ where: { id: job.id }, data: { state: 'blocked' } });
       return;
     }
+    let confirmedStopped = false;
     if (job.run_id) {
       const stopped = await db.sandboxAllocation.findFirst({
         where: {
@@ -404,6 +388,8 @@ async function failure(job: jobs, error: unknown) {
           stopProof: { not: null },
         },
       });
+      confirmedStopped = !!stopped;
+      if (stopped) await db.jobs.update({ where: { id: job.id }, data: { state: 'blocked' } });
       await db.runs.updateMany({
         where: { id: job.run_id, stopped_at: null },
         data: stopped
@@ -420,7 +406,11 @@ async function failure(job: jobs, error: unknown) {
       job.project_id,
       job.task_id,
       null,
-      setup ? 'Connection setup required' : 'Outcome uncertain; ownership retained',
+      setup
+        ? 'Connection setup required'
+        : confirmedStopped
+          ? 'Execution stopped; retry available'
+          : 'Outcome uncertain; ownership retained',
       { message: message.slice(0, 500) },
     );
   });

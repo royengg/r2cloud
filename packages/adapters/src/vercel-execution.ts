@@ -1,4 +1,10 @@
-import { type Sandbox, type Session, type NetworkPolicy } from '@vercel/sandbox';
+import { sandboxPath, bunIntegrity, installBun } from './sandbox-bun';
+import {
+  type Sandbox,
+  type Session,
+  type NetworkPolicy,
+  type NetworkPolicyRule,
+} from '@vercel/sandbox';
 import { createHash } from 'node:crypto';
 import { mkdir, open, rename, rm, statfs, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -29,6 +35,7 @@ export type ExecutionControl = {
     operationId: string,
   ): Promise<{ identity: VercelIdentity; result: RunResult | null } | null>;
   progress(grant: RunGrant, message: string): Promise<void>;
+  reply?(grant: RunGrant, message: string): Promise<void>;
   models?(grant: RunGrant, models: CodexModel[]): Promise<void>;
   previousArtifact(grant: RunGrant): Promise<{ digest: string; headSha: string }>;
 };
@@ -101,6 +108,11 @@ export class VercelCodexExecution implements ExecutionBackend {
       vcpus: 2,
     });
     const session = sandbox.currentSession();
+    let stage = 'Sandbox setup';
+    const progress = async (message: string) => {
+      stage = message;
+      await this.control.progress(grant, message);
+    };
     let checking = false;
     let revoked = false;
     const monitor = setInterval(() => {
@@ -136,10 +148,10 @@ export class VercelCodexExecution implements ExecutionBackend {
       if (remaining < 1000) throw new Uncertain('Execution time limit reached.');
       const result = await session.runCommand({
         cmd: 'runuser',
-        args: ['-u', 'r2-agent', '--', cmd, ...args],
+        args: ['-u', 'r2-agent', '--', 'env', `PATH=${sandboxPath}`, cmd, ...args],
         sudo: true,
         cwd: directory,
-        env: {},
+        env: { PATH: sandboxPath },
         timeoutMs: remaining,
         signal: AbortSignal.timeout(remaining + 5000),
       });
@@ -171,7 +183,7 @@ export class VercelCodexExecution implements ExecutionBackend {
           throw new SetupRequired('Sandbox control isolation could not be established.');
         return { isolated: true };
       });
-      await this.control.progress(grant, 'Preparing the repository');
+      await progress('Preparing the repository');
       await sandbox.updateNetworkPolicy(this.network(grant.config.repository));
       await once(
         'checkout',
@@ -235,7 +247,26 @@ export class VercelCodexExecution implements ExecutionBackend {
           return { restored: true };
         });
       }
-      await this.control.progress(grant, 'Installing project dependencies');
+      await progress('Preparing the Bun runtime');
+      await once('bun-runtime', { version: '1.4.2', integrity: bunIntegrity }, async () => {
+        await session.writeFiles([
+          { path: '/tmp/r2cloud-install-bun.py', content: installBun, mode: 0o600 },
+        ]);
+        const installed = await session.runCommand({
+          cmd: 'python3',
+          args: ['/tmp/r2cloud-install-bun.py'],
+          sudo: true,
+          timeoutMs: 90000,
+          signal: AbortSignal.timeout(95000),
+        });
+        if (installed.exitCode !== 0)
+          throw new SetupRequired('The pinned Bun runtime could not be installed.');
+        const version = (await (await run('bun', ['--version'], '/tmp')).stdout()).trim();
+        if (version !== '1.4.2')
+          throw new SetupRequired('The sandbox Bun version does not match the project toolchain.');
+        return { version };
+      });
+      await progress('Installing project dependencies');
       await once('install', setup.install, async () => {
         const result = await run(setup.install.cmd, setup.install.args, cwd, 180000);
         if (result.exitCode !== 0)
@@ -257,7 +288,7 @@ export class VercelCodexExecution implements ExecutionBackend {
           args: ['/tmp/r2cloud-bridge.py'],
           sudo: true,
           cwd: '/tmp',
-          env: {},
+          env: { PATH: sandboxPath },
           detached: true,
         });
         return { commandId: process.cmdId };
@@ -297,7 +328,7 @@ export class VercelCodexExecution implements ExecutionBackend {
         throw new SetupRequired('The selected model is no longer available. Choose another model.');
       const { thread } = await harness.start(`${grant.operationId}:thread`, cwd, selectedModel);
       await this.control.authorize(grant);
-      await this.control.progress(grant, 'Codex is working on the task');
+      await progress('Codex is working on the task');
       const { turn } = await harness.input(
         `${grant.operationId}:turn`,
         thread.id,
@@ -312,11 +343,14 @@ export class VercelCodexExecution implements ExecutionBackend {
       );
       if ((await transport.waitForTurn(thread.id, turn.id)).status !== 'completed')
         throw new Error('Codex did not finish this turn.');
+      const reply = await transport.read<{ text: string }>('message.json');
+      await this.control.authorize(grant);
+      if (typeof reply?.text === 'string' && reply.text.trim())
+        await this.control.reply?.(grant, reply.text);
       await sandbox.updateNetworkPolicy(this.network(grant.config.repository));
       if (revoked) throw new SetupRequired('Codex access was revoked during this run.');
       await this.control.authorize(grant);
-      await this.control.progress(grant, 'Checking the changes');
-      const reply = await transport.read<{ text: string }>('message.json');
+      await progress('Checking the changes');
       const checks: { cmd: string; exitCode: number }[] = [];
       for (const [index, test] of setup.tests.entries())
         checks.push(
@@ -403,20 +437,26 @@ export class VercelCodexExecution implements ExecutionBackend {
       }
       throw error instanceof SetupRequired || error instanceof Uncertain
         ? error
-        : new Error('Managed execution failed. Check the last activity and repository settings.');
+        : new Error(`Execution stopped during: ${stage}. No changes were published.`);
     } finally {
       clearInterval(monitor);
     }
   }
   private network(repository: string, account?: ExecutionCredentials): NetworkPolicy {
-    const allow: Record<string, unknown> = {
+    const allow: Record<string, NetworkPolicyRule[]> = {
       'github.com': [
-        { match: { method: ['GET'], path: { exact: `/${repository}.git/info/refs` } } },
-        { match: { method: ['POST'], path: { exact: `/${repository}.git/git-upload-pack` } } },
+        {
+          match: { method: ['GET'], path: { exact: `/${repository}.git/info/refs` } },
+          transform: [],
+        },
+        {
+          match: { method: ['POST'], path: { exact: `/${repository}.git/git-upload-pack` } },
+          transform: [],
+        },
       ],
-      'registry.npmjs.org': [{ match: { method: ['GET', 'HEAD'] } }],
-      'fonts.googleapis.com': [{ match: { method: ['GET'] } }],
-      'fonts.gstatic.com': [{ match: { method: ['GET'] } }],
+      'registry.npmjs.org': [{ match: { method: ['GET', 'HEAD'] }, transform: [] }],
+      'fonts.googleapis.com': [{ match: { method: ['GET'] }, transform: [] }],
+      'fonts.gstatic.com': [{ match: { method: ['GET'] }, transform: [] }],
     };
     if (account)
       allow['chatgpt.com'] = [
@@ -432,7 +472,7 @@ export class VercelCodexExecution implements ExecutionBackend {
           ],
         },
       ];
-    return { allow } as NetworkPolicy;
+    return { allow };
   }
   private async assertHobby() {
     const response = await this.http(

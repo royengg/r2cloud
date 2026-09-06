@@ -30,10 +30,26 @@ export async function readThreads(actor: Actor, projectId: string, threadId?: st
         ? await db.runs.findFirst({
             where: { task_id: thread.taskId },
             orderBy: { generation: 'desc' },
-            select: { state: true, stopped_at: true },
+            select: { id: true, state: true, stopped_at: true },
+          })
+        : null;
+      const failure =
+        task?.state === 'blocked' && run
+          ? await db.jobs.findFirst({
+              where: { run_id: run.id, kind: 'execute', error: { not: null } },
+              select: { error: true },
+            })
+          : null;
+      const activity = task
+        ? await db.events.findFirst({
+            where: { task_id: task.id },
+            orderBy: { id: 'desc' },
+            select: { kind: true },
           })
         : null;
       return {
+        activity: activity?.kind ?? null,
+        failure: failure?.error ?? null,
         thread,
         task,
         run,

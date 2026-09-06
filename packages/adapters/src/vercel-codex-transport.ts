@@ -22,7 +22,7 @@ def unprivileged():
     os.setuid(agent.pw_uid)
 proc = subprocess.Popen(['codex', 'app-server', '--listen', 'stdio://', '-c', 'cli_auth_credentials_store="file"'],
     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-    cwd=agent.pw_dir, preexec_fn=unprivileged, env={'PATH':os.environ['PATH'], 'HOME':str(home), 'CODEX_HOME':str(home), 'LANG':'C.UTF-8'}, text=True)
+    cwd=agent.pw_dir, preexec_fn=unprivileged, env={'PATH':'/opt/r2cloud/bin:' + os.environ['PATH'], 'HOME':str(home), 'CODEX_HOME':str(home), 'LANG':'C.UTF-8'}, text=True)
 def save(name, value):
     temp = root / (name + '.tmp')
     temp.write_text(json.dumps(value))

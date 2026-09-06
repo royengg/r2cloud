@@ -111,3 +111,9 @@ Project and task threads are durable product records. Settings and scoped histor
 The authentication broker refreshes `model/list` using an isolated authentication-only Codex home. Only the model catalog reaches the API. Personal catalogs are scoped to the connected person and project, refreshed hourly and considered stale after one day. The picker intersects that catalog with models verified by the pinned sandbox runtime; each execution refreshes the sandbox catalog. A new runtime needs a model-discovery check before named choices appear. The managed harness checks the selected model against its own catalog before starting the thread, without silently substituting another model.
 
 The pilot restores the previous immutable code candidate and sends bounded conversation history to a new Codex session per run. This is product-thread continuity, not native `thread/resume` across destroyed sandboxes. Live streaming, in-turn steering and user-facing interruption remain unfinished. Archiving preserves conversation history and requires stopped execution.
+
+## Repository setup recovery
+
+The universal image ships Bun 1.3.14, which cannot read the selected repository’s version-2 lockfile. The supervisor installs Bun 1.4.2 from a version-pinned npm artifact, verifies its SHA-512 integrity and keeps it in a root-owned sandbox toolchain directory. Both repository commands and Codex use that directory explicitly; sudo otherwise replaces the inherited PATH. No host packages or repository lockfiles are changed.
+
+Restricted HTTP rules include the SDK-required transform array, including empty arrays for read-only allow rules. Real Vercel checks verified the rules, repository checkout and frozen installation. Confirmed-stop failures require an explicit retry; they are not reconciled as still-running jobs. The thread displays the failure and current stage, and completed model replies survive later check/export failures.

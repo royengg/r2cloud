@@ -9,10 +9,10 @@ The project-scoped Vercel/Codex pilot worker is implemented and running locally.
 - GitHub App repository discovery and attachment; the pilot project is connected to `royengg/roy`.
 - Personal Codex device login, encrypted credentials and project-scoped disconnect.
 - Exclusive task claims, version/generation checks, durable jobs, worker leases and request reconciliation.
-- Vercel allocation, restricted repository import, dependency setup, Codex app-server transport, command checks and confirmed stop.
+- Vercel allocation, restricted repository import, integrity-checked Bun 1.4.2 setup, Codex app-server transport, command checks and confirmed stop. Repository import and frozen dependency installation have been validated against `royengg/roy`.
 - Model credentials injected by Vercel’s network layer; real tokens never enter sandbox files or command environments. No GitHub write credentials enter the sandbox.
 - Immutable Git bundle export to private local artifact storage; correction runs restore the previous candidate. Unknown product acceptance stays explicit and requires human review.
-- Project and task conversations support named threads, per-thread models and instructions, notes, archiving and explicit run actions. A project thread creates and claims a visible task atomically when the contributor starts work. Agent summaries return to the originating thread.
+- Project and task conversations support named threads, per-thread models and instructions, notes, archiving and explicit run actions. A project thread creates and claims a visible task atomically when the contributor starts work. Finished agent replies return to the originating thread before checks and export; subsequent failures do not discard them.
 - The Codex harness discovers account models, revalidates selection in the sandbox and pins bounded thread history with each run. Threads cannot bypass ownership or run limits.
 - Execution readiness reflects a live worker heartbeat and saved repository settings.
 
@@ -34,6 +34,6 @@ Open **Threads**, or a task’s **Conversation** tab. Create a thread, choose a 
 
 Local tests cover Postgres/HTTP/Socket.IO invariants and mocked Vercel/Codex execution. Live checks cover Vercel create/stop/remove, the installed Codex 0.147.0 protocol, credential-brokered model access and one subscription-backed connection-check turn without repository edits. Probe sandboxes were removed.
 
-The TypeScript/Vite build and 75 local tests pass. The authentication browser journey passes twelve axe audits. Browser checks required pausing the dev processes to stay within shared-VPS thread resources.
+The TypeScript/Vite build and 76 local tests pass. The authentication browser journey passes twelve axe audits. Browser checks required pausing the dev processes to stay within shared-VPS thread resources.
 
 Tests, scripts, screenshots, CLI authentication and environment files remain local-only. No deployment or GitHub publication has been validated.

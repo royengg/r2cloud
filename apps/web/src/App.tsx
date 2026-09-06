@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AuthScreen, WorkspaceSetup } from './components/AuthScreen';
+import { Select } from './components/Select';
 import { Sidebar } from './components/Sidebar';
 import { Board } from './components/Board';
 import { Composer } from './components/Composer';
@@ -255,18 +256,15 @@ export function App() {
           </div>
           {showFilters && (
             <div className="active-filters">
-              <label>
-                Priority
-                <select
-                  aria-label="Filter priority"
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value)}
-                >
-                  {['All priorities', 'High', 'Medium', 'Low'].map((p) => (
-                    <option key={p}>{p}</option>
-                  ))}
-                </select>
-              </label>
+              <Select
+                label="Filter priority"
+                value={priority}
+                onChange={setPriority}
+                options={['All priorities', 'High', 'Medium', 'Low'].map((value) => ({
+                  value,
+                  label: value,
+                }))}
+              />
               <Button
                 variant="ghost"
                 onClick={() => {

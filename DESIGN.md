@@ -73,7 +73,7 @@ components:
     textColor: '{colors.text-primary}'
   separator:
     backgroundColor: '{colors.border}'
-  focus-ring:
+  focus-stroke:
     backgroundColor: '{colors.focus}'
   button-primary-hover:
     backgroundColor: '{colors.accent-hover}'
@@ -148,7 +148,7 @@ Use **Hugeicons Stroke Rounded** exclusively, rendered by a shared Icon componen
 
 Primary actions name their result: Start work, Try the preview, Request changes, Publish changes for code review. Publication and merge have separate, exact-candidate confirmations. Simulated external work remains visibly labelled as a local fixture.
 
-Use native buttons, inputs, selects, details and modal dialogs. Move and restore focus; the modal background is inert. Empty states have one relevant next action. Errors stay visible until dismissed and say how to recover.
+Use native buttons, inputs, details and modal dialogs. Selection controls use the shared Select component: a labelled combobox with a rounded popover, checked selection, arrow-key navigation, typeahead and Escape dismissal. Position menus within the viewport and above dialog surfaces. Focus strokes sit inside control edges at a two-pixel inset; never draw a detached outer ring. Primary buttons use a contrasting light inset focus stroke, and forced-colors mode preserves system highlights. Move and restore focus; the modal background is inert. Empty states have one relevant next action. Errors stay visible until dismissed and say how to recover.
 
 Emil's motion guidance applies: frequent board actions are immediate. Pointer presses sink 1px and scale to 0.98 for 120ms. Cards lift 1px on pointer hover. Dialogs, the sidebar, and review drawers enter over 180ms with a strong ease-out. A loading icon rotates only while an operation is pending. Keyboard navigation and reduced-motion users get no movement. Never animate all properties.
 

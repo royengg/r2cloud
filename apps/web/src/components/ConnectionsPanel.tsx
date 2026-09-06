@@ -3,6 +3,7 @@ import { ExecutionSetup } from './ExecutionSetup';
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { Button, IconButton, Modal } from './ui';
+import { Select } from './Select';
 import { Icon } from './Icon';
 import type { DiscoveredRepository } from '@r2cloud/contracts/adapters';
 type State = {
@@ -128,21 +129,19 @@ export function ConnectionsPanel({
                     void attach();
                   }}
                 >
-                  <label htmlFor="connected-repository">Repository</label>
-                  <select
-                    id="connected-repository"
+                  <Select
+                    label="Repository"
                     required
                     value={selected}
-                    onChange={(e) => setSelected(e.target.value)}
-                  >
-                    <option value="">Choose a repository</option>
-                    {state.pending.repositories.map((repo) => (
-                      <option key={`${repo.installationId}:${repo.id}`} value={repo.id}>
-                        {repo.fullName}
-                      </option>
-                    ))}
-                  </select>
-                  <Button variant="primary" busy={busy}>
+                    onChange={setSelected}
+                    placeholder="Choose a repository"
+                    disabled={busy}
+                    options={state.pending.repositories.map((repo) => ({
+                      value: String(repo.id),
+                      label: repo.fullName,
+                    }))}
+                  />
+                  <Button variant="primary" busy={busy} disabled={!selected}>
                     Connect repository
                   </Button>
                 </form>

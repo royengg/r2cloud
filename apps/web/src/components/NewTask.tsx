@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Button, IconButton, Modal } from './ui';
+import { Select } from './Select';
 import { Icon } from './Icon';
 export function NewTask({
   busy,
@@ -76,14 +77,12 @@ export function NewTask({
             placeholder={'One clear next step\nWorks on a phone'}
           />
         </label>
-        <label>
-          Priority
-          <select value={priority} onChange={(e) => setPriority(e.target.value)}>
-            {['High', 'Medium', 'Low'].map((p) => (
-              <option key={p}>{p}</option>
-            ))}
-          </select>
-        </label>
+        <Select
+          label="Priority"
+          value={priority}
+          onChange={setPriority}
+          options={['High', 'Medium', 'Low'].map((value) => ({ value, label: value }))}
+        />
         {error && (
           <p className="inline-error" role="alert">
             {error}

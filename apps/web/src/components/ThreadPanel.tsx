@@ -67,6 +67,7 @@ export function ThreadPanel({
       loading = true;
       pending = false;
       const generation = ++version.current;
+      let retry = false;
       try {
         const [listResult, detailResult, timelineResult] = await Promise.allSettled([
           api<{ threads: Thread[]; models: CodexModel[] }>(path, undefined, controller.signal),
@@ -89,15 +90,30 @@ export function ThreadPanel({
           setLoaded(true);
         }
       } catch (e) {
+        retry = true;
         if (!disposed && generation === version.current) setError((e as Error).message);
       } finally {
         loading = false;
-        if (!disposed) timer = setTimeout(() => void load(), pending ? 0 : 5000);
+        if (!disposed) {
+          clearTimeout(timer);
+          if (pending || retry || !socket.connected)
+            timer = setTimeout(() => void load(), pending ? 0 : 5000);
+        }
       }
     }
     setDetail(null);
     setTimeline(null);
-    const socket = io({ auth: { projectId: project.id }, withCredentials: true });
+    const socket = io({
+      auth: { projectId: project.id },
+      withCredentials: true,
+      transports: ['websocket'],
+    });
+    socket.on('connect', () => void load());
+    socket.on('disconnect', () => {
+      if (disposed) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => void load(), 5000);
+    });
     socket.on('snapshot-required', () => {
       clearTimeout(timer);
       void load();

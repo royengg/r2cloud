@@ -2727,7 +2727,10 @@ body[data-keyboard] .account-menu {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
+}
+.thread-content > :not(.thread-messages) {
+  flex-shrink: 0;
 }
 .thread-heading {
   display: flex;
@@ -2761,7 +2764,10 @@ body[data-keyboard] .account-menu {
   overflow-wrap: anywhere;
 }
 .thread-messages {
-  min-height: 120px;
+  min-height: 0;
+  overscroll-behavior: contain;
+  overflow-anchor: none;
+  scrollbar-gutter: stable;
 }
 .thread-running {
   display: flex;

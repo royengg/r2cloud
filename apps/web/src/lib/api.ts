@@ -1,10 +1,15 @@
 const pending = new Map<string, string>();
-export async function api<T = unknown>(path: string, body?: unknown): Promise<T> {
+export async function api<T = unknown>(
+  path: string,
+  body?: unknown,
+  signal?: AbortSignal,
+): Promise<T> {
   const fingerprint = path + JSON.stringify(body),
     key = pending.get(fingerprint) ?? crypto.randomUUID();
   if (body !== undefined) pending.set(fingerprint, key);
   // Preserve a command key after transport loss so a retry can reconcile the same intent.
   const response = await fetch(`/api${path}`, {
+    signal,
     method: body === undefined ? 'GET' : 'POST',
     headers:
       body === undefined ? {} : { 'Content-Type': 'application/json', 'Idempotency-Key': key },

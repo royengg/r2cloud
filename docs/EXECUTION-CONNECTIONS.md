@@ -65,7 +65,7 @@ Snapshot intent closes command intake. Snapshot identifiers and a separately con
 
 ## Project-scoped coding pilot
 
-The control plane is implemented and tested with the official SDK replaced by a test double. The project-scoped pilot worker uses `VercelCodexExecution` for public repository import, Codex turns, configured checks, immutable bundle export and confirmed stop. A complete selected-repository task has not yet been validated.
+The control plane is implemented and tested with the official SDK replaced by a test double. The project-scoped pilot worker uses `VercelCodexExecution` for public repository import, Codex turns, configured checks, immutable bundle export and confirmed stop. A live Luna run completed the selected repository’s checkout/edit/build/export path; product acceptance remains unverified.
 
 The worker uses the pinned image below and verifies its Codex 0.147.0 executable before starting the app-server. A temporary JSONL bridge uses Vercel session file/command APIs; no app-server port is exposed. Request intent and response receipts prevent an ambiguous request from being dispatched twice. Lost execution outcomes retain ownership.
 

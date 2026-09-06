@@ -338,7 +338,7 @@ export class VercelCodexExecution implements ExecutionBackend {
           threadInstructions: grant.config.thread?.instructions,
           feedback: grant.feedback,
           instructions:
-            'Implement this task in the checkout. Do not publish, push, open pull requests, or merge. Keep changes focused. Summarize changes and limitations.',
+            'Only implement an explicitly requested product or code change in the checkout. If the request is a greeting, conversational question, or unclear outcome, respond conversationally or ask for clarification; do not invent a code change. Do not publish, push, open pull requests, or merge. Keep changes focused. Summarize changes and limitations.',
         }),
       );
       if ((await transport.waitForTurn(thread.id, turn.id)).status !== 'completed')

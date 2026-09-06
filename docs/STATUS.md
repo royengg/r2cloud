@@ -1,6 +1,6 @@
 # Implementation status
 
-The project-scoped Vercel/Codex pilot worker is implemented and running locally. A real subscription-backed connection-check turn completed in Vercel. The selected repository’s complete checkout/edit/build journey has not yet been validated. Nothing has been published or deployed through the product.
+The project-scoped Vercel/Codex pilot worker is implemented and running locally. A real subscription-backed connection-check turn completed in Vercel. A real Luna run against `royengg/roy` completed checkout, dependency installation, a small edit, the configured build, private artifact export and confirmed stop. The candidate remains in product review; acceptance is unverified. Nothing has been published or deployed through the product.
 
 ## Implemented
 
@@ -24,7 +24,7 @@ Open **Threads**, or a task’s **Conversation** tab. Create a thread, choose a 
 
 ## Still unfinished
 
-1. Validate the complete selected-repository coding/build journey and recovery of partial work. Explicit retry now requires confirmed stop and retains exclusive ownership.
+1. Validate substantive task outcomes and recovery of partial work. The first live coding/build path passed; explicit retry requires confirmed stop and retains exclusive ownership.
 2. Authenticated browser previews, downloadable diff/artifact review and production object storage. The pilot currently marks previews unavailable.
 3. GitHub installation credential custody for private repositories, publisher, required checks, reconciliation and verified merge integration.
 4. Renewable Codex/Vercel credentials, skills mounting, batch UI and production service isolation.

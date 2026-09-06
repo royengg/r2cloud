@@ -12,8 +12,8 @@ export const commandInput = z.discriminatedUnion('action', [
     .object({
       action: z.literal('start'),
       version: z.number().int().positive(),
-      minutes: z.number().int().min(1).max(60).default(15),
-      budgetCents: z.number().int().min(1).max(5000).default(300),
+      minutes: z.number().int().min(1).max(60).default(10),
+      budgetCents: z.number().int().min(0).max(5000).default(0),
     })
     .strict(),
   z
@@ -51,8 +51,8 @@ export const batchInput = z
       .min(1)
       .max(10),
     minutesPerTask: z.number().int().min(1).max(60),
-    budgetCentsPerTask: z.number().int().min(1).max(5000),
-    maxTotalBudgetCents: z.number().int().min(1).max(50000),
+    budgetCentsPerTask: z.number().int().min(0).max(5000),
+    maxTotalBudgetCents: z.number().int().min(0).max(50000),
   })
   .strict()
   .refine(

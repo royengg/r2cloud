@@ -1,4 +1,5 @@
-import { CodexLogo } from './CodexLogo';
+import { CodexConnection } from './CodexConnection';
+import { ExecutionSetup } from './ExecutionSetup';
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { Button, IconButton, Modal } from './ui';
@@ -19,12 +20,10 @@ type State = {
 };
 export function ConnectionsPanel({
   projectId,
-  providerConnected,
   close,
   onConnected,
 }: {
   projectId: string;
-  providerConnected: boolean;
   close: () => void;
   onConnected: () => Promise<void>;
 }) {
@@ -189,15 +188,7 @@ export function ConnectionsPanel({
           {!state.repository && !state.manage && (
             <p className="subtle">Ask a workspace administrator to connect a repository.</p>
           )}
-          <div className="connection-row">
-            <CodexLogo />
-            <div>
-              <strong>Codex</strong>
-              <span>
-                {providerConnected ? 'AI connection configured' : 'No AI account connected'}
-              </span>
-            </div>
-          </div>
+          <CodexConnection projectId={projectId} />
           <div className="connection-row">
             <Icon name="cloud" />
             <div>
@@ -205,6 +196,7 @@ export function ConnectionsPanel({
               <span>Execution setup pending</span>
             </div>
           </div>
+          {state.repository && <ExecutionSetup projectId={projectId} manage={state.manage} />}
           <p className="subtle">
             Repository access and AI credentials are separate from project membership.
           </p>

@@ -30,3 +30,10 @@ export async function nextRepositoryConnection(db: DB) {
   `;
   return rows[0]?.id;
 }
+export async function nextCodexConnection(db: DB) {
+  const rows = await db.$queryRaw<{ id: string }[]>`
+    SELECT id FROM ${namespace}.codex_connections WHERE state='queued' AND expires_at>now()
+    ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1
+  `;
+  return rows[0]?.id;
+}

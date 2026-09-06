@@ -16,6 +16,11 @@ export async function readExecutionSetup(actor: Actor, projectId: string) {
     where: { project_id: projectId, user_id: actor.id },
     select: { provider: true, mode: true, enabled: true },
   });
+  const subscription = await prisma.codexConnection.findFirst({
+    where: { projectId, userId: actor.id },
+    orderBy: { createdAt: 'desc' },
+    select: { state: true },
+  });
   return {
     repositoryConnected: !!project.repo_id,
     profile,
@@ -24,7 +29,7 @@ export async function readExecutionSetup(actor: Actor, projectId: string) {
     subscription: {
       method: 'codex_app_server_device_code',
       scope: 'personal_project',
-      status: 'broker_setup_required',
+      status: subscription?.state ?? 'not_connected',
     },
     ready: false,
   };

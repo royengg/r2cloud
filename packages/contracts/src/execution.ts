@@ -38,7 +38,7 @@ export const executionProfile = z
       .max(200)
       .regex(/^\/(?!\/)[a-zA-Z0-9/_-]*$/),
     maxMinutes: z.number().int().min(1).max(60),
-    maxBudgetCents: z.number().int().min(1).max(10000),
+    maxBudgetCents: z.number().int().min(0).max(10000),
     vcpus: z.union([z.literal(2), z.literal(4)]),
   })
   .strict();

@@ -372,7 +372,6 @@ export function App() {
         <ConnectionsPanel
           key={w.projectId}
           projectId={w.projectId}
-          providerConnected={!!project?.provider_connected}
           close={() => setConnections(false)}
           onConnected={() => w.loadIdentity(w.projectId)}
         />

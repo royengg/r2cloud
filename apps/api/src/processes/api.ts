@@ -1,6 +1,6 @@
-if (process.env.R2_GITHUB_APP_CLIENT_SECRET)
+if (process.env.R2_GITHUB_APP_CLIENT_SECRET || process.env.R2_CODEX_VAULT_KEY)
   throw new Error(
-    'Keep the GitHub App client secret in the broker environment, not the API environment.',
+    'Keep GitHub App and Codex vault secrets in their broker environments, not the API environment.',
   );
 import { createHttpServer } from '../server';
 const fixture = process.env.R2_MODE === 'fixture';
@@ -39,7 +39,12 @@ const repositoryConnection =
     : undefined;
 if (repositoryConnection && !/^[a-z0-9-]+$/.test(repositoryConnection.appSlug))
   throw new Error('Invalid GitHub App slug.');
-const { server } = createHttpServer({ fixture, identity, repositoryConnection });
+const { server } = createHttpServer({
+  fixture,
+  identity,
+  repositoryConnection,
+  codexLogin: process.env.R2_CODEX_LOGIN_ENABLED === 'true',
+});
 server.listen(4310, '127.0.0.1', () =>
   console.log(`R2Cloud API · ${fixture ? 'test fixtures' : 'product'} · http://127.0.0.1:4310`),
 );

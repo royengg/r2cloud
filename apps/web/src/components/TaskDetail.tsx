@@ -123,7 +123,7 @@ export function TaskDetail({
                 </div>
                 <h3>Ready for a first pass?</h3>
                 <p>One owner. A working preview. Your review.</p>
-                <small>One run · 15 minutes · $3 model budget cap</small>
+                <small>One run · 10 minutes · No paid overage</small>
               </div>
             )}
             {task.state === 'building' && (
@@ -347,8 +347,8 @@ export function TaskDetail({
                 void onCommand({
                   action: 'start',
                   version: task.version,
-                  minutes: 15,
-                  budgetCents: 300,
+                  minutes: 10,
+                  budgetCents: 0,
                 })
               }
             >

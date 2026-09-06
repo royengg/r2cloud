@@ -79,6 +79,11 @@ async function queueRun(
     409,
     'Connect an AI account authorised for this project before starting work.',
   );
+  requireThat(
+    connection.mode !== 'managed' || budgetCents === 0,
+    400,
+    'This pilot only permits subscription usage with no paid overage.',
+  );
   const active = await db.runs.count({ where: { org_id: p.org_id, stopped_at: null } });
   const org = await db.organisations.findUniqueOrThrow({ where: { id: p.org_id } });
   requireThat(active < org.max_runs, 409, 'The organisation has reached its concurrent run limit.');

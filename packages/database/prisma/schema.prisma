@@ -177,6 +177,7 @@ model project_access {
 }
 
 model projects {
+  codexConnections      CodexConnection[]
   executionProfiles     execution_profiles[]
   repositoryConnections RepositoryConnection[]
   invitations           ProjectInvitation[]
@@ -329,6 +330,7 @@ model tasks {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model users {
+  codexConnections      CodexConnection[]
   executionProfiles     execution_profiles[]
   repositoryConnections RepositoryConnection[]
   sentInvitations       ProjectInvitation[]    @relation("InvitationSender")
@@ -510,4 +512,24 @@ model execution_profiles {
   updated_at DateTime @default(now()) @db.Timestamptz(6)
   projects   projects @relation(fields: [org_id, project_id], references: [org_id, id], onDelete: NoAction, onUpdate: NoAction)
   users      users    @relation(fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model CodexConnection {
+  id         String    @id
+  orgId      String    @map("org_id")
+  projectId  String    @map("project_id")
+  userId     String    @map("user_id")
+  state      String
+  loginId    String?   @map("login_id")
+  userCode   String?   @map("user_code")
+  plan       String?
+  error      String?
+  leaseToken String?   @map("lease_token")
+  leaseUntil DateTime? @map("lease_until") @db.Timestamptz(6)
+  expiresAt  DateTime  @default(dbgenerated("now() + interval '10 minutes'")) @map("expires_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  project    projects  @relation(fields: [orgId, projectId], references: [org_id, id])
+  user       users     @relation(fields: [userId], references: [id])
+
+  @@map("codex_connections")
 }

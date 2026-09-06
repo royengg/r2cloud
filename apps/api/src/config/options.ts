@@ -14,6 +14,7 @@ if (process.env.R2_DEV_ORIGIN) {
 }
 export type AppOptions = {
   fixture: boolean;
+  codexLogin?: boolean;
   identity?: ProductIdentity;
   repositoryConnection?: ConnectionConfig;
 };

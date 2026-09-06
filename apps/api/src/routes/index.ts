@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { codexRoutes } from './codex';
 import type { AppOptions } from '../config/options';
 import { authenticateRequest } from '../middleware/authenticate';
 import { accountRoutes } from './account';
@@ -11,6 +12,7 @@ export function protectedRoutes(options: AppOptions) {
   const router = Router();
   router.use(authenticateRequest(options));
   router.use(teamRoutes());
+  router.use(codexRoutes(options.codexLogin ?? false));
   router.use(connectionRoutes(options.repositoryConnection));
   router.use(accountRoutes(options));
   router.use(workspacesRoutes());

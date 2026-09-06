@@ -2632,3 +2632,35 @@ body[data-keyboard] .account-menu {
     padding: 16px;
   }
 }
+.codex-connection .connection-row > div {
+  flex: 1;
+}
+.codex-login-code {
+  padding: 20px;
+  border-radius: var(--radius-card);
+  background: var(--color-accent-soft);
+}
+.codex-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 0;
+}
+.codex-code-row code {
+  font-size: 1.375rem;
+  letter-spacing: 0.08em;
+  user-select: all;
+}
+.execution-setup fieldset {
+  display: grid;
+  gap: 16px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.command-settings textarea {
+  font-family: ui-monospace, monospace;
+  font-size: var(--text-caption);
+}

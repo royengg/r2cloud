@@ -5,6 +5,7 @@ import { requireThat, type CandidateManifest } from '@r2cloud/contracts/domain';
 import { AgentSession, type SessionControl } from '@r2cloud/adapters/agent-session';
 import { TaskCheckout } from '@r2cloud/adapters/task-checkout';
 import type { CredentialVault } from '@r2cloud/adapters/credential-vault';
+import { authorizeAgentRuntime, reserveAgentRuntime } from './agent-runtimes';
 import { activeAgentTurn } from './agent-turns';
 import { recordAgentEvents } from './agent-events';
 import { callAgentTool, waitForAgentResponse } from './agent-tools';
@@ -12,17 +13,42 @@ import { claimAgentTask, finishAgentImplementation } from './agent-implementatio
 import { codexCredentials } from './managed-execution';
 import { event, lockProject } from './project-context';
 
-export function agentControl(projectId: string, vault: CredentialVault): SessionControl {
+export function agentControl(
+  projectId: string,
+  vault: CredentialVault,
+  owner: string,
+): SessionControl {
   const checkouts = new Map<string, TaskCheckout>();
   const candidates = new Map<string, Omit<RunResult, 'stopProof'>>();
   const authorize = async (grant: AgentGrant) => {
     requireThat(grant.projectId === projectId, 403, 'This worker is scoped to another project.');
+    await authorizeAgentRuntime(grant, owner);
     await activeAgentTurn(grant);
     await prisma.agentTurn.update({ where: { id: grant.id }, data: { heartbeatAt: new Date() } });
     return codexCredentials(projectId, grant.actorId, grant.connectionId, vault);
   };
   return {
     authorize,
+    async authorizeRuntime(grant) {
+      await authorizeAgentRuntime(grant, owner);
+      return codexCredentials(projectId, grant.actorId, grant.connectionId, vault);
+    },
+    async hasImplementation(grant) {
+      return !!(await prisma.runs.count({
+        where: {
+          project_id: projectId,
+          manifest: { path: ['agentTurnId'], equals: grant.id },
+          stopped_at: null,
+        },
+      }));
+    },
+    async closed(grant, proof) {
+      if (!grant.runtimeId) return;
+      await prisma.agentRuntime.updateMany({
+        where: { id: grant.runtimeId, owner, stoppedAt: null },
+        data: { state: 'stopped', stoppedAt: new Date(), stopProof: proof },
+      });
+    },
     async models(grant, models) {
       await authorize(grant);
       await prisma.executionRuntime.update({
@@ -70,7 +96,7 @@ export function agentControl(projectId: string, vault: CredentialVault): Session
             sandbox,
             run,
             await authorize(grant),
-            (grant.startedAt ?? Date.now()) + grant.minutes * 60000,
+            grant.runtimeExpiresAt ?? (grant.startedAt ?? Date.now()) + grant.minutes * 60000,
             previous,
           );
           const prepared = await checkout.prepare();
@@ -152,7 +178,7 @@ export function agentControl(projectId: string, vault: CredentialVault): Session
         });
       });
     },
-    async finish(grant, stopProof, error) {
+    async finish(grant, stopProof, error, keepWarm) {
       requireThat(grant.projectId === projectId, 403, 'This worker is scoped to another project.');
       const recorded = await prisma.agentItem.findUnique({
         where: { turnId_sourceId: { turnId: grant.id, sourceId: 'candidate' } },
@@ -160,9 +186,32 @@ export function agentControl(projectId: string, vault: CredentialVault): Session
       const candidate =
         candidates.get(grant.id) ??
         (recorded?.detail as unknown as Omit<RunResult, 'stopProof'> | undefined);
-      await finishAgentImplementation(grant, stopProof, candidate, error);
+      if (grant.runtimeId)
+        requireThat(
+          await prisma.agentRuntime.count({ where: { id: grant.runtimeId, owner } }),
+          409,
+          'Runtime ownership changed.',
+        );
+      await finishAgentImplementation(grant, stopProof, candidate, error, owner);
       await prisma.$transaction(async (db) => {
         await lockProject(db, projectId);
+        if (grant.runtimeId)
+          requireThat(
+            await db.agentRuntime.count({ where: { id: grant.runtimeId, owner } }),
+            409,
+            'Runtime ownership changed.',
+          );
+        if (keepWarm && grant.runtimeId) {
+          const updated = await db.agentRuntime.updateMany({
+            where: { id: grant.runtimeId, owner, state: 'active', stoppedAt: null },
+            data: {
+              state: 'idle',
+              idleUntil: new Date(Date.now() + 120000),
+              heartbeatAt: new Date(),
+            },
+          });
+          requireThat(updated.count === 1, 409, 'Runtime lease changed.');
+        }
         await db.agentTurn.updateMany({
           where: { id: grant.id, stoppedAt: null },
           data: {
@@ -206,6 +255,7 @@ export async function runAgentTurn(
   backend: AgentSession,
   control: SessionControl,
   projectId: string,
+  owner: string,
 ) {
   const selected = await prisma.$transaction(async (db) => {
     await lockProject(db, projectId);
@@ -222,15 +272,29 @@ export async function runAgentTurn(
       ...(turn.grant as unknown as AgentGrant),
       ...(turn.state === 'queued' ? { startedAt: Date.now() } : {}),
     };
+    let stopProof: string | null = null;
+    if (turn.state === 'queued') {
+      const runtime = await reserveAgentRuntime(db, grant, owner);
+      if (!runtime) return null;
+      grant.runtimeId = runtime.id;
+      grant.runtimeExpiresAt = runtime.expiresAt.getTime();
+    } else if (grant.runtimeId) {
+      const runtime = await db.agentRuntime.findUniqueOrThrow({ where: { id: grant.runtimeId } });
+      if (runtime.stoppedAt) {
+        stopProof = runtime.stopProof;
+        await db.agentRuntime.update({ where: { id: runtime.id }, data: { owner } });
+      }
+    }
     await db.agentTurn.update({
       where: { id: turn.id },
       data: {
         grant: json(grant),
+        runtimeId: grant.runtimeId,
         state: turn.state === 'queued' ? 'running' : 'unknown',
         heartbeatAt: new Date(),
       },
     });
-    return { ...turn, grant };
+    return { ...turn, grant, stopProof };
   });
   if (!selected) return false;
   const grant = selected.grant as unknown as AgentGrant;
@@ -254,14 +318,15 @@ export async function runAgentTurn(
         ).slice(-32000);
   }
   if (selected.state !== 'queued') {
-    const proof = await backend.recover(grant);
+    const proof = selected.stopProof ?? (await backend.recover(grant));
     await control.finish(
       grant,
       proof ?? 'no-sandbox-allocated',
       'The previous runtime disconnected. It was stopped before allowing another turn.',
     );
-  } else if (selected.stopRequested)
-    await control.finish(grant, 'no-sandbox-allocated', 'Turn stopped before execution.');
-  else await backend.run(grant);
+  } else if (selected.stopRequested) {
+    const proof = await backend.retire(grant);
+    await control.finish(grant, proof, 'Turn stopped before execution.');
+  } else await backend.run(grant);
   return true;
 }

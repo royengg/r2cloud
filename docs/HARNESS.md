@@ -196,3 +196,13 @@ The research above does not validate hosted entitlement, resource renewal, cross
 [vk-issues]: https://github.com/BloopAI/vibe-kanban/blob/4deb7eca8f381f7cbc1f9d15515a9ab8f8009053/crates/mcp/src/task_server/tools/remote_issues.rs
 [vk-workspace]: https://github.com/BloopAI/vibe-kanban/blob/4deb7eca8f381f7cbc1f9d15515a9ab8f8009053/crates/mcp/src/task_server/tools/task_attempts.rs
 [vk-preview]: https://github.com/BloopAI/vibe-kanban/blob/4deb7eca8f381f7cbc1f9d15515a9ab8f8009053/crates/server/src/routes/preview.rs
+
+## Warm runtime implementation
+
+A durable `AgentRuntime` owns the sandbox independently of individual `AgentTurn` records. One live runtime per thread and the existing one-active-turn constraint prevent competing sessions. The worker keeps the native transport in memory for consecutive turns, translates its cumulative event cursor into each turn’s sequence, and checkpoints native history in Postgres. A restart never adopts an uncertain live process: a worker first confirms retirement, then restores conversation state in a replacement. Recorded stop proof also recovers a crash before turn completion.
+
+The pilot retains idle runtimes for two minutes within a fixed ten-minute total lifespan. There is no resource renewal. Idle runtimes count toward organisation concurrency, and actor/provider-connection changes require retirement. Cleanup runs every five seconds and checks access, archive state, expiry and stale leases. The provider’s hard lifetime bounds an unavailable worker.
+
+At implementation handoff, all agent processes stop before candidate export. Check commands are also quiesced afterward. The checkout and its parent become root-owned and read-only before the task enters review. A subsequent checked grant validates the retained HEAD and clean worktree, then restores ownership from the leaves upward. This preserves dependencies while preventing review-time writes to the candidate checkout. Codex restarts from its checkpoint inside the retained sandbox after this boundary. Ordinary conversation turns keep the native process running.
+
+Real verification covered two conversation turns sharing one sandbox and native identity, project-context tools, remembered context and confirmed idle cleanup. The new warm coding/correction sequence has local database and mocked-provider tests; live coding, previews and publication are separate remaining checks.

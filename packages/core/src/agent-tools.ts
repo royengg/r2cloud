@@ -107,7 +107,8 @@ export async function waitForAgentResponse(
     });
     return request;
   });
-  const deadline = (grant.startedAt ?? Date.now()) + grant.minutes * 60000 - 30000;
+  const deadline =
+    (grant.runtimeExpiresAt ?? (grant.startedAt ?? Date.now()) + grant.minutes * 60000) - 30000;
   while (Date.now() < deadline) {
     const turn = await activeAgentTurn(grant);
     if (turn.stopRequested) throw new Error('Turn stopped while waiting for a response.');

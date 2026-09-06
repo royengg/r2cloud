@@ -104,9 +104,16 @@ export async function finishAgentImplementation(
   proof: string,
   result?: Omit<RunResult, 'stopProof'>,
   error?: string,
+  owner?: string,
 ) {
   await prisma.$transaction(async (db) => {
     await lockProject(db, grant.projectId);
+    if (grant.runtimeId)
+      requireThat(
+        owner && (await db.agentRuntime.count({ where: { id: grant.runtimeId, owner } })),
+        409,
+        'Runtime ownership changed.',
+      );
     const run = await db.runs.findFirst({
       where: {
         project_id: grant.projectId,

@@ -581,6 +581,8 @@ model ConversationThread {
 }
 
 model AgentTurn {
+ runtimeId String? @map("runtime_id")
+ runtime AgentRuntime? @relation(fields: [runtimeId], references: [id])
  lastSequence Int @default(0) @map("last_sequence")
  id String @id
  orgId String @map("org_id")
@@ -626,4 +628,23 @@ model AgentRequest {
  turn AgentTurn @relation(fields: [turnId], references: [id])
  @@unique([turnId, sourceId])
  @@map("agent_requests")
+}
+
+model AgentRuntime {
+ id String @id
+ orgId String @map("org_id")
+ threadId String @map("thread_id")
+ projectId String @map("project_id")
+ actorId String @map("actor_id")
+ connectionId String @map("connection_id")
+ owner String
+ state String
+ heartbeatAt DateTime @map("heartbeat_at") @db.Timestamptz(6)
+ expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+ idleUntil DateTime? @map("idle_until") @db.Timestamptz(6)
+ stoppedAt DateTime? @map("stopped_at") @db.Timestamptz(6)
+ stopProof String? @map("stop_proof")
+ turns AgentTurn[]
+ @@index([projectId, state])
+ @@map("agent_runtimes")
 }

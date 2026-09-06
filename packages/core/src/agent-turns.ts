@@ -4,6 +4,7 @@ import { agentInput, type AgentGrant, type AgentTimeline } from '@r2cloud/contra
 import { id } from '@r2cloud/contracts/hash';
 import { access, event } from './project-context';
 import { receipt } from './receipt';
+import { agentResourceUsage } from './agent-runtimes';
 import { availableModels } from './thread-context';
 
 export async function queueAgentTurn(
@@ -39,9 +40,8 @@ export async function queueAgentTurn(
     'The managed agent worker is not available.',
   );
   const org = await db.organisations.findUniqueOrThrow({ where: { id: project.org_id } });
-  const active =
-    (await db.agentTurn.count({ where: { orgId: project.org_id, stoppedAt: null } })) +
-    (await db.runs.count({ where: { org_id: project.org_id, stopped_at: null } }));
+  const runtime = await db.agentRuntime.findFirst({ where: { threadId, stoppedAt: null } });
+  const active = await agentResourceUsage(db, project.org_id, runtime?.id);
   requireThat(active < org.max_runs, 409, 'The organisation has reached its concurrent run limit.');
   const models = await availableModels(db, actor, projectId);
   requireThat(

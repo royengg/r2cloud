@@ -3,7 +3,21 @@ import { prisma, json, type DB } from '@r2cloud/database';
 import { lockRow } from '@r2cloud/database/locking';
 import { requireThat } from '@r2cloud/contracts/domain';
 import type { SandboxJournal, VercelIdentity } from '@r2cloud/adapters/vercel';
-async function fence(db: DB, identity: VercelIdentity) {
+async function fence(db: DB, identity: VercelIdentity, owner?: string) {
+  const runtime = await db.agentRuntime.findUnique({ where: { id: identity.runId } });
+  if (runtime) {
+    await lockProject(db, runtime.projectId);
+    const current = await db.agentRuntime.findUniqueOrThrow({ where: { id: runtime.id } });
+    requireThat(
+      current.owner === owner &&
+        !current.stoppedAt &&
+        identity.operationId === current.id &&
+        identity.generation === 1,
+      409,
+      'Stale sandbox runtime lease.',
+    );
+    return { manifest: { minutes: 10 }, agent: true };
+  }
   const agentTurn = await db.agentTurn.findUnique({ where: { id: identity.runId } });
   if (agentTurn) {
     await lockProject(db, agentTurn.projectId);
@@ -39,9 +53,10 @@ async function fence(db: DB, identity: VercelIdentity) {
   return { manifest: run.manifest, agent: false };
 }
 export class PostgresSandboxJournal implements SandboxJournal {
+  constructor(private owner?: string) {}
   async reserve(identity: VercelIdentity, name: string, configHash: string, minutes: number) {
     return prisma.$transaction(async (db) => {
-      const run = await fence(db, identity);
+      const run = await fence(db, identity, this.owner);
       const grant = run.manifest as { minutes: number };
       requireThat(
         Number.isFinite(grant.minutes) && minutes <= grant.minutes,
@@ -77,7 +92,7 @@ export class PostgresSandboxJournal implements SandboxJournal {
   }
   async get(identity: VercelIdentity) {
     return prisma.$transaction(async (db) => {
-      await fence(db, identity);
+      await fence(db, identity, this.owner);
       const row = await db.sandboxAllocation.findFirst({
         where: {
           operationId: identity.operationId,
@@ -90,7 +105,7 @@ export class PostgresSandboxJournal implements SandboxJournal {
   }
   async mark(identity: VercelIdentity, state: string, stopProof?: string) {
     await prisma.$transaction(async (db) => {
-      await fence(db, identity);
+      await fence(db, identity, this.owner);
       const row = await db.sandboxAllocation.updateMany({
         where: {
           operationId: identity.operationId,
@@ -103,7 +118,7 @@ export class PostgresSandboxJournal implements SandboxJournal {
   }
   async beginStep(identity: VercelIdentity, key: string, payloadHash: string) {
     return prisma.$transaction(async (db) => {
-      await fence(db, identity);
+      await fence(db, identity, this.owner);
       // The run lock serializes allocation and step mutations for this execution.
       const allocation = await db.sandboxAllocation.findUnique({
         where: { operationId: identity.operationId },
@@ -129,7 +144,7 @@ export class PostgresSandboxJournal implements SandboxJournal {
   }
   async finishStep(identity: VercelIdentity, key: string, result: unknown) {
     await prisma.$transaction(async (db) => {
-      await fence(db, identity);
+      await fence(db, identity, this.owner);
       await db.sandboxStep.updateMany({
         where: { operationId: identity.operationId, key, state: 'pending' },
         data: { state: 'finished', result: json(result) },

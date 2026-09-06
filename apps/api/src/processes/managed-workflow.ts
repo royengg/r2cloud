@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { maintainAgentRuntimes } from '@r2cloud/core/agent-runtimes';
 import { AgentSession } from '@r2cloud/adapters/agent-session';
 import { agentControl, runAgentTurn } from '@r2cloud/core/agent-worker';
 import { agentTools } from '@r2cloud/core/agent-tools';
@@ -27,11 +29,12 @@ const backend = new VercelCodexExecution(
   new PostgresSandboxJournal(),
   executionControl(projectId, vault),
 );
-const sessionControl = agentControl(projectId, vault);
+const owner = randomUUID();
+const sessionControl = agentControl(projectId, vault, owner);
 const sessions = new AgentSession(
   { token, teamId, projectId: vercelProjectId },
   image,
-  new PostgresSandboxJournal(),
+  new PostgresSandboxJournal(owner),
   sessionControl,
   agentTools,
 );
@@ -53,14 +56,26 @@ async function heartbeat() {
     checking = false;
   }
 }
+let maintaining = false;
+async function maintain() {
+  if (maintaining || stopping) return;
+  maintaining = true;
+  try {
+    await maintainAgentRuntimes(sessions, sessionControl, projectId!, owner);
+  } finally {
+    maintaining = false;
+  }
+}
 await heartbeat();
+await maintain();
+const cleanupTimer = setInterval(() => void maintain().catch(() => {}), 5000);
 const timer = setInterval(() => void heartbeat().catch(() => {}), 10000);
 console.log('Managed execution worker ready for the configured project');
 try {
   while (!stopping) {
     try {
       if (
-        !(await runAgentTurn(sessions, sessionControl, projectId)) &&
+        !(await runAgentTurn(sessions, sessionControl, projectId, owner)) &&
         !(await executeOne(backend, projectId))
       )
         await pause(750);
@@ -71,6 +86,17 @@ try {
   }
 } finally {
   clearInterval(timer);
+  clearInterval(cleanupTimer);
+  while (maintaining) await pause(50);
+  const idle = await prisma.agentRuntime.findMany({
+    where: { projectId, owner, stoppedAt: null },
+    include: { turns: { orderBy: { createdAt: 'desc' }, take: 1 } },
+  });
+  for (const runtime of idle) {
+    const grant = runtime.turns[0]?.grant as unknown as
+      import('@r2cloud/contracts/agent').AgentGrant | undefined;
+    if (grant) await sessions.retire({ ...grant, runtimeId: runtime.id }).catch(() => {});
+  }
   await prisma.executionRuntime.updateMany({
     where: { projectId },
     data: { expiresAt: new Date(0) },

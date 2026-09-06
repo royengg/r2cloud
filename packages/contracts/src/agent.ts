@@ -48,4 +48,6 @@ export type AgentGrant = {
   taskId: string | null;
   minutes: number;
   startedAt?: number;
+  runtimeId?: string;
+  runtimeExpiresAt?: number;
 };

@@ -83,6 +83,9 @@ export class VercelCodexTransport implements CodexTransport {
     private deadline: number,
   ) {}
   private eventCursor = 0;
+  get cursor() {
+    return this.eventCursor;
+  }
   async events() {
     const head = await this.read<{ seq: number }>('events/head.json');
     const messages: { seq: number; message: Record<string, any> }[] = [];

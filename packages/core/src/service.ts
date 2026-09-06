@@ -1,3 +1,4 @@
+import { agentResourceUsage } from './agent-runtimes';
 import { receipt } from './receipt';
 import { pinThread } from './thread-context';
 import { access, event, type AccessibleProject } from './project-context';
@@ -60,15 +61,10 @@ async function queueRun(
       409,
       'The managed execution worker is not available.',
     );
-  const active =
-    (await db.runs.count({ where: { org_id: p.org_id, stopped_at: null } })) +
-    (await db.agentTurn.count({
-      where: {
-        orgId: p.org_id,
-        stoppedAt: null,
-        ...(agentTurnId ? { id: { not: agentTurnId } } : {}),
-      },
-    }));
+  const turn = agentTurnId
+    ? await db.agentTurn.findUnique({ where: { id: agentTurnId }, select: { runtimeId: true } })
+    : null;
+  const active = await agentResourceUsage(db, p.org_id, turn?.runtimeId ?? undefined, agentTurnId);
   const org = await db.organisations.findUniqueOrThrow({ where: { id: p.org_id } });
   requireThat(active < org.max_runs, 409, 'The organisation has reached its concurrent run limit.');
   const skills = await db.skills.findMany({

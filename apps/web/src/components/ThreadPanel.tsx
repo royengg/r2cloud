@@ -182,6 +182,7 @@ export function ThreadPanel({
             <button
               key={thread.id}
               type="button"
+              title={thread.title}
               aria-pressed={selected === thread.id}
               disabled={busy}
               onClick={() => {
@@ -199,18 +200,16 @@ export function ThreadPanel({
       <div className="thread-content">
         <header className="thread-heading">
           <div>
-            <h3>{detail?.thread.title ?? 'New conversation'}</h3>
+            <h3 title={detail?.thread.title}>{detail?.thread.title ?? 'New conversation'}</h3>
           </div>
           {detail && (detail.thread.createdBy === userId || project.review) && (
-            <>
-              <Button
-                variant="ghost"
-                disabled={busy || running}
-                onClick={() => void perform({ action: 'archive', version: detail.thread.version })}
-              >
-                Archive
-              </Button>
-            </>
+            <Button
+              variant="ghost"
+              disabled={busy || running}
+              onClick={() => void perform({ action: 'archive', version: detail.thread.version })}
+            >
+              Archive
+            </Button>
           )}
         </header>
         {detail?.failure && (

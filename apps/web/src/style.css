@@ -2687,11 +2687,14 @@ body[data-keyboard] .account-menu {
 }
 .thread-list {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   margin-top: 16px;
 }
 .thread-list button {
   display: flex;
+  min-width: 0;
+  max-width: 100%;
   align-items: center;
   gap: 9px;
   padding: 12px;
@@ -2702,7 +2705,13 @@ body[data-keyboard] .account-menu {
   color: var(--color-text-secondary);
   text-align: left;
 }
+.thread-list button .icon,
+.thread-heading > .button {
+  flex-shrink: 0;
+}
 .thread-list button span {
+  min-width: 0;
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2731,7 +2740,9 @@ body[data-keyboard] .account-menu {
   min-width: 0;
 }
 .thread-heading h3 {
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--text-heading);
 }
 .thread-task-context {

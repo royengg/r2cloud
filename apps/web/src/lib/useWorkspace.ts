@@ -61,6 +61,7 @@ export function useWorkspace() {
     socket.on('disconnect', () => setConnection('Reconnecting'));
     socket.on('connect_error', () => setConnection('Offline'));
     socket.on('access-ended', () => {
+      serial.current++;
       setSnapshot(null);
       setError('Project access ended. Sign in again.');
       setConnection('Access ended');

@@ -376,28 +376,39 @@ export async function snapshot(actor: Actor, projectId: string) {
         where: { project_id: projectId },
         orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
         include: {
-          claims: { orderBy: { created_at: 'desc' }, take: 1, include: { users: true } },
+          claims: {
+            orderBy: { created_at: 'desc' },
+            take: 1,
+            include: {
+              users: { select: { name: true, kind: true } },
+            },
+          },
           candidates: { include: { publications: { take: 1 } } },
         },
       });
-      // Fetch latest runs in one query without loading every historical run into the board.
       const runs = await db.runs.findMany({
-        where: { project_id: projectId },
-        orderBy: { generation: 'desc' },
-        distinct: ['task_id'],
+        where: {
+          project_id: projectId,
+          OR: rows.map((task) => ({ task_id: task.id, generation: task.generation })),
+        },
       });
-      const latest = new Map(runs.map((run) => [run.task_id, run]));
+      const currentRuns = new Map(runs.map((run) => [run.task_id, run]));
       const tasks = rows.map(({ claims, candidates, ...task }) => {
         const claim = claims[0];
-        const { publications, ...candidate } = candidates ?? { publications: [] };
+        const candidate = candidates && {
+          id: candidates.id,
+          digest: candidates.digest,
+          manifest: candidates.manifest,
+          evidence: candidates.evidence,
+        };
         return {
           ...task,
           owner_name: claim?.users.name ?? null,
           owner_id: claim?.owner_id ?? null,
           owner_kind: claim?.users.kind ?? 'human',
-          run: latest.get(task.id) ?? null,
-          candidate: candidates ? candidate : null,
-          publication: publications[0] ?? null,
+          run: currentRuns.get(task.id) ?? null,
+          candidate,
+          publication: candidates?.publications[0] ?? null,
         };
       });
       const grants = await db.project_access.findMany({

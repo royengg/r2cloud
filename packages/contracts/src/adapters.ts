@@ -62,3 +62,18 @@ export interface PublisherBackend {
 }
 export class Uncertain extends Error {}
 export class SetupRequired extends Error {}
+
+export type DiscoveredRepository = {
+  id: number;
+  installationId: number;
+  fullName: string;
+  defaultBranch: string;
+  baseSha: string;
+};
+export interface RepositoryDiscovery {
+  discover(input: {
+    code: string;
+    verifier: string;
+    githubUserId: string;
+  }): Promise<DiscoveredRepository[]>;
+}

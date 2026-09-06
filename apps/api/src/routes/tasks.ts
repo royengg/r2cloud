@@ -42,7 +42,7 @@ export function tasksRoutes() {
   });
   router.post('/projects/:projectId/comments', async (req, res) => {
     requireThat(
-      typeof req.body.body === 'string' &&
+      typeof req.body?.body === 'string' &&
         (req.body.taskId === null || typeof req.body.taskId === 'string'),
       400,
       'Message and scope are required.',

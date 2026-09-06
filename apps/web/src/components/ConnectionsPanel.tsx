@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { Button, IconButton, Modal } from './ui';
 import { Icon } from './Icon';
-import type { DiscoveredRepository } from '@r2cloud/adapters/github-discovery';
+import type { DiscoveredRepository } from '@r2cloud/contracts/adapters';
 type State = {
   repository: { full_name: string; target_ref: string } | null;
   manage: boolean;

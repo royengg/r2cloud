@@ -1,18 +1,5 @@
 import { SetupRequired } from '@r2cloud/contracts/adapters';
-export type DiscoveredRepository = {
-  id: number;
-  installationId: number;
-  fullName: string;
-  defaultBranch: string;
-  baseSha: string;
-};
-export interface RepositoryDiscovery {
-  discover(input: {
-    code: string;
-    verifier: string;
-    githubUserId: string;
-  }): Promise<DiscoveredRepository[]>;
-}
+import type { DiscoveredRepository, RepositoryDiscovery } from '@r2cloud/contracts/adapters';
 /** Only the connection broker process receives this GitHub App client secret. */
 export class GitHubDiscovery implements RepositoryDiscovery {
   constructor(

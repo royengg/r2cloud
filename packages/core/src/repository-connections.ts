@@ -6,7 +6,7 @@ import { access, event, lockProject } from './project-context';
 import { projectAdministrator } from './team';
 import { id, hash, digest } from '@r2cloud/contracts/hash';
 import { requireThat, Fault, type Actor } from '@r2cloud/contracts/domain';
-import type { RepositoryDiscovery, DiscoveredRepository } from '@r2cloud/adapters/github-discovery';
+import type { RepositoryDiscovery, DiscoveredRepository } from '@r2cloud/contracts/adapters';
 export type ConnectionConfig = { clientId: string; callbackURL: string; appSlug: string };
 export async function connectionStatus(actor: Actor, projectId: string, config?: ConnectionConfig) {
   const project = await access(prisma, actor, projectId);

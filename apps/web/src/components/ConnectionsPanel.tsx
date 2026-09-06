@@ -100,9 +100,7 @@ export function ConnectionsPanel({
         <IconButton name="close" label="Close connections" onClick={finishClose} />
       </div>
       <h2>Connect your project</h2>
-      <p className="modal-description">
-        Choose a repository, then connect the AI account that can work on it.
-      </p>
+
       {error && (
         <p className="inline-error" role="alert">
           {error}
@@ -154,12 +152,6 @@ export function ConnectionsPanel({
                     <p role="status">Checking your GitHub repositories…</p>
                   ) : (
                     <>
-                      <p className="subtle">
-                        {state.pending?.error ??
-                          (state.githubAvailable
-                            ? 'Use your GitHub account to choose repositories you administer.'
-                            : 'Repository connections are being configured.')}
-                      </p>
                       {state.githubAvailable && (
                         <Button
                           variant="primary"
@@ -190,9 +182,6 @@ export function ConnectionsPanel({
           )}
           <CodexConnection projectId={projectId} />
           {state.repository && <ExecutionSetup projectId={projectId} manage={state.manage} />}
-          <p className="subtle">
-            Repository access and AI credentials are separate from project membership.
-          </p>
         </>
       )}
     </Modal>

@@ -53,54 +53,7 @@ export function executionControl(projectId: string, vault: CredentialVault): Exe
       requireThat(run, 409, 'Execution identity is no longer active.');
       await access(prisma, { id: run.claims.owner_id }, projectId, 'contribute');
       const manifest = run.manifest as { connectionId: string };
-      const connection = await prisma.provider_connections.findFirst({
-        where: {
-          id: manifest.connectionId,
-          project_id: projectId,
-          user_id: run.claims.owner_id,
-          enabled: true,
-          mode: 'managed',
-        },
-      });
-      requireThat(
-        connection?.secret_ref,
-        403,
-        'The personal Codex connection is no longer available.',
-      );
-      const linked = await prisma.codexConnection.findFirst({
-        where: {
-          id: connection.secret_ref,
-          userId: run.claims.owner_id,
-          projectId,
-          state: 'connected',
-        },
-      });
-      requireThat(linked, 403, 'The personal Codex connection was disconnected.');
-      const bytes = await vault.read(connection.secret_ref);
-      try {
-        const auth = JSON.parse(bytes.toString());
-        const token = auth.tokens?.access_token;
-        const accountId = auth.tokens?.account_id;
-        requireThat(
-          typeof token === 'string' && typeof accountId === 'string',
-          409,
-          'Reconnect your Codex account.',
-        );
-        const payload = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString());
-        requireThat(
-          typeof payload.exp === 'number',
-          409,
-          'Codex credential expiration is unavailable.',
-        );
-        return {
-          accessToken: token,
-          accountId,
-          plan: linked.plan ?? 'unknown',
-          expiresAt: payload.exp * 1000,
-        };
-      } finally {
-        bytes.fill(0);
-      }
+      return codexCredentials(projectId, run.claims.owner_id, manifest.connectionId, vault);
     },
     async recover(operationId) {
       const allocation = await prisma.sandboxAllocation.findFirst({
@@ -109,7 +62,7 @@ export function executionControl(projectId: string, vault: CredentialVault): Exe
       });
       if (!allocation) return null;
       return {
-        identity: { operationId, runId: allocation.runId, generation: allocation.generation },
+        identity: { operationId, runId: allocation.runId!, generation: allocation.generation },
         result: (allocation.steps[0]?.result as unknown as RunResult) ?? null,
       };
     },
@@ -172,5 +125,57 @@ export async function heartbeatExecution(projectId: string) {
         where: { id: connection.id, project_id: projectId, secret_ref: connection.id },
         data: { enabled: true },
       });
+  }
+}
+
+export async function codexCredentials(
+  projectId: string,
+  ownerId: string,
+  connectionId: string,
+  vault: CredentialVault,
+) {
+  const connection = await prisma.provider_connections.findFirst({
+    where: {
+      id: connectionId,
+      project_id: projectId,
+      user_id: ownerId,
+      enabled: true,
+      mode: 'managed',
+    },
+  });
+  requireThat(connection?.secret_ref, 403, 'The personal Codex connection is no longer available.');
+  const linked = await prisma.codexConnection.findFirst({
+    where: {
+      id: connection.secret_ref,
+      userId: ownerId,
+      projectId,
+      state: 'connected',
+    },
+  });
+  requireThat(linked, 403, 'The personal Codex connection was disconnected.');
+  const bytes = await vault.read(connection.secret_ref);
+  try {
+    const auth = JSON.parse(bytes.toString());
+    const token = auth.tokens?.access_token;
+    const accountId = auth.tokens?.account_id;
+    requireThat(
+      typeof token === 'string' && typeof accountId === 'string',
+      409,
+      'Reconnect your Codex account.',
+    );
+    const payload = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString());
+    requireThat(
+      typeof payload.exp === 'number',
+      409,
+      'Codex credential expiration is unavailable.',
+    );
+    return {
+      accessToken: token,
+      accountId,
+      plan: linked.plan ?? 'unknown',
+      expiresAt: payload.exp * 1000,
+    };
+  } finally {
+    bytes.fill(0);
   }
 }

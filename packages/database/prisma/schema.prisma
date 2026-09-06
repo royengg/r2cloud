@@ -443,14 +443,16 @@ model OnboardingReceipt {
 
 model SandboxAllocation {
   operationId String        @id @map("operation_id")
-  runId       String        @unique @map("run_id")
+  runId       String?        @unique @map("run_id")
+  agentTurnId String? @unique @map("agent_turn_id")
+  agentTurn AgentTurn? @relation(fields: [agentTurnId], references: [id])
   generation  Int
   name        String        @unique
   configHash  String        @map("config_hash")
   state       String
   stopProof   String?       @map("stop_proof")
   createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  run         runs          @relation(fields: [runId], references: [id])
+  run         runs?          @relation(fields: [runId], references: [id])
   steps       SandboxStep[]
 
   @@map("sandbox_allocations")
@@ -553,6 +555,9 @@ model ExecutionRuntime {
 }
 
 model ConversationThread {
+  turns AgentTurn[]
+  providerId String? @map("provider_id")
+  providerState String? @map("provider_state")
   author       users      @relation(fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   id           String     @id
   projectId    String     @map("project_id")
@@ -573,4 +578,52 @@ model ConversationThread {
   @@unique([id, projectId])
   @@index([projectId, updatedAt])
   @@map("conversation_threads")
+}
+
+model AgentTurn {
+ lastSequence Int @default(0) @map("last_sequence")
+ id String @id
+ orgId String @map("org_id")
+ projectId String @map("project_id")
+ threadId String @map("thread_id")
+ actorId String @map("actor_id")
+ grant Json
+ state String @default("queued")
+ stopRequested Boolean @default(false) @map("stop_requested")
+ heartbeatAt DateTime? @map("heartbeat_at") @db.Timestamptz(6)
+ stoppedAt DateTime? @map("stopped_at") @db.Timestamptz(6)
+ error String?
+ createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+ thread ConversationThread @relation(fields: [threadId, projectId], references: [id, projectId])
+ allocation SandboxAllocation?
+ items AgentItem[]
+ requests AgentRequest[]
+ @@index([projectId, state, createdAt])
+ @@map("agent_turns")
+}
+model AgentItem {
+ id String @id
+ turnId String @map("turn_id")
+ sourceId String @map("source_id")
+ kind String
+ text String @default("")
+ status String
+ detail Json @default("{}")
+ revision BigInt @default(autoincrement())
+ turn AgentTurn @relation(fields: [turnId], references: [id])
+ @@unique([turnId, sourceId])
+ @@map("agent_items")
+}
+model AgentRequest {
+ id String @id
+ turnId String @map("turn_id")
+ sourceId String @map("source_id")
+ kind String
+ prompt String
+ detail Json
+ response Json?
+ resolvedBy String? @map("resolved_by")
+ turn AgentTurn @relation(fields: [turnId], references: [id])
+ @@unique([turnId, sourceId])
+ @@map("agent_requests")
 }

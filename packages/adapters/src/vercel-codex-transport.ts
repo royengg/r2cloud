@@ -12,6 +12,9 @@ root = pathlib.Path('/tmp/r2cloud-control')
 root.mkdir(mode=0o700, exist_ok=True)
 (root / 'in').mkdir(exist_ok=True)
 (root / 'out').mkdir(exist_ok=True)
+(root / 'events').mkdir(exist_ok=True)
+event_seq = 0
+event_batch = []
 agent = pwd.getpwnam('r2-agent')
 home = pathlib.Path(agent.pw_dir) / '.codex'
 home.mkdir(mode=0o700, exist_ok=True)
@@ -28,6 +31,7 @@ def save(name, value):
     temp.write_text(json.dumps(value))
     temp.replace(root / name)
 def listen():
+    global event_seq, event_batch
     for line in proc.stdout:
         if len(line) > 1048576:
             proc.kill()
@@ -35,6 +39,15 @@ def listen():
         try:
             message = json.loads(line)
             ident = message.get('id')
+            if message.get('method'):
+                event_seq += 1
+                if event_seq > 20000:
+                    proc.kill()
+                    return
+                if (event_seq - 1) % 10 == 0: event_batch = []
+                event_batch.append({'seq':event_seq,'message':message})
+                save('events/batch-' + str((event_seq - 1) // 10) + '.json', event_batch)
+                save('events/head.json', {'seq':event_seq})
             if isinstance(ident, str) and len(ident) == 64 and not message.get('method'):
                 save('out/' + ident + '.json', message)
             elif message.get('method') == 'turn/completed':
@@ -43,9 +56,6 @@ def listen():
                 save('message.json', {'text':str(message['params']['item'].get('text',''))[-16000:]})
             elif message.get('method') == 'item/agentMessage/delta':
                 save('progress.json', {'text':str(message.get('params', {}).get('delta',''))[-16000:]})
-            elif message.get('method') and ident is not None:
-                proc.stdin.write(json.dumps({'id':ident, 'error':{'code':-32601,'message':'Permission is not granted by this host'}})+'\n')
-                proc.stdin.flush()
         except (ValueError, OSError):
             proc.kill()
             return
@@ -72,6 +82,30 @@ export class VercelCodexTransport implements CodexTransport {
     private identity: VercelIdentity,
     private deadline: number,
   ) {}
+  private eventCursor = 0;
+  async events() {
+    const head = await this.read<{ seq: number }>('events/head.json');
+    const messages: { seq: number; message: Record<string, any> }[] = [];
+    const end = Math.min(head?.seq ?? 0, this.eventCursor + 100);
+    for (
+      let batch = Math.floor(this.eventCursor / 10);
+      batch <= Math.floor((end - 1) / 10) && this.eventCursor < end;
+      batch++
+    ) {
+      const entries = await this.read<typeof messages>(
+        `events/batch-${batch}.json`,
+        11 * 1024 * 1024,
+      );
+      if (!entries) throw new Uncertain('Provider event sequence has a gap.');
+      messages.push(...entries.filter((entry) => entry.seq > this.eventCursor && entry.seq <= end));
+    }
+    if (messages.length !== end - this.eventCursor)
+      throw new Uncertain('Provider event sequence has a gap.');
+    return messages;
+  }
+  acknowledge(seq: number) {
+    this.eventCursor = seq;
+  }
   private listeners = new Set<(message: unknown) => void>();
   private key(value: string) {
     return createHash('sha256').update(value).digest('hex');
@@ -126,7 +160,7 @@ export class VercelCodexTransport implements CodexTransport {
       { signal: AbortSignal.timeout(15000) },
     );
   }
-  async read<T = unknown>(path: string): Promise<T | null> {
+  async read<T = unknown>(path: string, limit = 1024 * 1024): Promise<T | null> {
     const stream = await this.session.readFile(
       { path: `${root}/${path}` },
       { signal: AbortSignal.timeout(15000) },
@@ -137,13 +171,23 @@ export class VercelCodexTransport implements CodexTransport {
     for await (const chunk of stream) {
       const data = Buffer.from(chunk);
       size += data.length;
-      if (size > 1024 * 1024) throw new Error('Codex response exceeds the transport limit.');
+      if (size > limit) throw new Error('Codex response exceeds the transport limit.');
       chunks.push(data);
     }
     return JSON.parse(Buffer.concat(chunks).toString()) as T;
   }
   async waitForTurn(threadId: string, turnId: string) {
     while (Date.now() < this.deadline) {
+      for (const { seq, message } of await this.events()) {
+        if (message.id !== undefined && message.method)
+          await this.reply(
+            message.id,
+            message.method === 'item/tool/requestUserInput'
+              ? { answers: {} }
+              : { decision: 'decline' },
+          );
+        this.acknowledge(seq);
+      }
       const ended = await this.read<{ threadId: string; turn: { id: string; status: string } }>(
         'turn.json',
       );

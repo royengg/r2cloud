@@ -1,3 +1,4 @@
+import { queueAgentTurn } from './agent-turns';
 import { prisma } from '@r2cloud/database';
 import { requireThat, type Actor } from '@r2cloud/contracts/domain';
 import { threadCommand } from '@r2cloud/contracts/threads';
@@ -5,7 +6,6 @@ import { id } from '@r2cloud/contracts/hash';
 import { access, event } from './project-context';
 import { receipt } from './receipt';
 import { availableModels } from './thread-context';
-import { commandInTransaction } from './service';
 export async function readThreads(actor: Actor, projectId: string, threadId?: string) {
   return prisma.$transaction(async (db) => {
     await access(db, actor, projectId);
@@ -50,7 +50,7 @@ export async function readThreads(actor: Actor, projectId: string, threadId?: st
       return {
         activity: activity?.kind ?? null,
         failure: failure?.error ?? null,
-        thread,
+        thread: publicThread(thread),
         task,
         run,
         messages: messages
@@ -59,11 +59,13 @@ export async function readThreads(actor: Actor, projectId: string, threadId?: st
       };
     }
     return {
-      threads: await db.conversationThread.findMany({
-        where: { projectId, archivedAt: null },
-        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-        take: 100,
-      }),
+      threads: (
+        await db.conversationThread.findMany({
+          where: { projectId, archivedAt: null },
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+          take: 100,
+        })
+      ).map(publicThread),
       models: await availableModels(db, actor, projectId),
     };
   });
@@ -126,6 +128,11 @@ export async function changeThread(
       );
     if (input.action === 'update' || input.action === 'archive') {
       requireThat(
+        !(await db.agentTurn.count({ where: { threadId: thread.id, stoppedAt: null } })),
+        409,
+        'Wait until this agent turn has stopped.',
+      );
+      requireThat(
         actor.id === thread.createdBy || project.review,
         403,
         'Only the author or a project reviewer can change this thread.',
@@ -154,85 +161,7 @@ export async function changeThread(
       });
     } else {
       if (input.action === 'run') {
-        let task = thread.taskId
-          ? await db.tasks.findUniqueOrThrow({ where: { id: thread.taskId } })
-          : null;
-        if (!task) {
-          task = await db.tasks.create({
-            data: {
-              id: id(),
-              org_id: project.org_id,
-              project_id: projectId,
-              title: thread.title,
-              priority: 'Medium',
-              outcome: input.body,
-              criteria: ['The requested outcome is implemented and ready for human review.'],
-            },
-          });
-          await db.conversationThread.update({
-            where: { id: thread.id },
-            data: { taskId: task.id },
-          });
-          await db.comments.updateMany({
-            where: { threadId: thread.id },
-            data: { task_id: task.id },
-          });
-          await event(db, projectId, task.id, actor.id, 'Task created from conversation', {
-            threadId: thread.id,
-          });
-        } else
-          requireThat(
-            task.version === input.taskVersion,
-            409,
-            'The task changed. Review its current state before running.',
-          );
-        requireThat(
-          ['todo', 'review', 'blocked'].includes(task.state),
-          409,
-          'This task is already running or awaiting code review.',
-        );
-        if (task.state !== 'todo')
-          requireThat(
-            await db.claims.count({
-              where: { task_id: task.id, owner_id: actor.id, released_at: null },
-            }),
-            403,
-            'Only the implementation owner can run another turn.',
-          );
-        if (task.state === 'todo')
-          await db.comments.create({
-            data: {
-              id: id(),
-              org_id: project.org_id,
-              project_id: projectId,
-              task_id: task.id,
-              threadId: thread.id,
-              user_id: actor.id,
-              body: input.body,
-            },
-          });
-        await commandInTransaction(
-          db,
-          actor,
-          projectId,
-          task.id,
-          task.state === 'todo'
-            ? {
-                action: 'start',
-                version: task.version,
-                minutes: 10,
-                budgetCents: 0,
-                threadId: thread.id,
-                threadVersion: thread.version,
-              }
-            : {
-                action: 'changes',
-                version: task.version,
-                feedback: input.body,
-                threadId: thread.id,
-                threadVersion: thread.version,
-              },
-        );
+        await queueAgentTurn(db, actor, projectId, thread.id, input.body);
       } else
         await db.comments.create({
           data: {
@@ -260,4 +189,11 @@ export async function changeThread(
     );
     return { id: thread.id };
   });
+}
+
+function publicThread<T extends { providerId: string | null; providerState: string | null }>(
+  thread: T,
+) {
+  const { providerId, providerState, ...visible } = thread;
+  return visible;
 }

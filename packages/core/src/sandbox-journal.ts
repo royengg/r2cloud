@@ -1,8 +1,23 @@
+import { lockProject } from './project-context';
 import { prisma, json, type DB } from '@r2cloud/database';
 import { lockRow } from '@r2cloud/database/locking';
 import { requireThat } from '@r2cloud/contracts/domain';
 import type { SandboxJournal, VercelIdentity } from '@r2cloud/adapters/vercel';
 async function fence(db: DB, identity: VercelIdentity) {
+  const agentTurn = await db.agentTurn.findUnique({ where: { id: identity.runId } });
+  if (agentTurn) {
+    await lockProject(db, agentTurn.projectId);
+    const current = await db.agentTurn.findUniqueOrThrow({ where: { id: agentTurn.id } });
+    requireThat(
+      !current.stoppedAt &&
+        current.state !== 'queued' &&
+        identity.operationId === current.id &&
+        identity.generation === 1,
+      409,
+      'Stale agent execution.',
+    );
+    return { manifest: { minutes: 10 }, agent: true };
+  }
   const existing = await db.runs.findUnique({
     where: { id: identity.runId },
     select: { task_id: true },
@@ -21,7 +36,7 @@ async function fence(db: DB, identity: VercelIdentity) {
   });
   const job = await db.jobs.count({ where: { id: identity.operationId, run_id: identity.runId } });
   requireThat(run && job, 409, 'Stale or unauthorised sandbox execution.');
-  return run;
+  return { manifest: run.manifest, agent: false };
 }
 export class PostgresSandboxJournal implements SandboxJournal {
   async reserve(identity: VercelIdentity, name: string, configHash: string, minutes: number) {
@@ -34,7 +49,16 @@ export class PostgresSandboxJournal implements SandboxJournal {
         'Sandbox duration exceeds the authorised run limit.',
       );
       const inserted = await db.sandboxAllocation.createMany({
-        data: [{ ...identity, name, configHash, state: 'creating' }],
+        data: [
+          {
+            operationId: identity.operationId,
+            generation: identity.generation,
+            ...(run.agent ? { agentTurnId: identity.runId } : { runId: identity.runId }),
+            name,
+            configHash,
+            state: 'creating',
+          },
+        ],
         skipDuplicates: true,
       });
       const row = await db.sandboxAllocation.findUnique({
@@ -45,13 +69,23 @@ export class PostgresSandboxJournal implements SandboxJournal {
         409,
         'Execution already has a different sandbox allocation.',
       );
-      return { fresh: inserted.count === 1, allocation: row };
+      return {
+        fresh: inserted.count === 1,
+        allocation: { ...row, runId: row.runId ?? row.agentTurnId! },
+      };
     });
   }
   async get(identity: VercelIdentity) {
     return prisma.$transaction(async (db) => {
       await fence(db, identity);
-      return db.sandboxAllocation.findFirst({ where: identity });
+      const row = await db.sandboxAllocation.findFirst({
+        where: {
+          operationId: identity.operationId,
+          generation: identity.generation,
+          OR: [{ runId: identity.runId }, { agentTurnId: identity.runId }],
+        },
+      });
+      return row ? { ...row, runId: row.runId ?? row.agentTurnId! } : null;
     });
   }
   async mark(identity: VercelIdentity, state: string, stopProof?: string) {

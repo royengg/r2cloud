@@ -1,10 +1,6 @@
+import { codexNetworkPolicy } from './codex-network';
 import { sandboxPath, bunIntegrity, installBun } from './sandbox-bun';
-import {
-  type Sandbox,
-  type Session,
-  type NetworkPolicy,
-  type NetworkPolicyRule,
-} from '@vercel/sandbox';
+import { type Sandbox, type Session } from '@vercel/sandbox';
 import { createHash } from 'node:crypto';
 import { mkdir, open, rename, rm, statfs, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -184,7 +180,7 @@ export class VercelCodexExecution implements ExecutionBackend {
         return { isolated: true };
       });
       await progress('Preparing the repository');
-      await sandbox.updateNetworkPolicy(this.network(grant.config.repository));
+      await sandbox.updateNetworkPolicy(codexNetworkPolicy(grant.config.repository));
       await once(
         'checkout',
         { repository: grant.config.repository, sha: grant.config.baseSha },
@@ -275,7 +271,7 @@ export class VercelCodexExecution implements ExecutionBackend {
           );
         return { exitCode: result.exitCode };
       });
-      await sandbox.updateNetworkPolicy(this.network(grant.config.repository, account));
+      await sandbox.updateNetworkPolicy(codexNetworkPolicy(grant.config.repository, account));
       await once('codex-process', { version: '0.147.0', bridge: digest(codexBridge) }, async () => {
         const version = await run('codex', ['--version']);
         if ((await version.stdout()).trim() !== 'codex-cli 0.147.0')
@@ -347,7 +343,7 @@ export class VercelCodexExecution implements ExecutionBackend {
       await this.control.authorize(grant);
       if (typeof reply?.text === 'string' && reply.text.trim())
         await this.control.reply?.(grant, reply.text);
-      await sandbox.updateNetworkPolicy(this.network(grant.config.repository));
+      await sandbox.updateNetworkPolicy(codexNetworkPolicy(grant.config.repository));
       if (revoked) throw new SetupRequired('Codex access was revoked during this run.');
       await this.control.authorize(grant);
       await progress('Checking the changes');
@@ -441,38 +437,6 @@ export class VercelCodexExecution implements ExecutionBackend {
     } finally {
       clearInterval(monitor);
     }
-  }
-  private network(repository: string, account?: ExecutionCredentials): NetworkPolicy {
-    const allow: Record<string, NetworkPolicyRule[]> = {
-      'github.com': [
-        {
-          match: { method: ['GET'], path: { exact: `/${repository}.git/info/refs` } },
-          transform: [],
-        },
-        {
-          match: { method: ['POST'], path: { exact: `/${repository}.git/git-upload-pack` } },
-          transform: [],
-        },
-      ],
-      'registry.npmjs.org': [{ match: { method: ['GET', 'HEAD'] }, transform: [] }],
-      'fonts.googleapis.com': [{ match: { method: ['GET'] }, transform: [] }],
-      'fonts.gstatic.com': [{ match: { method: ['GET'] }, transform: [] }],
-    };
-    if (account)
-      allow['chatgpt.com'] = [
-        {
-          match: { method: ['GET', 'POST'], path: { startsWith: '/backend-api/codex/' } },
-          transform: [
-            {
-              headers: {
-                authorization: `Bearer ${account.accessToken}`,
-                'chatgpt-account-id': account.accountId,
-              },
-            },
-          ],
-        },
-      ];
-    return { allow };
   }
   private async assertHobby() {
     const response = await this.http(

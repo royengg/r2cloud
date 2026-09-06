@@ -36,6 +36,7 @@ async function queueRun(
   minutes: number,
   budgetCents: number,
   thread?: RunGrant['config']['thread'],
+  agentTurnId?: string,
 ) {
   const connection = await db.provider_connections.findFirst({
     where: { project_id: p.id, user_id: actor.id, enabled: true },
@@ -59,7 +60,15 @@ async function queueRun(
       409,
       'The managed execution worker is not available.',
     );
-  const active = await db.runs.count({ where: { org_id: p.org_id, stopped_at: null } });
+  const active =
+    (await db.runs.count({ where: { org_id: p.org_id, stopped_at: null } })) +
+    (await db.agentTurn.count({
+      where: {
+        orgId: p.org_id,
+        stoppedAt: null,
+        ...(agentTurnId ? { id: { not: agentTurnId } } : {}),
+      },
+    }));
   const org = await db.organisations.findUniqueOrThrow({ where: { id: p.org_id } });
   requireThat(active < org.max_runs, 409, 'The organisation has reached its concurrent run limit.');
   const skills = await db.skills.findMany({
@@ -75,6 +84,7 @@ async function queueRun(
     connection.mode === 'fixture' ? null : await pinExecutionSetup(db, p.id, minutes, budgetCents);
   const manifest = {
     thread,
+    agentTurnId,
     executionSetup,
     provider: 'codex',
     connectionId: connection.id,
@@ -110,16 +120,17 @@ async function queueRun(
     where: { id: t.id },
     data: { state: 'building', generation: gen, candidate_id: null, version: { increment: 1 } },
   });
-  await db.jobs.create({
-    data: {
-      id: id(),
-      org_id: p.org_id,
-      project_id: p.id,
-      task_id: t.id,
-      run_id: runId,
-      kind: 'execute',
-    },
-  });
+  if (!agentTurnId)
+    await db.jobs.create({
+      data: {
+        id: id(),
+        org_id: p.org_id,
+        project_id: p.id,
+        task_id: t.id,
+        run_id: runId,
+        kind: 'execute',
+      },
+    });
   await event(db, p.id, t.id, actor.id, 'Work started', {
     runId,
     generation: gen,
@@ -134,6 +145,7 @@ async function startTask(
   p: AccessibleProject,
   t: tasks,
   input: Extract<Command, { action: 'start' }>,
+  agentTurnId?: string,
 ) {
   requireThat(p.repo_id, 409, 'Connect a repository before starting this task.');
   requireThat(t.state === 'todo', 409, 'This task already has an implementation owner.');
@@ -166,7 +178,7 @@ async function startTask(
   const thread = input.threadId
     ? await pinThread(db, actor, p.id, t.id, input.threadId, input.threadVersion)
     : undefined;
-  return queueRun(db, actor, p, t, claimId, input.minutes, input.budgetCents, thread);
+  return queueRun(db, actor, p, t, claimId, input.minutes, input.budgetCents, thread, agentTurnId);
 }
 export async function command(
   actor: Actor,
@@ -186,6 +198,7 @@ export async function commandInTransaction(
   projectId: string,
   taskId: string,
   input: Command,
+  agentTurnId?: string,
 ) {
   const p = await access(
     db,
@@ -222,7 +235,7 @@ export async function commandInTransaction(
       });
       await event(db, projectId, taskId, actor.id, 'Task instructions added');
     }
-    return startTask(db, actor, p, t, input);
+    return startTask(db, actor, p, t, input, agentTurnId);
   }
   const claim = await db.claims.findFirst({ where: { task_id: taskId, released_at: null } });
   requireThat(claim, 409, 'This task has no active claim.');
@@ -271,7 +284,17 @@ export async function commandInTransaction(
     const thread = input.threadId
       ? await pinThread(db, owner, projectId, taskId, input.threadId, input.threadVersion)
       : undefined;
-    return queueRun(db, owner, p, t, claim.id, config.minutes, config.budgetCents, thread);
+    return queueRun(
+      db,
+      owner,
+      p,
+      t,
+      claim.id,
+      config.minutes,
+      config.budgetCents,
+      thread,
+      agentTurnId,
+    );
   }
   requireThat(
     t.state === (input.action === 'publish' ? 'review' : 'code_review'),
@@ -423,6 +446,27 @@ export async function snapshot(actor: Actor, projectId: string) {
           ];
         }),
       );
+      const activeTurns = await db.agentTurn.findMany({
+        where: { projectId, stoppedAt: null, thread: { taskId: { not: null } } },
+        orderBy: { createdAt: 'asc' },
+        select: { state: true, thread: { select: { taskId: true, title: true, model: true } } },
+      });
+      const taskAgents = new Map<
+        string,
+        { state: string; threadTitle: string; model: string | null; count: number }
+      >();
+      for (const turn of activeTurns) {
+        const key = turn.thread.taskId!;
+        const existing = taskAgents.get(key);
+        if (existing) existing.count++;
+        else
+          taskAgents.set(key, {
+            state: turn.state,
+            threadTitle: turn.thread.title,
+            model: turn.thread.model,
+            count: 1,
+          });
+      }
       const tasks = rows.map(({ claims, candidates, ...task }) => {
         const claim = claims[0];
         const candidate = candidates && {
@@ -437,6 +481,7 @@ export async function snapshot(actor: Actor, projectId: string) {
           owner_id: claim?.owner_id ?? null,
           owner_kind: claim?.users.kind ?? 'human',
           run: currentRuns.get(task.id) ?? null,
+          agent: taskAgents.get(task.id) ?? null,
           candidate,
           publication: candidates?.publications[0] ?? null,
         };

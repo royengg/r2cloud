@@ -1,3 +1,4 @@
+import { agentTimeline, agentCommand } from '@r2cloud/core/agent-turns';
 import { Router } from 'express';
 import { readThreads, changeThread } from '@r2cloud/core/threads';
 export function threadRoutes() {
@@ -36,5 +37,25 @@ export function threadRoutes() {
       ),
     );
   });
+  router.get('/projects/:projectId/threads/:threadId/timeline', async (req, res) =>
+    res.json(
+      await agentTimeline(
+        res.locals.actor,
+        String(req.params.projectId),
+        String(req.params.threadId),
+      ),
+    ),
+  );
+  router.post('/projects/:projectId/threads/:threadId/control', async (req, res) =>
+    res.json(
+      await agentCommand(
+        res.locals.actor,
+        String(req.params.projectId),
+        String(req.params.threadId),
+        req.get('Idempotency-Key') ?? '',
+        req.body,
+      ),
+    ),
+  );
   return router;
 }

@@ -1,3 +1,6 @@
+import { AgentSession } from '@r2cloud/adapters/agent-session';
+import { agentControl, runAgentTurn } from '@r2cloud/core/agent-worker';
+import { agentTools } from '@r2cloud/core/agent-tools';
 import { resolve, join } from 'node:path';
 import { setTimeout as pause } from 'node:timers/promises';
 import { prisma } from '@r2cloud/database';
@@ -24,6 +27,14 @@ const backend = new VercelCodexExecution(
   new PostgresSandboxJournal(),
   executionControl(projectId, vault),
 );
+const sessionControl = agentControl(projectId, vault);
+const sessions = new AgentSession(
+  { token, teamId, projectId: vercelProjectId },
+  image,
+  new PostgresSandboxJournal(),
+  sessionControl,
+  agentTools,
+);
 let stopping = false;
 process.on('SIGTERM', () => (stopping = true));
 process.on('SIGINT', () => (stopping = true));
@@ -48,7 +59,11 @@ console.log('Managed execution worker ready for the configured project');
 try {
   while (!stopping) {
     try {
-      if (!(await executeOne(backend, projectId))) await pause(750);
+      if (
+        !(await runAgentTurn(sessions, sessionControl, projectId)) &&
+        !(await executeOne(backend, projectId))
+      )
+        await pause(750);
     } catch {
       console.error('Managed execution processing deferred.');
       await pause(1000);

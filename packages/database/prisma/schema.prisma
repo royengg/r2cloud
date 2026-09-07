@@ -1,6 +1,7 @@
 // Partial unique indexes, CHECK constraints and immutability trigger live in SQL migrations.
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {

@@ -9,14 +9,18 @@ export function accountRoutes(options: AppOptions) {
   const router = Router();
   router.get('/me', async (_req, res) => {
     const actor = res.locals.actor;
-    const user = await prisma.users.findUnique({
-      where: { id: actor.id },
-      select: { id: true, name: true, kind: true },
-    });
+    const [user, invitations, availableProjects] = await Promise.all([
+      prisma.users.findUnique({
+        where: { id: actor.id },
+        select: { id: true, name: true, kind: true },
+      }),
+      invitationInbox(actor),
+      projects(actor),
+    ]);
     res.json({
       user,
-      invitations: await invitationInbox(actor),
-      projects: await projects(actor),
+      invitations,
+      projects: availableProjects,
       mode: options.fixture ? 'fixture' : 'managed',
       authMode: options.identity?.mode ?? 'fixture',
     });

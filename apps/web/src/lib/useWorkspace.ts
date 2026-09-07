@@ -17,15 +17,32 @@ export function useWorkspace() {
     [busy, setBusy] = useState(false),
     [announcement, setAnnouncement] = useState('');
   const serial = useRef(0);
-  const reload = useCallback(async () => {
-    if (!projectId) return;
-    const current = ++serial.current;
-    try {
-      const next = await api<Snapshot>(`/projects/${projectId}/snapshot`);
-      if (current === serial.current) setSnapshot(next);
-    } catch (e) {
-      if (current === serial.current) setError((e as Error).message);
+  const refresh = useRef<{ generation: number; pending: boolean; promise: Promise<void> } | null>(
+    null,
+  );
+  const reload = useCallback((): Promise<void> => {
+    if (!projectId) return Promise.resolve();
+    const generation = serial.current;
+    const active = refresh.current;
+    if (active?.generation === generation) {
+      active.pending = true;
+      return active.promise;
     }
+    const batch = { generation, pending: false, promise: Promise.resolve() };
+    refresh.current = batch;
+    batch.promise = (async () => {
+      do {
+        batch.pending = false;
+        try {
+          const next = await api<Snapshot>(`/projects/${projectId}/snapshot`);
+          if (generation === serial.current) setSnapshot(next);
+        } catch (e) {
+          if (generation === serial.current) setError((e as Error).message);
+        }
+      } while (batch.pending && generation === serial.current);
+      if (refresh.current === batch) refresh.current = null;
+    })();
+    return batch.promise;
   }, [projectId]);
   async function loadIdentity(preferredProject?: string) {
     const next = await api<Identity>('/me');
@@ -55,7 +72,6 @@ export function useWorkspace() {
     const socket = io({ auth: { projectId }, withCredentials: true, transports: ['websocket'] });
     socket.on('connect', () => {
       setConnection('Live');
-      void reload();
     });
     socket.on('snapshot-required', () => void reload());
     socket.on('disconnect', () => setConnection('Reconnecting'));

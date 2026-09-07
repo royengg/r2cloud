@@ -113,17 +113,24 @@ export function createIdentity(config: {
       });
       requireThat(session?.user.emailVerified, 401, 'Sign in with a verified account.');
       // Stable provider ID mapping, never email matching or client-supplied actor/role fields.
-      const user = await prisma.users.upsert({
+      const existing = await prisma.users.findUnique({
         where: { auth_user_id: session.user.id },
-        create: {
-          id: 'person:' + session.user.id,
-          name: session.user.name,
-          kind: 'human',
-          auth_user_id: session.user.id,
-        },
-        update: { name: session.user.name },
-        select: { id: true, kind: true },
+        select: { id: true, kind: true, name: true },
       });
+      const user =
+        existing?.name === session.user.name
+          ? existing
+          : await prisma.users.upsert({
+              where: { auth_user_id: session.user.id },
+              create: {
+                id: 'person:' + session.user.id,
+                name: session.user.name,
+                kind: 'human',
+                auth_user_id: session.user.id,
+              },
+              update: { name: session.user.name },
+              select: { id: true, kind: true },
+            });
       requireThat(user.kind === 'human', 403, 'Product sign-in is reserved for people.');
       return { id: user.id, kind: user.kind };
     },

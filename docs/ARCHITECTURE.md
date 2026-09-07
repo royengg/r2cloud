@@ -1,6 +1,6 @@
 # Architecture
 
-This describes the current implementation. [Status](STATUS.md) distinguishes live verification from local test coverage; [decisions](DECISIONS.md) records product constraints. Preview and GitHub publication services remain unfinished.
+This describes the current implementation. [Status](STATUS.md) distinguishes live verification from local test coverage. Preview and GitHub publication services remain unfinished.
 
 ## Codebase
 
@@ -12,7 +12,7 @@ A Bun workspace monorepo with separate API and background processes. There is no
 | `apps/api/src/routes`    | Express endpoints that call checked domain services                |
 | `apps/api/src/auth`      | Better Auth sign-in and session resolution                         |
 | `apps/api/src/realtime`  | Project-authorised Socket.IO subscriptions                         |
-| `apps/api/src/processes` | API, brokers, workflow and publisher entry points                  |
+| `apps/api/src/processes` | API, brokers and managed worker entry points                       |
 | `packages/core`          | Membership, claims, permissions, durable turns, jobs and approvals |
 | `packages/database`      | Prisma client, schema and SQL migrations                           |
 | `packages/adapters`      | Codex, Vercel and GitHub integration boundaries                    |
@@ -74,4 +74,14 @@ The checked publication policy binds a designated human reviewer’s approval to
 
 The live publisher, required-check reconciliation and verified GitHub merge integration are unfinished. Existing policies and fixture tests are foundations, not proof of a working end-to-end publication flow. Authenticated previews must use a separate origin, scoped access and isolated browser state; that service is also unfinished.
 
-See [setup](SETUP.md) for configuration and [harness research](HARNESS.md) for the pinned upstream references behind this design.
+See [setup](SETUP.md) for configuration.
+
+## Product constraints
+
+The product serves teams and nontechnical founders building websites and web applications. Todo, Ongoing and Completed are the main board columns; review and blockers stay within Ongoing. Work is individual or an explicitly authorised, bounded batch. Agents never pick unrestricted autonomous work. Production deployment is outside the initial scope.
+
+The pilot supports one configured project, public repositories and existing Vercel Hobby capacity, with no paid upgrade or API-key fallback. The worker processes up to two turns concurrently; database admission still enforces organisation limits and counts warm allocations. An inline question in one thread does not block another admitted thread. Repository concurrency (`repositories.max_changes`) is a separate configurable policy.
+
+Additional providers and connected local runners are future extensions. Hosted credential renewal, entitlement, billing, production budget, scale, residency and broader repository-stack support remain open. [DESIGN.md](../DESIGN.md) defines the interface system.
+
+Keep code minimal, readable and formatted with Prettier. Add comments only when needed. Commit under the repository owner's identity and push only with authorisation. Tests, helper scripts, credentials and scratch artifacts stay local. Preserve third-party license notices.

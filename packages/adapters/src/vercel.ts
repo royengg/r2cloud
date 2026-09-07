@@ -169,27 +169,7 @@ export class VercelSandboxes {
     await this.journal.finishStep(identity, key, value);
     return value;
   }
-  async snapshotAndStop(identity: VercelIdentity) {
-    const allocation = await this.journal.get(identity);
-    if (!allocation || allocation.state !== 'running')
-      throw new Uncertain('Sandbox is not ready for snapshotting.');
-    const receipt = await this.journal.beginStep(
-      identity,
-      'snapshot',
-      sandboxDigest({ retentionDays: 7 }),
-    );
-    if (!receipt.fresh)
-      throw new Uncertain('Snapshot was already requested; reconcile its outcome before retrying.');
-    // Snapshotting stops the session. Keep intake closed even if the response is lost.
-    await this.journal.mark(identity, 'stopping');
-    const sandbox = await this.existing(identity, allocation);
-    const snapshot = await sandbox
-      .currentSession()
-      .snapshot({ expiration: 7 * 24 * 3600_000, signal: AbortSignal.timeout(30_000) });
-    await this.journal.finishStep(identity, 'snapshot', { snapshotId: snapshot.snapshotId });
-    const stopProof = await this.stop(identity);
-    return { snapshotId: snapshot.snapshotId, stopProof };
-  }
+
   async stop(identity: VercelIdentity) {
     const allocation = await this.journal.get(identity);
     if (!allocation) throw new Uncertain('No sandbox allocation is recorded.');

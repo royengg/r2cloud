@@ -9,8 +9,7 @@
   ],
   "scripts": {
     "api": "bun apps/api/src/processes/api.ts",
-    "worker": "bun apps/api/src/processes/workflow.ts",
-    "publisher": "bun apps/api/src/processes/publisher.ts",
+    "worker": "bun apps/api/src/processes/managed-workflow.ts",
     "web": "bun --bun vite --host 127.0.0.1",
     "build": "bun run typecheck && bun --bun vite build",
     "typecheck": "bun --bun tsc --noEmit",

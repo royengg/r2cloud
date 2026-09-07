@@ -30,11 +30,11 @@ Publication and merge policy exist internally and have fixture coverage. They mu
 
 One configured project, public repositories and Vercel Hobby capacity. No paid-plan upgrade, automatic runtime extension, region failover or API-key fallback. Provider credentials can expire and require reconnection. Preview settings do not imply a running preview.
 
-Native conversation checkpoints are private backend data, capped at 4 MiB. Timeline snapshots include up to 1,000 items from the latest 30 turns. Artifact export is capped at 64 MiB and requires 21 GiB free in the current local storage implementation. Production storage and retention remain separate work.
+Native conversation checkpoints are private backend data, capped at 4 MiB. Timelines load 100 recent items, paginate older history and retrieve updates by committed event cursor. Artifact export is capped at 64 MiB and requires 21 GiB free in the current local storage implementation. Production storage and retention remain separate work.
 
 ## Verification
 
-- **Local tests:** 87 Postgres/HTTP/Socket.IO and mocked-provider tests passed. They cover ownership, access, approvals, generation checks, streaming, runtime reuse and failure recovery.
+- **Local tests:** 92 Postgres/HTTP/Socket.IO and mocked-provider tests passed. They cover ownership, access, approvals, generation checks, streaming, runtime reuse, concurrent waiting threads, shutdown and failure recovery.
 - **Browser:** the authentication/product journey passed 13 axe audits. The shared picker passed three additional audits plus keyboard, mobile, modal, reduced-motion and forced-colors checks. Streaming tests cover strict-origin WebSockets, idle request suppression, reconnects, transient HTTP errors and scroll stability. Screen-reader testing was not available.
 - **Build:** TypeScript, Vite and design-system validation passed.
 - **Real integrations:** repository attachment; subscription-backed Vercel turns; a public-repository checkout/edit/build/export run; native history restoration across sandboxes; two conversation turns sharing a warm sandbox; and confirmed idle cleanup. Warm coding/correction handoff has local and mocked-provider coverage, not a completed live journey.

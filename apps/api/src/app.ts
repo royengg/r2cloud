@@ -2,7 +2,6 @@ import express from 'express';
 import type { AppOptions } from './config/options';
 import { security } from './middleware/security';
 import { handleError } from './middleware/error';
-import { fixtureRoutes } from './routes/fixture';
 import { publicRoutes } from './routes/public';
 import { protectedRoutes } from './routes';
 export function createApp(options: AppOptions) {
@@ -15,7 +14,6 @@ export function createApp(options: AppOptions) {
   app.use('/api', publicRoutes(options));
   app.use(express.json({ limit: '64kb' }));
   app.use(security(options));
-  if (options.fixture && !options.identity) app.use('/api', fixtureRoutes());
   app.use('/api', protectedRoutes(options));
   app.use(express.static('dist/web', { index: 'index.html' }));
   app.use(handleError);

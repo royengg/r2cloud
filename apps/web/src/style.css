@@ -1032,13 +1032,6 @@ button .icon {
   align-items: center;
   gap: 10px;
 }
-.composer-hint {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--text-caption);
-  color: var(--color-text-secondary);
-}
 .composer-send {
   display: grid;
   place-items: center;
@@ -1380,7 +1373,6 @@ button .icon {
 .detail-footer > .button-primary {
   flex-shrink: 1;
 }
-.conversation-section,
 .activity-section {
   min-height: 250px;
 }
@@ -1409,23 +1401,6 @@ button .icon {
   padding: 40px 0;
   gap: 15px;
   color: var(--color-text-secondary);
-}
-.feedback-form {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  align-items: flex-start;
-  margin-block-start: 24px;
-}
-.feedback-form label {
-  font-size: var(--text-caption);
-  font-weight: 550;
-}
-.feedback-form textarea {
-  width: 100%;
-}
-.feedback-form .button {
-  align-self: flex-end;
 }
 .activity-item {
   display: flex;
@@ -1495,8 +1470,7 @@ button .icon {
   margin-block: 18px 0;
 }
 .modal form input,
-.modal form textarea,
-.feedback-form textarea {
+.modal form textarea {
   display: block;
   border: 1px solid var(--color-border);
   border-radius: 12px;
@@ -2081,9 +2055,6 @@ button .icon {
     width: 42px;
     height: 42px;
   }
-  .composer-hint {
-    font-size: var(--text-caption);
-  }
   .task-detail {
     margin: 0;
     width: 100vw;
@@ -2143,8 +2114,7 @@ button .icon {
     font-size: var(--text-caption);
   }
   .modal form input,
-  .modal form textarea,
-  .feedback-form textarea {
+  .modal form textarea {
     font-size: 16px;
   }
   .task-form-modal,
@@ -2782,9 +2752,6 @@ body[data-keyboard] .account-menu {
 }
 .thread-error {
   padding: 12px 24px;
-}
-.detail-body .thread-panel {
-  min-height: 480px;
 }
 @media (hover: hover) and (pointer: fine) {
   .thread-list button:hover {

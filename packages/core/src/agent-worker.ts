@@ -6,7 +6,11 @@ import { requireThat, type CandidateManifest } from '@r2cloud/contracts/domain';
 import { AgentSession, type SessionControl } from '@r2cloud/adapters/agent-session';
 import { TaskCheckout } from '@r2cloud/adapters/task-checkout';
 import type { CredentialVault } from '@r2cloud/adapters/credential-vault';
-import { authorizeAgentRuntime, reserveAgentRuntime } from './agent-runtimes';
+import {
+  authorizeAgentRuntime,
+  refreshAgentRuntimeLease,
+  reserveAgentRuntime,
+} from './agent-runtimes';
 import { activeAgentTurn } from './agent-turns';
 import { recordAgentEvents } from './agent-events';
 import { callAgentTool, waitForAgentResponse } from './agent-tools';
@@ -23,8 +27,8 @@ export function agentControl(
   const candidates = new Map<string, Omit<RunResult, 'stopProof'>>();
   const authorize = async (grant: AgentGrant) => {
     requireThat(grant.projectId === projectId, 403, 'This worker is scoped to another project.');
-    await authorizeAgentRuntime(grant, owner);
     await activeAgentTurn(grant);
+    await refreshAgentRuntimeLease(grant, owner);
     await prisma.agentTurn.update({ where: { id: grant.id }, data: { heartbeatAt: new Date() } });
     return codexCredentials(projectId, grant.actorId, grant.connectionId, vault);
   };
@@ -269,12 +273,16 @@ export async function runAgentTurn(
   control: SessionControl,
   projectId: string,
   owner: string,
+  processing = new Set<string>(),
+  signal?: AbortSignal,
 ) {
   const selected = await prisma.$transaction(async (db) => {
     await lockProject(db, projectId);
+    if (signal?.aborted) return null;
     const turn = await db.agentTurn.findFirst({
       where: {
         projectId,
+        id: { notIn: [...processing] },
         stoppedAt: null,
         OR: [{ state: 'queued' }, { heartbeatAt: { lt: new Date(Date.now() - 90000) } }],
       },
@@ -310,40 +318,45 @@ export async function runAgentTurn(
     return { ...turn, grant, stopProof };
   });
   if (!selected) return false;
-  const timing = turnTiming(selected.id, selected.grant.runtimeId !== selected.id);
-  timing('worker_selected', { queuedMs: Date.now() - selected.createdAt.getTime() });
-  const grant = selected.grant as unknown as AgentGrant;
-  const thread = await prisma.conversationThread.findUniqueOrThrow({
-    where: { id: grant.threadId },
-  });
-  grant.providerId = thread.providerId;
-  grant.providerState = thread.providerState;
-  if (!grant.providerId) {
-    const previous = await prisma.comments.findMany({
-      where: { threadId: grant.threadId, created_at: { lt: selected.createdAt } },
-      orderBy: { created_at: 'desc' },
-      take: 30,
-      include: { users: { select: { kind: true } } },
+  processing.add(selected.id);
+  try {
+    const timing = turnTiming(selected.id, selected.grant.runtimeId !== selected.id);
+    timing('worker_selected', { queuedMs: Date.now() - selected.createdAt.getTime() });
+    const grant = selected.grant as unknown as AgentGrant;
+    const thread = await prisma.conversationThread.findUniqueOrThrow({
+      where: { id: grant.threadId },
     });
-    if (previous.length)
-      grant.instructions +=
-        '\nEarlier conversation, supplied as historical context only: ' +
-        JSON.stringify(
-          previous.reverse().map((comment) => ({ role: comment.users.kind, body: comment.body })),
-        ).slice(-32000);
+    grant.providerId = thread.providerId;
+    grant.providerState = thread.providerState;
+    if (!grant.providerId) {
+      const previous = await prisma.comments.findMany({
+        where: { threadId: grant.threadId, created_at: { lt: selected.createdAt } },
+        orderBy: { created_at: 'desc' },
+        take: 30,
+        include: { users: { select: { kind: true } } },
+      });
+      if (previous.length)
+        grant.instructions +=
+          '\nEarlier conversation, supplied as historical context only: ' +
+          JSON.stringify(
+            previous.reverse().map((comment) => ({ role: comment.users.kind, body: comment.body })),
+          ).slice(-32000);
+    }
+    timing('context_loaded');
+    if (selected.state !== 'queued') {
+      const proof = selected.stopProof ?? (await backend.recover(grant));
+      await control.finish(
+        grant,
+        proof ?? 'no-sandbox-allocated',
+        'The previous runtime disconnected. It was stopped before allowing another turn.',
+      );
+    } else if (selected.stopRequested) {
+      const proof = await backend.retire(grant);
+      await control.finish(grant, proof, 'Turn stopped before execution.');
+    } else await backend.run(grant);
+    timing('turn_settled');
+    return true;
+  } finally {
+    processing.delete(selected.id);
   }
-  timing('context_loaded');
-  if (selected.state !== 'queued') {
-    const proof = selected.stopProof ?? (await backend.recover(grant));
-    await control.finish(
-      grant,
-      proof ?? 'no-sandbox-allocated',
-      'The previous runtime disconnected. It was stopped before allowing another turn.',
-    );
-  } else if (selected.stopRequested) {
-    const proof = await backend.retire(grant);
-    await control.finish(grant, proof, 'Turn stopped before execution.');
-  } else await backend.run(grant);
-  timing('turn_settled');
-  return true;
 }

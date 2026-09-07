@@ -1,7 +1,5 @@
 import { Router } from 'express';
 import { prisma } from '@r2cloud/database';
-import { hash } from '@r2cloud/contracts/hash';
-import { sessionToken } from '../auth/session';
 import type { AppOptions } from '../config/options';
 import { invitationInbox } from '@r2cloud/core/team';
 import { projects } from '@r2cloud/core/service';
@@ -21,17 +19,12 @@ export function accountRoutes(options: AppOptions) {
       user,
       invitations,
       projects: availableProjects,
-      mode: options.fixture ? 'fixture' : 'managed',
-      authMode: options.identity?.mode ?? 'fixture',
+      mode: 'managed',
+      authMode: options.identity?.mode ?? 'unconfigured',
     });
   });
   router.post('/logout', async (req, res) => {
-    if (options.identity) return options.identity.signOut(req, res);
-    await prisma.sessions.deleteMany({
-      where: { token_hash: hash(sessionToken(req.headers.cookie)) },
-    });
-    res.clearCookie('r2session');
-    res.json({ ok: true });
+    await options.identity!.signOut(req, res);
   });
   return router;
 }

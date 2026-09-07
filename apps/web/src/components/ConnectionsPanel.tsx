@@ -1,6 +1,8 @@
 import { CodexConnection } from './CodexConnection';
 import { ExecutionSetup } from './ExecutionSetup';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { queryClient, readQuery } from '../lib/queries';
 import { api } from '../lib/api';
 import { Button, IconButton, Modal } from './ui';
 import { Select } from './Select';
@@ -28,34 +30,20 @@ export function ConnectionsPanel({
   close: () => void;
   onConnected: () => Promise<void>;
 }) {
-  const [state, setState] = useState<State | null>(null),
-    [error, setError] = useState(
+  const query = useQuery({
+    ...readQuery<State>(`/projects/${projectId}/connections`),
+    refetchInterval: (query) =>
+      ['queued', 'checking'].includes(query.state.data?.pending?.status ?? '') ? 2000 : false,
+  });
+  const state = query.data;
+  const [actionError, setError] = useState(
       new URLSearchParams(location.search).has('connection_error')
         ? 'GitHub authorization could not be verified. Try connecting again.'
         : '',
     ),
     [busy, setBusy] = useState(false),
     [selected, setSelected] = useState('');
-  useEffect(() => {
-    let disposed = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const load = async () => {
-      try {
-        const next = await api<State>(`/projects/${projectId}/connections`);
-        if (disposed) return;
-        setState(next);
-        if (['queued', 'checking'].includes(next.pending?.status ?? ''))
-          timer = setTimeout(() => void load(), 2000);
-      } catch (e) {
-        if (!disposed) setError((e as Error).message);
-      }
-    };
-    void load();
-    return () => {
-      disposed = true;
-      clearTimeout(timer);
-    };
-  }, [projectId]);
+  const error = actionError || query.error?.message || '';
   async function authorize() {
     setBusy(true);
     setError('');
@@ -80,7 +68,9 @@ export function ConnectionsPanel({
         connectionId: state!.pending!.id,
         repositoryId: Number(selected),
       });
-      setState(await api(`/projects/${projectId}/connections`));
+      await queryClient.invalidateQueries({
+        queryKey: ['api', `/projects/${projectId}/connections`],
+      });
       await onConnected();
     } catch (e) {
       setError((e as Error).message);

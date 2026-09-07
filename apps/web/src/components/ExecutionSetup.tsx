@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { executionProfile, type ExecutionProfile } from '@r2cloud/contracts/execution';
 import { api } from '../lib/api';
+import { queryClient, readQuery } from '../lib/queries';
 import { Button } from './ui';
 const template: ExecutionProfile = {
   directory: '.',
@@ -24,7 +25,8 @@ export function ExecutionSetup({ projectId, manage }: { projectId: string; manag
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     let disposed = false;
-    void api<Setup>(`/projects/${projectId}/execution-setup`)
+    void queryClient
+      .fetchQuery(readQuery<Setup>(`/projects/${projectId}/execution-setup`))
       .then((next) => {
         if (disposed) return;
         const config = executionProfile.parse(next.profile?.config ?? template);
@@ -73,6 +75,12 @@ export function ExecutionSetup({ projectId, manage }: { projectId: string; manag
         version,
         config: parsed.data,
       });
+      queryClient.setQueryData(
+        readQuery<Setup>(`/projects/${projectId}/execution-setup`).queryKey,
+        {
+          profile: { version: result.version, config: parsed.data },
+        },
+      );
       setVersion(result.version);
       setProfile(parsed.data);
       setNotice('Settings saved. No sandbox was started.');

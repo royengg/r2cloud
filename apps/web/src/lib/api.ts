@@ -1,3 +1,12 @@
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
 const pending = new Map<string, string>();
 export async function api<T = unknown>(
   path: string,
@@ -18,6 +27,9 @@ export async function api<T = unknown>(
   const data = await response.json();
   pending.delete(fingerprint);
   if (!response.ok)
-    throw new Error(data.error ?? data.message ?? 'Unable to load the workspace. Try again.');
+    throw new ApiError(
+      data.error ?? data.message ?? 'Unable to load the workspace. Try again.',
+      response.status,
+    );
   return data;
 }

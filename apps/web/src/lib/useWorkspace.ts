@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { queryClient, readQuery, clearProjectQueries } from './queries';
 import { io } from 'socket.io-client';
 import { api } from './api';
 import type { Identity, Snapshot } from './types';
 export function useWorkspace() {
   const [identity, setIdentity] = useState<Identity | null>(null),
     [projectId, setProjectId] = useState(''),
-    [snapshot, setSnapshot] = useState<Snapshot | null>(null),
+    [blockedProject, setBlockedProject] = useState(''),
     [ready, setReady] = useState(false),
     [authConfig, setAuthConfig] = useState<{
       mode: string;
@@ -16,12 +18,17 @@ export function useWorkspace() {
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [announcement, setAnnouncement] = useState('');
+  const board = useQuery({
+    ...readQuery<Snapshot>(`/projects/${projectId}/snapshot`),
+    enabled: Boolean(identity && projectId && blockedProject !== projectId),
+  });
+  const snapshot = identity && blockedProject !== projectId ? (board.data ?? null) : null;
   const serial = useRef(0);
   const refresh = useRef<{ generation: number; pending: boolean; promise: Promise<void> } | null>(
     null,
   );
   const reload = useCallback((): Promise<void> => {
-    if (!projectId) return Promise.resolve();
+    if (!projectId || blockedProject === projectId) return Promise.resolve();
     const generation = serial.current;
     const active = refresh.current;
     if (active?.generation === generation) {
@@ -34,8 +41,10 @@ export function useWorkspace() {
       do {
         batch.pending = false;
         try {
-          const next = await api<Snapshot>(`/projects/${projectId}/snapshot`);
-          if (generation === serial.current) setSnapshot(next);
+          await queryClient.fetchQuery({
+            ...readQuery<Snapshot>(`/projects/${projectId}/snapshot`),
+            staleTime: 0,
+          });
         } catch (e) {
           if (generation === serial.current) setError((e as Error).message);
         }
@@ -43,9 +52,10 @@ export function useWorkspace() {
       if (refresh.current === batch) refresh.current = null;
     })();
     return batch.promise;
-  }, [projectId]);
+  }, [projectId, blockedProject]);
   async function loadIdentity(preferredProject?: string) {
-    const next = await api<Identity>('/me');
+    const next = await queryClient.fetchQuery({ ...readQuery<Identity>('/me'), staleTime: 0 });
+    setBlockedProject('');
     setIdentity(next);
     setProjectId(
       next.projects.find(
@@ -57,18 +67,19 @@ export function useWorkspace() {
   }
   useEffect(() => {
     void Promise.all([
-      api<{ mode: string; provider: string | null; enabled: boolean }>('/auth-config').then(
-        setAuthConfig,
-      ),
+      queryClient
+        .fetchQuery(
+          readQuery<{ mode: string; provider: string | null; enabled: boolean }>('/auth-config'),
+        )
+        .then(setAuthConfig),
       loadIdentity().catch(() => {}),
     ])
       .catch((e) => setError((e as Error).message))
       .finally(() => setReady(true));
   }, []);
   useEffect(() => {
-    if (!identity || !projectId) return;
-    setSnapshot(null);
-    void reload();
+    if (!identity || !projectId || blockedProject === projectId) return;
+
     const socket = io({ auth: { projectId }, withCredentials: true, transports: ['websocket'] });
     socket.on('connect', () => {
       setConnection('Live');
@@ -78,7 +89,8 @@ export function useWorkspace() {
     socket.on('connect_error', () => setConnection('Offline'));
     socket.on('access-ended', () => {
       serial.current++;
-      setSnapshot(null);
+      clearProjectQueries(projectId);
+      setBlockedProject(projectId);
       setError('Project access ended. Sign in again.');
       setConnection('Access ended');
     });
@@ -86,7 +98,30 @@ export function useWorkspace() {
       socket.disconnect();
       serial.current++;
     };
-  }, [identity, projectId, reload]);
+  }, [identity, projectId, blockedProject, reload]);
+  useEffect(() => {
+    const endSession = () => {
+      serial.current++;
+      queryClient.clear();
+      setIdentity(null);
+      setProjectId('');
+    };
+    const endProject = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      clearProjectQueries(id);
+      if (id === projectId) {
+        serial.current++;
+        setBlockedProject(id);
+        setError('Project access ended. Sign in again.');
+      }
+    };
+    window.addEventListener('session-ended', endSession);
+    window.addEventListener('project-access-ended', endProject);
+    return () => {
+      window.removeEventListener('session-ended', endSession);
+      window.removeEventListener('project-access-ended', endProject);
+    };
+  }, [projectId]);
   async function act(work: () => Promise<unknown>, message = 'Saved') {
     setBusy(true);
     setError('');
@@ -108,8 +143,9 @@ export function useWorkspace() {
     setError('');
     try {
       await api('/logout', {});
+      serial.current++;
+      queryClient.clear();
       setIdentity(null);
-      setSnapshot(null);
       setProjectId('');
     } catch (e) {
       setError((e as Error).message);
@@ -126,7 +162,7 @@ export function useWorkspace() {
     snapshot,
     ready,
     connection,
-    error,
+    error: error || board.error?.message || '',
     setError,
     busy,
     announcement,

@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { queryClient, readQuery } from '../lib/queries';
 import { api } from '../lib/api';
 import { CodexLogo } from './CodexLogo';
 import { Button } from './ui';
@@ -13,31 +15,18 @@ type Connection = {
 };
 type State = { available: boolean; connection: Connection | null };
 export function CodexConnection({ projectId }: { projectId: string }) {
-  const [state, setState] = useState<State | null>(null);
-  const [error, setError] = useState('');
+  const query = useQuery({
+    ...readQuery<State>(`/projects/${projectId}/codex`),
+    refetchInterval: (query) =>
+      ['queued', 'starting', 'awaiting'].includes(query.state.data?.connection?.state ?? '')
+        ? 1500
+        : false,
+  });
+  const state = query.data;
+  const [actionError, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [revision, setRevision] = useState(0);
-  useEffect(() => {
-    let disposed = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const load = async () => {
-      try {
-        const next = await api<State>(`/projects/${projectId}/codex`);
-        if (disposed) return;
-        setState(next);
-        if (['queued', 'starting', 'awaiting'].includes(next.connection?.state ?? ''))
-          timer = setTimeout(() => void load(), 1500);
-      } catch (e) {
-        if (!disposed) setError((e as Error).message);
-      }
-    };
-    void load();
-    return () => {
-      disposed = true;
-      clearTimeout(timer);
-    };
-  }, [projectId, revision]);
+  const error = actionError || query.error?.message || '';
   async function act(disconnect = false) {
     setBusy(true);
     setError('');
@@ -47,7 +36,7 @@ export function CodexConnection({ projectId }: { projectId: string }) {
         `/projects/${projectId}/codex${disconnect ? `/${state!.connection!.id}/disconnect` : ''}`,
         {},
       );
-      setRevision((value) => value + 1);
+      await queryClient.invalidateQueries({ queryKey: ['api', `/projects/${projectId}/codex`] });
     } catch (e) {
       setError((e as Error).message);
     } finally {

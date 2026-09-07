@@ -4,6 +4,7 @@ import { Uncertain, SetupRequired } from '@r2cloud/contracts/adapters';
 export type VercelIdentity = { operationId: string; runId: string; generation: number };
 export type VercelPlan = {
   image: string;
+  snapshotId?: string;
   region: SandboxRegion;
   minutes: number;
   vcpus: 2 | 4;
@@ -47,6 +48,7 @@ export class VercelSandboxes {
   async ensure(identity: VercelIdentity, plan: VercelPlan) {
     if (
       !plan.region ||
+      (plan.snapshotId !== undefined && !/^snap_[a-zA-Z0-9]+$/.test(plan.snapshotId)) ||
       !/^[\w./-]+@sha256:[a-f0-9]{64}$/.test(plan.image) ||
       !Number.isInteger(plan.minutes) ||
       plan.minutes < 1 ||
@@ -77,7 +79,9 @@ export class VercelSandboxes {
       const sandbox = await this.sdk.create({
         ...this.credentials,
         name,
-        image: plan.image,
+        ...(plan.snapshotId
+          ? { source: { type: 'snapshot' as const, snapshotId: plan.snapshotId } }
+          : { image: plan.image }),
         region: plan.region,
         failoverRegions: [],
         resources: { vcpus: plan.vcpus },

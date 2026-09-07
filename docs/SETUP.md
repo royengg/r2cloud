@@ -86,6 +86,7 @@ Keep these in an ignored `.env.managed`, restricted to the worker:
 - `R2_EXECUTION_PROJECT_ID`: the product project this worker may execute for.
 - `R2_VERCEL_TOKEN`, `R2_VERCEL_TEAM_ID`, `R2_VERCEL_PROJECT_ID`: scoped Vercel access.
 - `R2_VERCEL_IMAGE`: the compatible digest-pinned image.
+- `R2_VERCEL_SNAPSHOT_ID` (optional): a clean prepared snapshot from that image.
 - `R2_CODEX_VAULT_KEY` and, if customised, `R2_CODEX_BROKER_DIR`: the same vault configuration used by the login broker.
 
 ```sh
@@ -93,6 +94,12 @@ bun --env-file=.env --env-file=.env.managed apps/api/src/processes/managed-workf
 ```
 
 The configured pilot uses Paris (`cdg1`), two vCPUs, a two-minute idle timeout and a ten-minute total sandbox limit. It requires Hobby eligibility and has no paid-plan, region-failover or API-key fallback. Database hosting is independent of the sandbox region.
+
+The worker streams Codex RPCs and events through Vercel's authenticated WebSocket shell connection and a root-only Unix socket inside the sandbox. No sandbox HTTP port is exposed. Commands retain durable receipts; reconnecting replays events after the acknowledged sequence, not commands with uncertain outcomes.
+
+A prepared snapshot contains the `r2-agent` user, `/vercel/sandbox/agent` owned by that user, and the current `packages/adapters/src/codex-bridge.py` installed root-only at `/opt/r2cloud/codex-bridge.py`. After checking Codex 0.147.0, store `/opt/r2cloud/prepared.json` as `JSON.stringify({ image, bridge: sandboxDigest(codexBridge), version: '0.147.0' })`. Create the snapshot before starting Codex or adding credentials, repository files or conversation state. Rebuild it when the image or bridge changes. Missing or expired snapshots fall back to the pinned base image; a mismatched prepared environment is rejected.
+
+Set `R2_TRACE_TURNS=1` only when measuring stage latency. Logs contain turn identifiers and durations, without message bodies or credentials. Compare cold and warm turns separately, and distinguish first persisted output from full completion and browser rendering.
 
 Open a project or task thread and send a message. Conversation starts a lightweight runtime; repository checkout and dependency installation wait for a checked implementation grant. Approve the named task inline to begin code work. Follow-up messages reuse the warm runtime where permitted. Stop and uncertain outcomes retain ownership until execution is confirmed quiescent or stopped.
 

@@ -39,6 +39,7 @@ export async function lockProject(db: DB, projectId: string) {
   // Fixed order coordinates events and organisation/repository limits across processes.
   await lockRow(db, 'organisations', project.org_id);
   await lockRow(db, 'projects', projectId);
+  return project;
 }
 export async function event(
   db: DB,

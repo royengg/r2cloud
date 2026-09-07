@@ -38,3 +38,13 @@ export async function nextCodexConnection(db: DB) {
   `;
   return rows[0]?.id;
 }
+
+export async function lockAgentRuntime(db: DB, id: string) {
+  const rows = await db.$queryRaw<
+    { id: string; owner: string; stoppedAt: Date | null }[]
+  >(Prisma.sql`
+    SELECT id, owner, stopped_at AS "stoppedAt" FROM ${namespace}.agent_runtimes
+    WHERE id=${id} FOR UPDATE
+  `);
+  return rows[0];
+}

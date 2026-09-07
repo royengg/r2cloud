@@ -37,6 +37,8 @@ const sessions = new AgentSession(
   new PostgresSandboxJournal(owner),
   sessionControl,
   agentTools,
+  undefined,
+  process.env.R2_VERCEL_SNAPSHOT_ID,
 );
 let stopping = false;
 process.on('SIGTERM', () => (stopping = true));

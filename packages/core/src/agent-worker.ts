@@ -58,7 +58,19 @@ export function agentControl(
       });
     },
     async stopped(grant) {
-      return (await activeAgentTurn(grant)).stopRequested;
+      const turn = await prisma.agentTurn.findFirst({
+        where: {
+          id: grant.id,
+          projectId,
+          threadId: grant.threadId,
+          actorId: grant.actorId,
+          stoppedAt: null,
+          state: { in: ['running', 'waiting'] },
+        },
+        select: { stopRequested: true },
+      });
+      requireThat(turn, 409, 'The agent turn is no longer active.');
+      return turn.stopRequested;
     },
     events: recordAgentEvents,
     async request(grant, message, sandbox) {

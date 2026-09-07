@@ -1,13 +1,12 @@
 import { lockProject } from './project-context';
 import { prisma, json, type DB } from '@r2cloud/database';
-import { lockRow } from '@r2cloud/database/locking';
+import { lockAgentRuntime, lockRow } from '@r2cloud/database/locking';
 import { requireThat } from '@r2cloud/contracts/domain';
 import type { SandboxJournal, VercelIdentity } from '@r2cloud/adapters/vercel';
 async function fence(db: DB, identity: VercelIdentity, owner?: string) {
-  const runtime = await db.agentRuntime.findUnique({ where: { id: identity.runId } });
+  const runtime = await lockAgentRuntime(db, identity.runId);
   if (runtime) {
-    await lockProject(db, runtime.projectId);
-    const current = await db.agentRuntime.findUniqueOrThrow({ where: { id: runtime.id } });
+    const current = runtime;
     requireThat(
       current.owner === owner &&
         !current.stoppedAt &&

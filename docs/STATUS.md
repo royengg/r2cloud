@@ -1,6 +1,6 @@
 # Current status
 
-Last reviewed: 6 September 2026. r2cloud is an early development preview. The configured cloud coding pilot works; the complete preview-to-publication-to-merge journey does not yet work end to end.
+Last reviewed: 7 September 2026. r2cloud is an early development preview. The configured cloud coding pilot works; the complete preview-to-publication-to-merge journey does not yet work end to end.
 
 ## Available
 
@@ -10,6 +10,7 @@ Last reviewed: 6 September 2026. r2cloud is an early development preview. The co
 - Project/task threads with model selection, streamed Markdown replies, activity, inline questions/implementation decisions and Stop.
 - One native Codex session per thread, project-aware tools, and no implementation claim for ordinary conversation.
 - Authoritative task claims, version/generation checks, bounded execution and durable operation intent.
+- Authenticated worker-to-Codex streaming, batched timeline persistence and optional credential-free prepared snapshots.
 - Vercel sandbox reuse with two-minute idle expiry and a ten-minute total limit. Account changes and ambiguous failures require confirmed retirement before replacement.
 - Public repository checkout, pinned dependency setup, configured checks and immutable Git bundle export. Coding handoff quiesces processes and seals the retained checkout read-only.
 - Neon Postgres through Prisma, with explicit pooled application and direct migration connections.

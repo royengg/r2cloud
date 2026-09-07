@@ -599,6 +599,7 @@ button .icon {
   gap: 10px;
 }
 .task-search {
+  border: 1px solid transparent;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -608,6 +609,12 @@ button .icon {
   min-height: 39px;
   padding: 8px 12px;
   box-shadow: var(--shadow-card);
+}
+.task-search:focus-within {
+  border-color: var(--color-focus);
+}
+.task-search input:focus-visible {
+  outline: none;
 }
 .task-search input {
   font-size: var(--text-caption);
@@ -2245,6 +2252,9 @@ button .icon {
   }
 }
 @media (forced-colors: active) {
+  .task-search:focus-within {
+    border-color: Highlight;
+  }
   button,
   input,
   textarea,

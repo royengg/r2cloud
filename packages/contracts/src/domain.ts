@@ -67,7 +67,7 @@ export const batchInput = z
 export type BatchInput = z.infer<typeof batchInput>;
 export type Command = z.infer<typeof commandInput>;
 export type TaskInput = z.infer<typeof taskInput>;
-export type Actor = { id: string; kind: 'human' | 'agent' };
+export type Actor = { id: string; kind: 'human' | 'agent'; sessionId?: string };
 export class Fault extends Error {
   constructor(
     public status: number,

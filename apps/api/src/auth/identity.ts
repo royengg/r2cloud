@@ -132,7 +132,7 @@ export function createIdentity(config: {
               select: { id: true, kind: true },
             });
       requireThat(user.kind === 'human', 403, 'Product sign-in is reserved for people.');
-      return { id: user.id, kind: user.kind };
+      return { id: user.id, kind: user.kind, sessionId: session.session.id };
     },
     async signOut(req, res) {
       const response = await auth.api.signOut({

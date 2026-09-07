@@ -1,3 +1,4 @@
+import { turnTiming } from '@r2cloud/contracts/turn-timing';
 import type { Sandbox } from '@vercel/sandbox';
 import type { CodexModel } from '@r2cloud/contracts/threads';
 import type { AgentGrant } from '@r2cloud/contracts/agent';
@@ -85,6 +86,9 @@ export class AgentSession {
     const runtimeId = grant.runtimeId ?? grant.id;
     const identity = { operationId: runtimeId, runId: runtimeId, generation: 1 };
     let warm = this.warm.get(runtimeId);
+    const timing = turnTiming(grant.id, !!warm);
+    timing('session_start');
+    let firstOutput = false;
     let keepWarm = false;
     let sandbox: Sandbox | undefined;
     let providerId: string | undefined;
@@ -111,6 +115,7 @@ export class AgentSession {
     }, 10000);
     try {
       const auth = await this.control.authorize(grant);
+      timing('authorized');
       if (auth.expiresAt < deadline + 60000)
         throw new SetupRequired('Reconnect Codex; the current credential expires too soon.');
       if (warm && (warm.actorId !== grant.actorId || warm.connectionId !== grant.connectionId))
@@ -128,6 +133,7 @@ export class AgentSession {
           throw new SetupRequired(
             'An active Vercel Hobby connection is required for free-only execution.',
           );
+        timing('plan_verified');
         sandbox = await this.cloud.ensure(identity, {
           image: this.image,
           region: 'cdg1',
@@ -135,6 +141,7 @@ export class AgentSession {
           vcpus: 2,
         });
       }
+      timing('sandbox_ready');
       if (!sandbox) throw new Error('Sandbox is unavailable.');
       const session = sandbox.currentSession();
       if (!warm) {
@@ -152,6 +159,7 @@ export class AgentSession {
           if (result.exitCode !== 0) throw new Error('Agent environment setup failed.');
         }
       }
+      timing('environment_ready');
       const preferences = JSON.stringify({ model: grant.model, instructions: grant.instructions });
       if (warm?.harness && warm.preferences !== preferences) {
         await this.quiesce(sandbox);
@@ -208,7 +216,9 @@ export class AgentSession {
           deadline - 15000,
         );
         const harness = new CodexHarness(transport);
+        timing('bridge_started');
         await harness.initialize(grant.id);
+        timing('codex_initialized');
         const placeholder = [
           Buffer.from(JSON.stringify({ alg: 'none' })).toString('base64url'),
           Buffer.from(
@@ -229,10 +239,12 @@ export class AgentSession {
           chatgptAccountId: auth.accountId,
           chatgptPlanType: auth.plan,
         });
+        timing('codex_authenticated');
         const models = await harness.models(`${grant.id}:models`);
         await this.control.models?.(grant, models);
         if (grant.model && !models.some((m) => m.model === grant.model))
           throw new SetupRequired('The selected model is not available.');
+        timing('models_verified');
         const settings = {
           cwd: '/vercel/sandbox/agent',
           model: grant.model,
@@ -281,8 +293,10 @@ export class AgentSession {
       const harness = warm!.harness!;
       providerId = warm!.providerId!;
       rolloutPath = warm!.rolloutPath;
+      timing('thread_ready');
       const offset = transport.cursor;
       const { turn } = await harness.input(`${grant.id}:turn`, providerId, grant.message);
+      timing('turn_submitted');
       let interrupted = false;
       let finished = false;
       while (Date.now() < deadline - 15000) {
@@ -293,6 +307,24 @@ export class AgentSession {
         }
         const events = await transport.events();
         if (events.length) {
+          const output = events.find(
+            (entry) =>
+              entry.message.params?.turnId === turn.id &&
+              (entry.message.method === 'item/agentMessage/delta' ||
+                (entry.message.method === 'item/completed' &&
+                  entry.message.params?.item?.type === 'agentMessage')),
+          );
+          const first = !firstOutput && !!output;
+          if (first) {
+            firstOutput = true;
+            timing(
+              'first_output_received',
+              typeof output.providerElapsedMs !== 'number'
+                ? {}
+                : { providerElapsedMs: output.providerElapsedMs },
+            );
+          }
+          const persistenceStarted = performance.now();
           await this.control.events(
             grant,
             events.map((entry) => ({
@@ -303,6 +335,10 @@ export class AgentSession {
                   : entry.message,
             })),
           );
+          if (first)
+            timing('first_output_persisted', {
+              persistenceMs: Math.round(performance.now() - persistenceStarted),
+            });
           for (const entry of events) {
             const m = entry.message;
             if (m.method && m.id !== undefined) {
@@ -336,6 +372,7 @@ export class AgentSession {
         await pause(200);
       }
       if (!finished) throw new Uncertain('The agent reached its time limit.');
+      timing('provider_completion_observed');
       if (interrupted) error = 'Turn stopped.';
       if (!rolloutPath) {
         const read = await transport.requestOnce<{ thread: { path?: string } }>(
@@ -365,6 +402,7 @@ export class AgentSession {
         chunks.push(bytes);
       }
       await this.control.persist(grant, providerId, Buffer.concat(chunks).toString());
+      timing('checkpoint_saved');
       const implementation = (await this.control.hasImplementation?.(grant)) ?? !grant.runtimeId;
       if (implementation || error) {
         await this.quiesce(sandbox);

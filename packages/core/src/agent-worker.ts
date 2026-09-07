@@ -1,3 +1,4 @@
+import { turnTiming } from '@r2cloud/contracts/turn-timing';
 import { prisma, json } from '@r2cloud/database';
 import type { AgentGrant } from '@r2cloud/contracts/agent';
 import type { RunResult } from '@r2cloud/contracts/adapters';
@@ -297,6 +298,8 @@ export async function runAgentTurn(
     return { ...turn, grant, stopProof };
   });
   if (!selected) return false;
+  const timing = turnTiming(selected.id, selected.grant.runtimeId !== selected.id);
+  timing('worker_selected', { queuedMs: Date.now() - selected.createdAt.getTime() });
   const grant = selected.grant as unknown as AgentGrant;
   const thread = await prisma.conversationThread.findUniqueOrThrow({
     where: { id: grant.threadId },
@@ -317,6 +320,7 @@ export async function runAgentTurn(
           previous.reverse().map((comment) => ({ role: comment.users.kind, body: comment.body })),
         ).slice(-32000);
   }
+  timing('context_loaded');
   if (selected.state !== 'queued') {
     const proof = selected.stopProof ?? (await backend.recover(grant));
     await control.finish(
@@ -328,5 +332,6 @@ export async function runAgentTurn(
     const proof = await backend.retire(grant);
     await control.finish(grant, proof, 'Turn stopped before execution.');
   } else await backend.run(grant);
+  timing('turn_settled');
   return true;
 }

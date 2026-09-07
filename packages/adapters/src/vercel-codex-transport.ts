@@ -15,6 +15,7 @@ root.mkdir(mode=0o700, exist_ok=True)
 (root / 'events').mkdir(exist_ok=True)
 event_seq = 0
 event_batch = []
+turn_started = None
 agent = pwd.getpwnam('r2-agent')
 home = pathlib.Path(agent.pw_dir) / '.codex'
 home.mkdir(mode=0o700, exist_ok=True)
@@ -45,7 +46,7 @@ def listen():
                     proc.kill()
                     return
                 if (event_seq - 1) % 10 == 0: event_batch = []
-                event_batch.append({'seq':event_seq,'message':message})
+                event_batch.append({'seq':event_seq,'message':message, 'providerElapsedMs':round((time.monotonic()-turn_started)*1000) if turn_started is not None else None})
                 save('events/batch-' + str((event_seq - 1) // 10) + '.json', event_batch)
                 save('events/head.json', {'seq':event_seq})
             if isinstance(ident, str) and len(ident) == 64 and not message.get('method'):
@@ -68,6 +69,7 @@ while proc.poll() is None:
             message = json.loads(path.read_text())
         except (ValueError, OSError): continue
         seen.add(path.name)
+        if message.get('method') == 'turn/start': turn_started = time.monotonic()
         proc.stdin.write(json.dumps(message)+'\n')
         proc.stdin.flush()
         if 'id' not in message: save('out/' + path.name, {'notified':True})
@@ -88,7 +90,8 @@ export class VercelCodexTransport implements CodexTransport {
   }
   async events() {
     const head = await this.read<{ seq: number }>('events/head.json');
-    const messages: { seq: number; message: Record<string, any> }[] = [];
+    const messages: { seq: number; message: Record<string, any>; providerElapsedMs?: number }[] =
+      [];
     const end = Math.min(head?.seq ?? 0, this.eventCursor + 100);
     for (
       let batch = Math.floor(this.eventCursor / 10);

@@ -1,4 +1,5 @@
 import { agentTimeline, agentCommand } from '@r2cloud/core/agent-turns';
+import { z } from 'zod';
 import { Router } from 'express';
 import { readThreads, changeThread } from '@r2cloud/core/threads';
 export function threadRoutes() {
@@ -43,6 +44,19 @@ export function threadRoutes() {
         res.locals.actor,
         String(req.params.projectId),
         String(req.params.threadId),
+        z
+          .object({
+            after: z
+              .string()
+              .regex(/^\d{1,19}$/)
+              .optional(),
+            before: z
+              .string()
+              .regex(/^\d{1,19}$/)
+              .optional(),
+          })
+          .refine((value) => !(value.after && value.before))
+          .parse(req.query),
       ),
     ),
   );

@@ -7,68 +7,65 @@ import { access, event } from './project-context';
 import { receipt } from './receipt';
 import { availableModels } from './thread-context';
 export async function readThreads(actor: Actor, projectId: string, threadId?: string) {
-  return prisma.$transaction(async (db) => {
-    await access(db, actor, projectId);
-    if (threadId) {
-      const thread = await db.conversationThread.findFirst({
-        where: { id: threadId, projectId, archivedAt: null },
-      });
-      requireThat(thread, 404, 'Thread not found.');
-      const messages = await db.comments.findMany({
-        where: { project_id: projectId, threadId },
-        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-        take: 100,
-        include: { users: { select: { name: true, kind: true } } },
-      });
-      const task = thread.taskId
-        ? await db.tasks.findUnique({
-            where: { id: thread.taskId },
-            select: { id: true, title: true, state: true, version: true },
-          })
-        : null;
-      const run = thread.taskId
-        ? await db.runs.findFirst({
-            where: { task_id: thread.taskId },
-            orderBy: { generation: 'desc' },
-            select: { id: true, state: true, stopped_at: true },
-          })
-        : null;
-      const failure =
-        task?.state === 'blocked' && run
-          ? await db.jobs.findFirst({
-              where: { run_id: run.id, kind: 'execute', error: { not: null } },
-              select: { error: true },
-            })
-          : null;
-      const activity = task
-        ? await db.events.findFirst({
-            where: { task_id: task.id },
-            orderBy: { id: 'desc' },
-            select: { kind: true },
-          })
-        : null;
-      return {
-        activity: activity?.kind ?? null,
-        failure: failure?.error ?? null,
-        thread: publicThread(thread),
-        task,
-        run,
-        messages: messages
-          .reverse()
-          .map(({ users, ...m }) => ({ ...m, name: users.name, role: users.kind })),
-      };
-    }
-    return {
-      threads: (
-        await db.conversationThread.findMany({
-          where: { projectId, archivedAt: null },
-          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+  const db = prisma;
+  await access(db, actor, projectId);
+  if (threadId) {
+    const row = await db.conversationThread.findFirst({
+      where: { id: threadId, projectId, archivedAt: null },
+      omit: { providerId: true, providerState: true },
+      include: {
+        comments: {
+          where: { project_id: projectId },
+          orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
           take: 100,
+          include: { users: { select: { name: true, kind: true } } },
+        },
+        task: { select: { id: true, title: true, state: true, version: true } },
+      },
+    });
+    requireThat(row, 404, 'Thread not found.');
+    const { comments: messages, task, ...thread } = row;
+    const run = thread.taskId
+      ? await db.runs.findFirst({
+          where: { task_id: thread.taskId },
+          orderBy: { generation: 'desc' },
+          select: { id: true, state: true, stopped_at: true },
         })
-      ).map(publicThread),
-      models: await availableModels(db, actor, projectId),
+      : null;
+    const failure =
+      task?.state === 'blocked' && run
+        ? await db.jobs.findFirst({
+            where: { run_id: run.id, kind: 'execute', error: { not: null } },
+            select: { error: true },
+          })
+        : null;
+    const activity = task
+      ? await db.events.findFirst({
+          where: { task_id: task.id },
+          orderBy: { id: 'desc' },
+          select: { kind: true },
+        })
+      : null;
+    return {
+      activity: activity?.kind ?? null,
+      failure: failure?.error ?? null,
+      thread,
+      task,
+      run,
+      messages: messages
+        .reverse()
+        .map(({ users, ...m }) => ({ ...m, name: users.name, role: users.kind })),
     };
-  });
+  }
+  return {
+    threads: await db.conversationThread.findMany({
+      where: { projectId, archivedAt: null },
+      omit: { providerId: true, providerState: true },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      take: 100,
+    }),
+    models: await availableModels(db, actor, projectId),
+  };
 }
 export async function changeThread(
   actor: Actor,
@@ -189,11 +186,4 @@ export async function changeThread(
     );
     return { id: thread.id };
   });
-}
-
-function publicThread<T extends { providerId: string | null; providerState: string | null }>(
-  thread: T,
-) {
-  const { providerId, providerState, ...visible } = thread;
-  return visible;
 }

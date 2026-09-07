@@ -16,12 +16,8 @@ const inviteInput = permissions.extend({
 });
 export async function projectAdministrator(db: DB, actor: Pick<Actor, 'id'>, projectId: string) {
   const project = await access(db, actor, projectId);
-  const membership = await db.memberships.findUnique({
-    where: { org_id_user_id: { org_id: project.org_id, user_id: actor.id } },
-    include: { users: true },
-  });
   requireThat(
-    membership?.users.kind === 'human' && ['owner', 'admin'].includes(membership.role),
+    project.actor_kind === 'human' && ['owner', 'admin'].includes(project.workspace_role),
     403,
     'A workspace owner or administrator must manage project access.',
   );

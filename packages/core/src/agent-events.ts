@@ -22,6 +22,7 @@ export async function recordAgentEvents(grant: AgentGrant, events: ProviderEvent
       'The agent turn has stopped.',
     );
     let cursor = turn.lastSequence;
+    const itemIds = new Set<string>();
     for (const { seq, message } of events) {
       if (seq <= cursor) continue;
       requireThat(seq === cursor + 1, 409, 'Provider event sequence has a gap.');
@@ -65,7 +66,7 @@ export async function recordAgentEvents(grant: AgentGrant, events: ProviderEvent
               : undefined;
         const text = (full ?? (existing?.text ?? '') + delta).slice(0, 64000);
         const status = method === 'item/completed' ? (item.status ?? 'completed') : 'running';
-        await db.agentItem.upsert({
+        const saved = await db.agentItem.upsert({
           where: { turnId_sourceId: { turnId: grant.id, sourceId } },
           create: {
             id: id(),
@@ -85,6 +86,7 @@ export async function recordAgentEvents(grant: AgentGrant, events: ProviderEvent
               : {}),
           },
         });
+        itemIds.add(saved.id);
       }
       cursor = seq;
     }
@@ -96,6 +98,7 @@ export async function recordAgentEvents(grant: AgentGrant, events: ProviderEvent
       await event(db, grant.projectId, grant.taskId, null, 'Agent timeline updated', {
         threadId: grant.threadId,
         turnId: grant.id,
+        itemIds: [...itemIds],
       });
   });
 }

@@ -26,6 +26,7 @@ export async function access(
     review: grant.review,
     merge: grant.merge,
     actor_kind: grant.memberships.users.kind,
+    workspace_role: grant.memberships.role,
   };
 }
 export type AccessibleProject = Awaited<ReturnType<typeof access>>;

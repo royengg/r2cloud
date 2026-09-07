@@ -11,6 +11,7 @@ export const agentInput = z.discriminatedUnion('action', [
   z.object({ action: z.literal('stop') }).strict(),
 ]);
 export type AgentItem = {
+  revision?: string;
   id: string;
   turnId: string;
   kind: string;
@@ -26,6 +27,8 @@ export type AgentRequest = {
   resolved: boolean;
 };
 export type AgentTimeline = {
+  nextBefore?: string | null;
+  reset?: boolean;
   cursor: string;
   items: AgentItem[];
   requests: AgentRequest[];

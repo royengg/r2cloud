@@ -5,7 +5,7 @@ import { nextRepositoryConnection } from '@r2cloud/database/locking';
 import { access, event, lockProject } from './project-context';
 import { projectAdministrator } from './team';
 import { id, hash, digest } from '@r2cloud/contracts/hash';
-import { requireThat, Fault, type Actor } from '@r2cloud/contracts/domain';
+import { requireThat, type Actor } from '@r2cloud/contracts/domain';
 import type { RepositoryDiscovery, DiscoveredRepository } from '@r2cloud/contracts/adapters';
 export type ConnectionConfig = { clientId: string; callbackURL: string; appSlug: string };
 export async function connectionStatus(actor: Actor, projectId: string, config?: ConnectionConfig) {
@@ -16,13 +16,8 @@ export async function connectionStatus(actor: Actor, projectId: string, config?:
         select: { full_name: true, target_ref: true },
       })
     : null;
-  let manage = false;
-  try {
-    await projectAdministrator(prisma, actor, projectId);
-    manage = true;
-  } catch (error) {
-    if (!(error instanceof Fault) || error.status !== 403) throw error;
-  }
+  const manage =
+    project.actor_kind === 'human' && ['owner', 'admin'].includes(project.workspace_role);
   const row = manage
     ? await prisma.repositoryConnection.findFirst({
         where: { projectId, actorId: actor.id },

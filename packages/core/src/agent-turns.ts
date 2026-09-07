@@ -117,50 +117,90 @@ export async function agentTimeline(
   actor: Actor,
   projectId: string,
   threadId: string,
+  page: { after?: string; before?: string } = {},
 ): Promise<AgentTimeline> {
-  return prisma.$transaction(async (db) => {
-    await access(db, actor, projectId);
-    requireThat(
-      await db.conversationThread.count({ where: { id: threadId, projectId, archivedAt: null } }),
-      404,
-      'Thread not found.',
-    );
-    const turns = await db.agentTurn.findMany({
-      where: { threadId, projectId },
-      orderBy: { createdAt: 'desc' },
-      take: 30,
-    });
-    const items = await db.agentItem.findMany({
-      where: { turnId: { in: turns.map((t) => t.id) }, kind: { not: 'checkpoint' } },
-      orderBy: { revision: 'desc' },
-      take: 1000,
-    });
-    const requests = await db.agentRequest.findMany({
-      where: { turnId: turns[0]?.id ?? '' },
-      orderBy: { id: 'asc' },
-    });
-    const cursor = await db.events.aggregate({
-      where: { project_id: projectId },
-      _max: { id: true },
-    });
-    return {
-      cursor: String(cursor._max.id ?? 0),
-      state: turns[0]?.state ?? 'idle',
-      turnId: turns[0]?.id ?? null,
-      actorId: turns[0]?.actorId ?? null,
-      items: items.reverse().map(({ revision, sourceId, ...item }) => ({
-        ...item,
-        detail: item.detail as Record<string, unknown>,
-      })),
-      requests: requests.map((r) => ({
-        id: r.id,
-        kind: r.kind,
-        prompt: r.prompt,
-        detail: r.detail as Record<string, unknown>,
-        resolved: r.response !== null,
-      })),
-    };
-  });
+  return prisma.$transaction(
+    async (db) => {
+      await access(db, actor, projectId);
+      const thread = await db.conversationThread.findFirst({
+        where: { id: threadId, projectId, archivedAt: null },
+        select: {
+          turns: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              id: true,
+              state: true,
+              actorId: true,
+              requests: { orderBy: { id: 'asc' } },
+            },
+          },
+        },
+      });
+      requireThat(thread, 404, 'Thread not found.');
+      const turns = thread.turns;
+      const requests = turns[0]?.requests ?? [];
+      const changes = page.after
+        ? await db.events.findMany({
+            where: { project_id: projectId, id: { gt: BigInt(page.after) } },
+            orderBy: { id: 'asc' },
+            take: 201,
+          })
+        : [];
+      const relevant = changes.filter(
+        (row) => (row.detail as { threadId?: string; itemIds?: string[] })?.threadId === threadId,
+      );
+      const changedIds = relevant.flatMap(
+        (row) => (row.detail as { threadId?: string; itemIds?: string[] }).itemIds ?? [],
+      ) as string[];
+      const incremental =
+        !!page.after &&
+        changes.length <= 200 &&
+        changedIds.length <= 100 &&
+        relevant.every(
+          (row) =>
+            row.kind === 'Agent timeline updated' &&
+            Array.isArray((row.detail as { threadId?: string; itemIds?: string[] })?.itemIds),
+        );
+      const items = await db.agentItem.findMany({
+        where: {
+          turn: { threadId, projectId },
+          kind: { not: 'checkpoint' },
+          ...(incremental ? { id: { in: changedIds } } : {}),
+          ...(page.before ? { revision: { lt: BigInt(page.before) } } : {}),
+        },
+        orderBy: { revision: 'desc' },
+        take: incremental ? undefined : 101,
+      });
+      const more = !incremental && items.length > 100;
+      if (more) items.pop();
+      const cursor = await db.events.aggregate({
+        where: { project_id: projectId },
+        _max: { id: true },
+      });
+      return {
+        cursor: String(cursor._max.id ?? 0),
+        state: turns[0]?.state ?? 'idle',
+        turnId: turns[0]?.id ?? null,
+        actorId: turns[0]?.actorId ?? null,
+        reset: !incremental && !page.before,
+        nextBefore: more ? String(items.at(-1)!.revision) : null,
+        items: items.reverse().map(({ revision, sourceId, ...item }) => ({
+          revision: String(revision),
+          ...item,
+          detail: item.detail as Record<string, unknown>,
+        })),
+        requests: requests.map((r) => ({
+          id: r.id,
+          kind: r.kind,
+          prompt: r.prompt,
+          detail: r.detail as Record<string, unknown>,
+          resolved: r.response !== null,
+        })),
+      };
+    },
+    { isolationLevel: 'RepeatableRead' },
+  );
 }
 export async function agentCommand(
   actor: Actor,

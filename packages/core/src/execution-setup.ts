@@ -8,23 +8,25 @@ import { executionProfile } from '@r2cloud/contracts/execution';
 export { executionProfile } from '@r2cloud/contracts/execution';
 export async function readExecutionSetup(actor: Actor, projectId: string) {
   const project = await access(prisma, actor, projectId);
-  const profile = await prisma.execution_profiles.findUnique({
-    where: { project_id: projectId },
-    select: { version: true, config: true, updated_at: true },
-  });
-  const connection = await prisma.provider_connections.findFirst({
-    where: { project_id: projectId, user_id: actor.id },
-    orderBy: { enabled: 'desc' },
-    select: { provider: true, mode: true, enabled: true },
-  });
-  const subscription = await prisma.codexConnection.findFirst({
-    where: { projectId, userId: actor.id },
-    orderBy: { createdAt: 'desc' },
-    select: { state: true },
-  });
-  const runtime = await prisma.executionRuntime.findFirst({
-    where: { projectId, expiresAt: { gt: new Date() } },
-  });
+  const [profile, connection, subscription, runtime] = await Promise.all([
+    prisma.execution_profiles.findUnique({
+      where: { project_id: projectId },
+      select: { version: true, config: true, updated_at: true },
+    }),
+    prisma.provider_connections.findFirst({
+      where: { project_id: projectId, user_id: actor.id },
+      orderBy: { enabled: 'desc' },
+      select: { provider: true, mode: true, enabled: true },
+    }),
+    prisma.codexConnection.findFirst({
+      where: { projectId, userId: actor.id },
+      orderBy: { createdAt: 'desc' },
+      select: { state: true },
+    }),
+    prisma.executionRuntime.findFirst({
+      where: { projectId, expiresAt: { gt: new Date() } },
+    }),
+  ]);
   return {
     repositoryConnected: !!project.repo_id,
     profile,

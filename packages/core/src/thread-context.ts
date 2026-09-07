@@ -12,13 +12,7 @@ export async function availableModels(db: DB, actor: Pick<Actor, 'id'>, projectI
     orderBy: { createdAt: 'desc' },
     select: { models: true },
   });
-  const personal = codexModels.parse(connection?.models ?? []);
-  const runtime = await db.executionRuntime.findFirst({
-    where: { projectId, modelsUpdatedAt: { gt: new Date(Date.now() - 86400000) } },
-    select: { models: true },
-  });
-  const supported = codexModels.parse(runtime?.models ?? []);
-  return supported.filter((model) => personal.some((p) => p.model === model.model));
+  return codexModels.parse(connection?.models ?? []);
 }
 export async function pinThread(
   db: DB,

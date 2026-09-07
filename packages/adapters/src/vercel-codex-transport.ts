@@ -7,29 +7,28 @@ import type { CodexTransport } from './codex';
 import { sandboxDigest, type SandboxJournal, type VercelIdentity } from './vercel';
 
 const root = '/tmp/r2cloud-control';
-export const codexBridge = readFileSync(new URL('./codex-bridge.py', import.meta.url), 'utf8');
+export const codexBridge = readFileSync(new URL('./codex-bridge.ts', import.meta.url), 'utf8');
 
 const bridgeClient = String.raw`
-import os, socket, sys, threading, time, tty
-tty.setraw(sys.stdin.fileno())
-client = socket.socket(socket.AF_UNIX)
-for attempt in range(100):
-    try:
-        client.connect('/tmp/r2cloud-control/bridge.sock')
-        break
-    except (FileNotFoundError, ConnectionRefusedError): time.sleep(0.05)
-else: sys.exit(1)
-os.write(sys.stdout.fileno(), b'{"connected":true}\n')
-def incoming():
-    while True:
-        data = client.recv(65536)
-        if not data: os._exit(0)
-        os.write(sys.stdout.fileno(), data)
-threading.Thread(target=incoming, daemon=True).start()
-while True:
-    data = os.read(sys.stdin.fileno(), 65536)
-    if not data: break
-    client.sendall(data)
+const { createConnection } = require('node:net');
+process.stdin.setRawMode(true);
+let client;
+for (let attempt = 0; attempt < 100; attempt++) {
+  try {
+    client = await new Promise((resolve, reject) => {
+      const socket = createConnection('/tmp/r2cloud-control/bridge.sock');
+      socket.once('connect', () => resolve(socket));
+      socket.once('error', reject);
+    });
+    break;
+  } catch { await Bun.sleep(50); }
+}
+if (!client) process.exit(1);
+client.on('error', () => process.exit(1));
+client.on('close', () => process.exit(0));
+process.stdout.write('{"connected":true}\n');
+process.stdin.pipe(client).pipe(process.stdout);
+
 `;
 type BridgeEvent = { seq: number; message: Record<string, any>; providerElapsedMs?: number };
 
@@ -92,7 +91,7 @@ export class VercelCodexTransport implements CodexTransport {
           JSON.stringify({
             type: 'start',
             command: 'sudo',
-            args: ['python3', '-u', '-c', bridgeClient],
+            args: ['bun', '-e', bridgeClient],
             env: [],
             cwd: '/tmp',
             cols: 80,

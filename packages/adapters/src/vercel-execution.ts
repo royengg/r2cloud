@@ -277,11 +277,11 @@ export class VercelCodexExecution implements ExecutionBackend {
         if ((await version.stdout()).trim() !== 'codex-cli 0.147.0')
           throw new SetupRequired('The sandbox Codex version changed.');
         await session.writeFiles([
-          { path: '/tmp/r2cloud-bridge.py', content: codexBridge, mode: 0o600 },
+          { path: '/tmp/r2cloud-bridge.ts', content: codexBridge, mode: 0o600 },
         ]);
         const process = await session.runCommand({
-          cmd: 'python3',
-          args: ['/tmp/r2cloud-bridge.py'],
+          cmd: 'bun',
+          args: ['/tmp/r2cloud-bridge.ts'],
           sudo: true,
           cwd: '/tmp',
           env: { PATH: sandboxPath },

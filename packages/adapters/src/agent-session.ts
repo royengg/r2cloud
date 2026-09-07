@@ -233,7 +233,7 @@ export class AgentSession {
         });
         if (!snapshotId)
           await session.writeFiles([
-            { path: '/tmp/r2cloud-bridge.py', content: codexBridge, mode: 0o600 },
+            { path: '/tmp/r2cloud-bridge.ts', content: codexBridge, mode: 0o600 },
           ]);
         if (!snapshotId) {
           const version = await session.runCommand({
@@ -245,8 +245,8 @@ export class AgentSession {
             throw new SetupRequired('The sandbox Codex version changed.');
         }
         await session.runCommand({
-          cmd: 'python3',
-          args: [snapshotId ? '/opt/r2cloud/codex-bridge.py' : '/tmp/r2cloud-bridge.py'],
+          cmd: 'bun',
+          args: [snapshotId ? '/opt/r2cloud/codex-bridge.ts' : '/tmp/r2cloud-bridge.ts'],
           sudo: true,
           cwd: '/tmp',
           detached: true,

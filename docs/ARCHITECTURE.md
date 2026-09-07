@@ -6,17 +6,17 @@ This describes the current implementation. [Status](STATUS.md) distinguishes liv
 
 A Bun workspace monorepo with separate API and background processes. There is no Turborepo or distributed microservice framework.
 
-| Location | Responsibility |
-| --- | --- |
-| `apps/web` | React/Vite board, conversations, account connections and review UI |
-| `apps/api/src/routes` | Express endpoints that call checked domain services |
-| `apps/api/src/auth` | Better Auth sign-in and session resolution |
-| `apps/api/src/realtime` | Project-authorised Socket.IO subscriptions |
-| `apps/api/src/processes` | API, brokers, workflow and publisher entry points |
-| `packages/core` | Membership, claims, permissions, durable turns, jobs and approvals |
-| `packages/database` | Prisma client, schema and SQL migrations |
-| `packages/adapters` | Codex, Vercel and GitHub integration boundaries |
-| `packages/contracts` | Shared types, validation and operation contracts |
+| Location                 | Responsibility                                                     |
+| ------------------------ | ------------------------------------------------------------------ |
+| `apps/web`               | React/Vite board, conversations, account connections and review UI |
+| `apps/api/src/routes`    | Express endpoints that call checked domain services                |
+| `apps/api/src/auth`      | Better Auth sign-in and session resolution                         |
+| `apps/api/src/realtime`  | Project-authorised Socket.IO subscriptions                         |
+| `apps/api/src/processes` | API, brokers, workflow and publisher entry points                  |
+| `packages/core`          | Membership, claims, permissions, durable turns, jobs and approvals |
+| `packages/database`      | Prisma client, schema and SQL migrations                           |
+| `packages/adapters`      | Codex, Vercel and GitHub integration boundaries                    |
+| `packages/contracts`     | Shared types, validation and operation contracts                   |
 
 `app.ts` composes middleware and routes; `server.ts` attaches Socket.IO. Neither starts a listener. Process entry points own startup. Tests and helper scripts stay local and are not included in the remote repository.
 
@@ -40,7 +40,7 @@ Product identity, GitHub repository access and personal Codex access are separat
 
 Prisma uses the pooled `DATABASE_URL`; migrations use `DIRECT_URL` when configured. There is no local database fallback. SQL migrations preserve constraints and triggers that are not replaceable with `prisma db push`.
 
-HTTP commands persist state and event/job intent together. Socket.IO sends invalidations after committed events are observed; clients fetch authoritative snapshots. Thread refreshes coalesce bursts, preserve reader position and recover after reconnecting. Timed reads are a fallback for disconnection or failed requests. The current realtime server polls Postgres per subscription; shared event fan-out remains a scaling improvement.
+HTTP commands persist state and event/job intent together. One browser socket serves the selected project; the API shares an event poll across project subscribers and rechecks each session before notification. TanStack Query caches thread reads independently and coalesces targeted invalidations, with timed refreshes while disconnected. Timelines load 100 recent items, page older history by item sequence, and use committed event cursors to fetch changed items. A missed-event window or lifecycle change resets the recent page.
 
 ## Threads and implementation ownership
 

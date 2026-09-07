@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { queryClient, readQuery, clearProjectQueries } from './queries';
-import { io } from 'socket.io-client';
+import { projectRealtime } from './realtime';
 import { api } from './api';
 import type { Identity, Snapshot } from './types';
 export function useWorkspace() {
@@ -80,14 +80,7 @@ export function useWorkspace() {
   useEffect(() => {
     if (!identity || !projectId || blockedProject === projectId) return;
 
-    const socket = io({ auth: { projectId }, withCredentials: true, transports: ['websocket'] });
-    socket.on('connect', () => {
-      setConnection('Live');
-    });
-    socket.on('snapshot-required', () => void reload());
-    socket.on('disconnect', () => setConnection('Reconnecting'));
-    socket.on('connect_error', () => setConnection('Offline'));
-    socket.on('access-ended', () => {
+    const disconnect = projectRealtime(projectId, setConnection, () => {
       serial.current++;
       clearProjectQueries(projectId);
       setBlockedProject(projectId);
@@ -95,7 +88,7 @@ export function useWorkspace() {
       setConnection('Access ended');
     });
     return () => {
-      socket.disconnect();
+      disconnect();
       serial.current++;
     };
   }, [identity, projectId, blockedProject, reload]);

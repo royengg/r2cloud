@@ -1,10 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import type { CodexModel } from '@r2cloud/contracts/threads';
 import type { Project, Comment } from '../lib/types';
 import { api } from '../lib/api';
 import { Avatar, Button, Status } from './ui';
 import { Icon } from './Icon';
-import { io } from 'socket.io-client';
+import { useQuery } from '@tanstack/react-query';
+import { queryClient, readQuery } from '../lib/queries';
+import { timelineQuery, mergeTimeline } from '../lib/timeline';
+import { refreshRead } from '../lib/realtime';
 import type { AgentTimeline as Timeline } from '@r2cloud/contracts/agent';
 import { AgentTimeline } from './AgentTimeline';
 import { ModelPicker } from './ModelPicker';
@@ -36,104 +39,54 @@ export function ThreadPanel({
   userId: string;
   initialMessage?: string;
 }) {
-  const [threads, setThreads] = useState<Thread[]>([]);
-  const [models, setModels] = useState<CodexModel[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
-  const [timeline, setTimeline] = useState<Timeline | null>(null);
-  const [detail, setDetail] = useState<Detail | null>(null);
+
   const [model, setModel] = useState<string | null>(null);
   const [text, setText] = useState(initialMessage);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [loaded, setLoaded] = useState(false);
+  const [historyBusy, setHistoryBusy] = useState(false);
   const following = useRef(true);
   const feed = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
-  const version = useRef(0);
   const path = `/projects/${project.id}/threads`;
-  useEffect(() => {
-    let disposed = false;
-    let timer: ReturnType<typeof setTimeout>;
-    let loading = false;
-    let pending = false;
-    const controller = new AbortController();
-    async function load() {
-      if (disposed) return;
-      clearTimeout(timer);
-      if (loading) {
-        pending = true;
-        return;
-      }
-      loading = true;
-      pending = false;
-      const generation = ++version.current;
-      let retry = false;
-      try {
-        const [listResult, detailResult, timelineResult] = await Promise.allSettled([
-          api<{ threads: Thread[]; models: CodexModel[] }>(path, undefined, controller.signal),
-          selected ? api<Detail>(`${path}/${selected}`, undefined, controller.signal) : null,
-          selected
-            ? api<Timeline>(`${path}/${selected}/timeline`, undefined, controller.signal)
-            : null,
-        ]);
-        if (listResult.status === 'rejected') throw listResult.reason;
-        if (detailResult.status === 'rejected') throw detailResult.reason;
-        if (timelineResult.status === 'rejected') throw timelineResult.reason;
-        const list = listResult.value;
-        const current = detailResult.value;
-        const stream = timelineResult.value;
-        if (!disposed && generation === version.current) {
-          setThreads(list.threads.filter((t) => !taskId || t.taskId === taskId));
-          setModels(list.models);
-          setDetail(current);
-          setTimeline(stream);
-          setLoaded(true);
-        }
-      } catch (e) {
-        retry = true;
-        if (!disposed && generation === version.current) setError((e as Error).message);
-      } finally {
-        loading = false;
-        if (!disposed) {
-          clearTimeout(timer);
-          if (pending || retry || !socket.connected)
-            timer = setTimeout(() => void load(), pending ? 0 : 5000);
-        }
-      }
+  const listQuery = useQuery(readQuery<{ threads: Thread[]; models: CodexModel[] }>(path));
+  const detailQuery = useQuery({
+    ...readQuery<Detail>(`${path}/${selected}`),
+    enabled: !!selected,
+  });
+  const streamQuery = useQuery({
+    ...timelineQuery(`${path}/${selected}/timeline`),
+    enabled: !!selected,
+  });
+  const threads = (listQuery.data?.threads ?? []).filter(
+    (thread) => !taskId || thread.taskId === taskId,
+  );
+  const models = listQuery.data?.models ?? [];
+  const loaded = !!listQuery.data;
+  const detail = selected ? detailQuery.data : null;
+  const timeline = selected ? streamQuery.data : null;
+  async function older() {
+    if (!timeline?.nextBefore || historyBusy) return;
+    setHistoryBusy(true);
+    const target = `${path}/${selected}/timeline`;
+    try {
+      const next = await api<Timeline>(`${target}?before=${timeline.nextBefore}`);
+      queryClient.setQueryData<Timeline>(['api', target], (current) =>
+        current
+          ? {
+              ...current,
+              items: mergeTimeline(next, { ...current, reset: false }).items,
+              nextBefore: next.nextBefore,
+            }
+          : undefined,
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setHistoryBusy(false);
     }
-    setDetail(null);
-    setTimeline(null);
-    const socket = io({
-      auth: { projectId: project.id },
-      withCredentials: true,
-      transports: ['websocket'],
-    });
-    socket.on('connect', () => void load());
-    socket.on('disconnect', () => {
-      if (disposed) return;
-      clearTimeout(timer);
-      timer = setTimeout(() => void load(), 5000);
-    });
-    socket.on('snapshot-required', () => {
-      clearTimeout(timer);
-      void load();
-    });
-    socket.on('access-ended', () => {
-      disposed = true;
-      controller.abort();
-      clearTimeout(timer);
-      setTimeline(null);
-      setDetail(null);
-    });
-    void load();
-    return () => {
-      disposed = true;
-      controller.abort();
-      socket.disconnect();
-      clearTimeout(timer);
-      version.current++;
-    };
-  }, [path, taskId, selected]);
+  }
   useLayoutEffect(() => {
     following.current = true;
     const box = feed.current;
@@ -156,14 +109,11 @@ export function ThreadPanel({
   const canRun = !!project.contribute && !running;
   async function control(body: unknown) {
     if (!selected || busy) return;
-    version.current++;
     setBusy(true);
     setError('');
     try {
       await api(`${path}/${selected}/control`, body);
-      const updated = await api<Timeline>(`${path}/${selected}/timeline`);
-      version.current++;
-      setTimeline(updated);
+      await refreshRead(`${path}/${selected}/timeline`);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -174,20 +124,18 @@ export function ThreadPanel({
     if (busy) return;
     setBusy(true);
     setError('');
-    version.current++;
     try {
       const result = await api<{ id: string }>(target ? `${path}/${target}` : path, body);
       const archived = (body as { action: string }).action === 'archive';
-      const list = await api<{ threads: Thread[]; models: CodexModel[] }>(path);
-      version.current++;
-      setThreads(list.threads.filter((t) => !taskId || t.taskId === taskId));
-      setModels(list.models);
+      await refreshRead(path);
       if (archived) {
+        queryClient.removeQueries({
+          predicate: (query) => String(query.queryKey[1]).startsWith(`${path}/${target}`),
+        });
         setSelected(null);
-        setDetail(null);
       } else {
         setSelected(result.id);
-        setDetail(await api<Detail>(`${path}/${result.id}`));
+        await refreshRead(`${path}/${result.id}`);
       }
       return true;
     } catch (e) {
@@ -199,7 +147,6 @@ export function ThreadPanel({
   }
   function newThread() {
     setSelected(null);
-    setDetail(null);
     setModel(null);
     setText('');
     setError('');
@@ -209,7 +156,6 @@ export function ThreadPanel({
     following.current = true;
     setBusy(true);
     setError('');
-    version.current++;
     try {
       let current = detail;
       if (!current) {
@@ -221,21 +167,19 @@ export function ThreadPanel({
           taskId: taskId ?? null,
         });
         setSelected(created.id);
-        current = await api<Detail>(`${path}/${created.id}`);
-        setDetail(current);
+        current = await queryClient.fetchQuery(readQuery<Detail>(`${path}/${created.id}`));
       }
       await api(`${path}/${current.thread.id}`, {
         action: 'run',
         version: current.thread.version,
         body: text,
       });
-      setTimeline(await api<Timeline>(`${path}/${current.thread.id}/timeline`));
       setText('');
-      const updated = await api<Detail>(`${path}/${current.thread.id}`);
-      const list = await api<{ threads: Thread[]; models: CodexModel[] }>(path);
-      version.current++;
-      setDetail(updated);
-      setThreads(list.threads.filter((t) => !taskId || t.taskId === taskId));
+      await Promise.all([
+        refreshRead(`${path}/${current.thread.id}/timeline`),
+        refreshRead(`${path}/${current.thread.id}`),
+        refreshRead(path),
+      ]);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -333,6 +277,18 @@ export function ThreadPanel({
                   </div>
                 </article>
               ))}
+            {timeline?.nextBefore && (
+              <Button
+                variant="ghost"
+                busy={historyBusy}
+                onClick={() => {
+                  following.current = false;
+                  void older();
+                }}
+              >
+                Load older activity
+              </Button>
+            )}
             {timeline && (
               <AgentTimeline
                 timeline={timeline}
@@ -345,7 +301,9 @@ export function ThreadPanel({
                 <Icon name="message" size={28} />
                 <p>
                   {selected
-                    ? 'Give Codex a clear next step.'
+                    ? detailQuery.isPending || streamQuery.isPending
+                      ? 'Loading conversation…'
+                      : 'Give Codex a clear next step.'
                     : loaded
                       ? 'What would you like to work on?'
                       : 'Loading conversations…'}
@@ -418,9 +376,12 @@ export function ThreadPanel({
             </div>
           </div>
         </form>
-        {error && (
+        {(error || listQuery.error || detailQuery.error || streamQuery.error) && (
           <p className="inline-error thread-error" role="alert">
-            {error}
+            {error ||
+              listQuery.error?.message ||
+              detailQuery.error?.message ||
+              streamQuery.error?.message}
           </p>
         )}
       </div>

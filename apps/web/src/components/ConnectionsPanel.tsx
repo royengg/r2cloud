@@ -1,6 +1,6 @@
 import { CodexConnection } from './CodexConnection';
 import { ExecutionSetup } from './ExecutionSetup';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { queryClient, readQuery } from '../lib/queries';
 import { api } from '../lib/api';
@@ -35,6 +35,9 @@ export function ConnectionsPanel({
     refetchInterval: (query) =>
       ['queued', 'checking'].includes(query.state.data?.pending?.status ?? '') ? 2000 : false,
   });
+  useEffect(() => {
+    void queryClient.prefetchQuery(readQuery(`/projects/${projectId}/execution-setup`));
+  }, [projectId]);
   const state = query.data;
   const [actionError, setError] = useState(
       new URLSearchParams(location.search).has('connection_error')
@@ -169,10 +172,11 @@ export function ConnectionsPanel({
           {!state.repository && !state.manage && (
             <p className="subtle">Ask a workspace administrator to connect a repository.</p>
           )}
-          <CodexConnection projectId={projectId} />
+
           {state.repository && <ExecutionSetup projectId={projectId} manage={state.manage} />}
         </>
       )}
+      <CodexConnection projectId={projectId} />
     </Modal>
   );
 }

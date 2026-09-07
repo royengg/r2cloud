@@ -21,7 +21,7 @@ Last reviewed: 6 September 2026. r2cloud is an early development preview. The co
 2. Authenticated live previews, isolated browser inspection, immutable screenshots, downloadable diff/artifact review and production object storage.
 3. Private repository credential custody, the live GitHub publisher, required checks, uncertain-response reconciliation and verified merge updates.
 4. Renewable Codex/Vercel credentials, enabled/versioned skills mounting, batch UI and production process/database isolation.
-5. Repository revocation/refresh, retention, pagination and shared realtime event fan-out. Board snapshots remain broad and the realtime server polls per subscription.
+5. Repository revocation/refresh, retention and pagination beyond agent timelines. Board snapshots remain broad; realtime event polling is shared per project within each API process.
 
 Publication and merge policy exist internally and have fixture coverage. They must not be presented as working live GitHub integrations. No code has been published or deployed through the product.
 

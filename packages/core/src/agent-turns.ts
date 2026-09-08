@@ -6,6 +6,7 @@ import { access, event } from './project-context';
 import { receipt } from './receipt';
 import { agentResourceUsage } from './agent-runtimes';
 import { availableModels } from './thread-context';
+import { resolveSkills } from './skills';
 
 export async function queueAgentTurn(
   db: DB,
@@ -85,6 +86,7 @@ export async function queueAgentTurn(
     reasoningEffort: reasoningEffort ?? selectedModel?.defaultReasoningEffort ?? null,
     instructions: thread.instructions,
     message,
+    skills: await resolveSkills(db, projectId, message),
     providerId: null,
     providerState: null,
     taskId: thread.taskId,

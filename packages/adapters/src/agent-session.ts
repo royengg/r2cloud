@@ -9,6 +9,7 @@ import { CodexHarness } from './codex';
 import type { ExecutionCredentials } from './vercel-execution';
 import { setTimeout as pause } from 'node:timers/promises';
 import { restoreSessionTools } from './session-tools';
+import { hash } from '@r2cloud/contracts/hash';
 
 export type SessionControl = {
   authorize(grant: AgentGrant): Promise<ExecutionCredentials>;
@@ -201,6 +202,23 @@ export class AgentSession {
         }
       }
       timing('environment_ready');
+      const selectedSkills = (grant.skills ?? []).map((skill) => {
+        if (!/^[a-z][a-z0-9-]{0,63}$/.test(skill.name) || hash(skill.content) !== skill.digest)
+          throw new Error('The queued skill content is invalid.');
+        return {
+          name: skill.name,
+          path: `/home/r2-agent/.codex/skills/${skill.name}-${skill.digest}/SKILL.md`,
+        };
+      });
+      if (selectedSkills.length) {
+        await session.writeFiles(
+          selectedSkills.map((skill, index) => ({
+            path: skill.path,
+            content: Buffer.from(grant.skills![index]!.content),
+            mode: 0o444,
+          })),
+        );
+      }
       const preferences = JSON.stringify({ model: grant.model, instructions: grant.instructions });
       if (warm?.harness && warm.preferences !== preferences) {
         await this.quiesce(sandbox);
@@ -346,12 +364,28 @@ export class AgentSession {
       providerId = warm!.providerId!;
       rolloutPath = warm!.rolloutPath;
       timing('thread_ready');
+      if (selectedSkills.length) {
+        const catalogue = await transport.requestOnce<{
+          data: { skills: { name: string; path: string; enabled: boolean }[] }[];
+        }>(`${grant.id}:skills`, 'skills/list', {
+          cwds: ['/vercel/sandbox/agent'],
+          forceReload: true,
+        });
+        for (const skill of selectedSkills)
+          if (
+            !catalogue.data.some((entry) =>
+              entry.skills.some((item) => item.path === skill.path && item.enabled),
+            )
+          )
+            throw new SetupRequired(`Codex could not load /${skill.name}.`);
+      }
       const offset = transport.cursor;
       const { turn } = await harness.input(
         `${grant.id}:turn`,
         providerId,
         grant.message,
         grant.reasoningEffort,
+        selectedSkills,
       );
       timing('turn_submitted');
       let interrupted = false;

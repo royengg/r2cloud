@@ -6,6 +6,7 @@ import { id } from '@r2cloud/contracts/hash';
 import { access, event } from './project-context';
 import { receipt } from './receipt';
 import { availableModels } from './thread-context';
+import { availableSkills } from './skills';
 export async function readThreads(actor: Actor, projectId: string, threadId?: string) {
   const db = prisma;
   await access(db, actor, projectId);
@@ -57,8 +58,8 @@ export async function readThreads(actor: Actor, projectId: string, threadId?: st
         .map(({ users, ...m }) => ({ ...m, name: users.name, role: users.kind })),
     };
   }
-  return {
-    threads: await db.conversationThread.findMany({
+  const [threads, models, skills] = await Promise.all([
+    db.conversationThread.findMany({
       where: { projectId, archivedAt: null },
       omit: { providerId: true, providerState: true },
       include: {
@@ -72,7 +73,17 @@ export async function readThreads(actor: Actor, projectId: string, threadId?: st
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
       take: 100,
     }),
-    models: await availableModels(db, actor, projectId),
+    availableModels(db, actor, projectId),
+    availableSkills(db, projectId),
+  ]);
+  return {
+    threads,
+    models,
+    skills: skills.map(({ name, description, source }) => ({
+      name,
+      description,
+      source,
+    })),
   };
 }
 export async function changeThread(

@@ -1,3 +1,5 @@
+import { SkillTextarea } from './SkillTextarea';
+import type { Skill } from '@r2cloud/contracts/skills';
 import { PreviewButton } from './PreviewButton';
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { CodexModel } from '@r2cloud/contracts/threads';
@@ -78,7 +80,9 @@ export function ThreadPanel({
   const feed = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const path = `/projects/${project.id}/threads`;
-  const listQuery = useQuery(readQuery<{ threads: Thread[]; models: CodexModel[] }>(path));
+  const listQuery = useQuery(
+    readQuery<{ threads: Thread[]; models: CodexModel[]; skills: Skill[] }>(path),
+  );
   const detailQuery = useQuery({
     ...readQuery<Detail>(`${path}/${selected}`),
     enabled: !!selected,
@@ -402,7 +406,7 @@ export function ThreadPanel({
           <label className="sr-only" htmlFor={`thread-message-${selected ?? 'new'}`}>
             Instructions or message
           </label>
-          <textarea
+          <SkillTextarea
             id={`thread-message-${selected ?? 'new'}`}
             ref={input}
             rows={1}
@@ -410,7 +414,8 @@ export function ThreadPanel({
             maxLength={8000}
             placeholder="Describe the next step…"
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={setText}
+            skills={listQuery.data?.skills ?? []}
             disabled={busy || !project.contribute}
           />
           <div className="thread-toolbar">

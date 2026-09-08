@@ -16,6 +16,8 @@ Describe an outcome, organise it on your board, and work with an agent in a conv
 
 Each task has one implementation owner. Agents work in isolated cloud sandboxes and cannot push or merge your code. Publication and merging require separate human approval; a finished agent reply does not make a task Completed.
 
+Type `/` in either chat box to choose a skill, or write a name directly—for example, `/better-ui review this screen`. The starter skills cover UI polish, accessibility, debugging, code review, testing and planning. Skills guide the same conversation; they do not grant permission to edit or publish code.
+
 ## Current limits
 
 The coding pilot supports one configured project and public repositories. It uses your connected Codex subscription and Vercel Hobby sandbox capacity. Sandboxes stay available for quick follow-ups, stop after two minutes idle, and have a ten-minute total limit.

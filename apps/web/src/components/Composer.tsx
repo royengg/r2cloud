@@ -1,3 +1,5 @@
+import { SkillTextarea } from './SkillTextarea';
+import type { Skill } from '@r2cloud/contracts/skills';
 import { useRef, useState, type FormEvent } from 'react';
 import { api } from '../lib/api';
 import { refreshRead } from '../lib/realtime';
@@ -18,7 +20,7 @@ export function Composer({
   const [model, setModel] = useState<string | null>(null);
   const [effort, setEffort] = useState<string | null>(null);
   const path = `/projects/${project.id}/threads`;
-  const catalogue = useQuery(readQuery<{ models: CodexModel[] }>(path));
+  const catalogue = useQuery(readQuery<{ models: CodexModel[]; skills: Skill[] }>(path));
   const models = catalogue.data?.models ?? [];
   const modelInfo = model
     ? models.find((option) => option.model === model)
@@ -70,12 +72,13 @@ export function Composer({
             {project.name}
           </span>
         </div>
-        <textarea
+        <SkillTextarea
           id="project-message"
           rows={2}
           placeholder="What would you like to work on?"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={setText}
+          skills={catalogue.data?.skills ?? []}
           disabled={busy || !project.contribute}
           maxLength={8000}
         />

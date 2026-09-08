@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { PinnedSkill } from './skills';
 export const agentInput = z.discriminatedUnion('action', [
   z
     .object({
@@ -47,6 +48,7 @@ export type AgentGrant = {
   reasoningEffort?: string | null;
   instructions: string;
   message: string;
+  skills?: PinnedSkill[];
   providerId: string | null;
   providerState: string | null;
   taskId: string | null;

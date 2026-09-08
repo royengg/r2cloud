@@ -91,3 +91,14 @@ export const statuses: Record<string, string> = {
 };
 export const columnFor = (task: Task) =>
   task.state === 'todo' ? 'todo' : task.state === 'completed' ? 'completed' : 'ongoing';
+
+export type Thread = {
+  id: string;
+  title: string;
+  model: string | null;
+  instructions: string;
+  taskId: string | null;
+  version: number;
+  createdBy: string;
+  turns?: { state: string }[];
+};

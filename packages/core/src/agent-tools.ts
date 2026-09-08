@@ -125,7 +125,12 @@ export async function waitForAgentResponse(
     if (turn.stopRequested) throw new Error('Turn stopped while waiting for a response.');
     const current = await prisma.agentRequest.findUniqueOrThrow({ where: { id: request.id } });
     if (current.response) {
-      await prisma.agentTurn.update({ where: { id: grant.id }, data: { state: 'running' } });
+      await prisma.$transaction(async (db) => {
+        await db.agentTurn.update({ where: { id: grant.id }, data: { state: 'running' } });
+        await event(db, grant.projectId, grant.taskId, null, 'Agent turn resumed', {
+          threadId: grant.threadId,
+        });
+      });
       return current.response as { approved?: boolean; answers?: Record<string, string[]> };
     }
     await pause(500);

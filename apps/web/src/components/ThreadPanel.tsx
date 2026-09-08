@@ -1,7 +1,7 @@
 import { PreviewButton } from './PreviewButton';
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { CodexModel } from '@r2cloud/contracts/threads';
-import type { Project, Comment } from '../lib/types';
+import type { Project, Comment, Thread } from '../lib/types';
 import { api } from '../lib/api';
 import { Avatar, Button, Status } from './ui';
 import { Icon } from './Icon';
@@ -12,15 +12,6 @@ import { refreshRead } from '../lib/realtime';
 import type { AgentTimeline as Timeline } from '@r2cloud/contracts/agent';
 import { AgentTimeline } from './AgentTimeline';
 import { ModelPicker } from './ModelPicker';
-type Thread = {
-  id: string;
-  title: string;
-  model: string | null;
-  instructions: string;
-  taskId: string | null;
-  version: number;
-  createdBy: string;
-};
 type Detail = {
   failure?: string | null;
   activity?: string | null;
@@ -34,19 +25,34 @@ export function ThreadPanel({
   taskId,
   userId,
   initialMessage = '',
+  selectedThreadId,
+  onSelectThread,
 }: {
   project: Project;
   taskId?: string;
   userId: string;
   initialMessage?: string;
+  selectedThreadId?: string | null;
+  onSelectThread?: (id: string | null) => void;
 }) {
-  const [selected, setSelected] = useState<string | null>(null);
-
+  const [localSelected, setLocalSelected] = useState<string | null>(null);
+  const selected = selectedThreadId === undefined ? localSelected : selectedThreadId;
+  function setSelected(id: string | null) {
+    setLocalSelected(id);
+    onSelectThread?.(id);
+  }
   const [model, setModel] = useState<string | null>(null);
   const [text, setText] = useState(initialMessage);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [historyBusy, setHistoryBusy] = useState(false);
+  useLayoutEffect(() => {
+    if (selectedThreadId !== undefined) {
+      if (selectedThreadId === null) setModel(null);
+      setText('');
+      setError('');
+    }
+  }, [selectedThreadId]);
   const following = useRef(true);
   const feed = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
@@ -203,34 +209,40 @@ export function ThreadPanel({
   const messages = detail?.messages ?? [];
   return (
     <section className="thread-panel" aria-label="Agent conversations">
-      <nav className="thread-navigation" aria-label="Conversation threads">
-        <Button icon="add" onClick={newThread} disabled={busy || !project.contribute}>
-          New thread
-        </Button>
-        <div className="thread-list">
-          {threads.map((thread) => (
-            <button
-              key={thread.id}
-              type="button"
-              title={thread.title}
-              aria-pressed={selected === thread.id}
-              disabled={busy}
-              onClick={() => {
-                setSelected(thread.id);
-                setText('');
-                setError('');
-              }}
-            >
-              <Icon name="message" size={17} />
-              <span>{thread.title}</span>
-            </button>
-          ))}
-        </div>
-      </nav>
+      {selectedThreadId === undefined && (
+        <nav className="thread-navigation" aria-label="Conversation threads">
+          <Button icon="add" onClick={newThread} disabled={busy || !project.contribute}>
+            New thread
+          </Button>
+          <div className="thread-list">
+            {threads.map((thread) => (
+              <button
+                key={thread.id}
+                type="button"
+                title={thread.title}
+                aria-pressed={selected === thread.id}
+                disabled={busy}
+                onClick={() => {
+                  setSelected(thread.id);
+                  setText('');
+                  setError('');
+                }}
+              >
+                <Icon name="message" size={17} />
+                <span>{thread.title}</span>
+              </button>
+            ))}
+          </div>
+        </nav>
+      )}
       <div className="thread-content">
         <header className="thread-heading">
           <div>
-            <h3 title={detail?.thread.title}>{detail?.thread.title ?? 'New conversation'}</h3>
+            <h3 title={detail?.thread.title}>
+              {detail?.thread.title ??
+                threads.find((thread) => thread.id === selected)?.title ??
+                (selected ? 'Opening conversation…' : 'New conversation')}
+            </h3>
           </div>
           <div className="thread-heading-actions">
             {detail && (

@@ -450,6 +450,9 @@ export async function runAgentTurn(
         heartbeatAt: new Date(),
       },
     });
+    await event(db, projectId, grant.taskId, grant.actorId, 'Agent turn started', {
+      threadId: turn.threadId,
+    });
     return { ...turn, grant, stopProof };
   });
   if (!selected) return false;

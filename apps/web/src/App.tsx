@@ -3,6 +3,7 @@ import { AuthScreen, WorkspaceSetup } from './components/AuthScreen';
 import { Select } from './components/Select';
 import { Sidebar } from './components/Sidebar';
 import { Board } from './components/Board';
+import { ThreadPanel } from './components/ThreadPanel';
 import { Composer } from './components/Composer';
 import { TaskDetail } from './components/TaskDetail';
 import { ConnectionsPanel } from './components/ConnectionsPanel';
@@ -22,6 +23,7 @@ export function App() {
     [search, setSearch] = useState(''),
     [priority, setPriority] = useState('All priorities'),
     [showFilters, setShowFilters] = useState(false),
+    [threadView, setThreadView] = useState<{ projectId: string; id: string | null } | null>(null),
     [selectedId, setSelectedId] = useState<string | null>(null),
     [creating, setCreating] = useState(false),
     [newProject, setNewProject] = useState(false),
@@ -76,6 +78,7 @@ export function App() {
       (priority === 'All priorities' || t.priority === priority),
   );
   const selectProject = (id: string) => {
+    setThreadView(null);
     w.setProjectId(id);
     if (mobile) setSidebarOpen(false);
   };
@@ -154,12 +157,19 @@ export function App() {
       {sidebarOpen && (
         <Sidebar
           identity={w.identity}
-          project={context}
+          project={context ? { ...context, contribute: project?.contribute } : undefined}
           onAttention={(value) => {
+            setThreadView(null);
             setAttention(value);
             if (mobile) setSidebarOpen(false);
           }}
           onProject={selectProject}
+          selectedThreadId={threadView?.projectId === w.projectId ? threadView.id : null}
+          onThread={(id) => {
+            setThreadView({ projectId: w.projectId, id });
+            setSelectedId(null);
+            if (mobile) setSidebarOpen(false);
+          }}
           onNewProject={() => setNewProject(true)}
           onClose={() => setSidebarOpen(false)}
           onConnections={() => setConnections(true)}
@@ -202,98 +212,136 @@ export function App() {
           </div>
         </header>
         <main id="main-content" className="board-workspace">
-          <section className="project-intro">
-            <div className="project-title-group">
-              <span className="project-cover-icon">
-                <Icon name="globe" size={28} />
-              </span>
-              <div>
-                <div className="project-eyebrow">
-                  A shared project <span>·</span> Web application
-                </div>
-                <h1>{context?.name ?? 'Your project'}</h1>
+          {threadView?.projectId === w.projectId ? (
+            <section className="project-thread-workspace">
+              <div className="project-thread-toolbar">
+                <Button variant="ghost" icon="board" onClick={() => setThreadView(null)}>
+                  Project board
+                </Button>
+                <Button
+                  icon="add"
+                  disabled={!project?.contribute}
+                  onClick={() => setThreadView({ projectId: w.projectId, id: null })}
+                >
+                  New thread
+                </Button>
               </div>
-            </div>
-            {project?.contribute ? (
-              <Button icon="add" variant="primary" onClick={() => setCreating(true)}>
-                New task
-              </Button>
-            ) : (
-              <span className="view-only">View only</span>
-            )}
-          </section>
-          <div className="board-control-row">
-            <div className="board-views" role="group" aria-label="Task view">
-              <button aria-pressed={!attention} onClick={() => setAttention(false)}>
-                <Icon name="board" size={17} />
-                Board<span>{tasks.length}</span>
-              </button>
-              <button aria-pressed={attention} onClick={() => setAttention(true)}>
-                <Icon name="attention" size={17} />
-                <span className="attention-label">Needs my attention</span>
-                {attentionCount > 0 && <span className="attention-number">{attentionCount}</span>}
-              </button>
-            </div>
-            <div className="board-filters">
-              <label className="task-search">
-                <Icon name="search" size={18} />
-                <span className="sr-only">Search tasks</span>
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search tasks"
+              {project ? (
+                <ThreadPanel
+                  key={project.id}
+                  project={project}
+                  userId={w.identity.user.id}
+                  selectedThreadId={threadView.id}
+                  onSelectThread={(id) =>
+                    setThreadView((current) =>
+                      current === threadView ? { projectId: w.projectId, id } : current,
+                    )
+                  }
                 />
-              </label>
-              <button
-                className={`filter-trigger ${showFilters ? 'is-active' : ''}`}
-                aria-expanded={showFilters}
-                onClick={() => setShowFilters(!showFilters)}
-              >
-                <Icon name="filter" size={18} />
-                <span>Filter</span>
-              </button>
-            </div>
-          </div>
-          {showFilters && (
-            <div className="active-filters">
-              <Select
-                label="Filter priority"
-                value={priority}
-                onChange={setPriority}
-                options={['All priorities', 'High', 'Medium', 'Low'].map((value) => ({
-                  value,
-                  label: value,
-                }))}
-              />
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setSearch('');
-                  setPriority('All priorities');
-                  setAttention(false);
-                }}
-              >
-                Clear filters
-              </Button>
-            </div>
-          )}
-          {w.snapshot ? (
-            <Board
-              tasks={filtered}
-              allTasks={tasks}
-              onSelect={setSelectedId}
-              onCreate={() => setCreating(true)}
-              canCreate={!!project?.contribute}
-              filtered={!!search || attention || priority !== 'All priorities'}
-            />
+              ) : (
+                <p role="status">Opening conversation…</p>
+              )}
+            </section>
           ) : (
-            <div className="board-loading" role="status">
-              <Icon name="loading" size={24} />
-              {w.error ? 'The board is unavailable.' : 'Gathering your tasks…'}
-              {w.error && <Button onClick={() => location.reload()}>Reload workspace</Button>}
-            </div>
+            <>
+              <section className="project-intro">
+                <div className="project-title-group">
+                  <span className="project-cover-icon">
+                    <Icon name="globe" size={28} />
+                  </span>
+                  <div>
+                    <div className="project-eyebrow">
+                      A shared project <span>·</span> Web application
+                    </div>
+                    <h1>{context?.name ?? 'Your project'}</h1>
+                  </div>
+                </div>
+                {project?.contribute ? (
+                  <Button icon="add" variant="primary" onClick={() => setCreating(true)}>
+                    New task
+                  </Button>
+                ) : (
+                  <span className="view-only">View only</span>
+                )}
+              </section>
+              <div className="board-control-row">
+                <div className="board-views" role="group" aria-label="Task view">
+                  <button aria-pressed={!attention} onClick={() => setAttention(false)}>
+                    <Icon name="board" size={17} />
+                    Board<span>{tasks.length}</span>
+                  </button>
+                  <button aria-pressed={attention} onClick={() => setAttention(true)}>
+                    <Icon name="attention" size={17} />
+                    <span className="attention-label">Needs my attention</span>
+                    {attentionCount > 0 && (
+                      <span className="attention-number">{attentionCount}</span>
+                    )}
+                  </button>
+                </div>
+                <div className="board-filters">
+                  <label className="task-search">
+                    <Icon name="search" size={18} />
+                    <span className="sr-only">Search tasks</span>
+                    <input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Search tasks"
+                    />
+                  </label>
+                  <button
+                    className={`filter-trigger ${showFilters ? 'is-active' : ''}`}
+                    aria-expanded={showFilters}
+                    onClick={() => setShowFilters(!showFilters)}
+                  >
+                    <Icon name="filter" size={18} />
+                    <span>Filter</span>
+                  </button>
+                </div>
+              </div>
+              {showFilters && (
+                <div className="active-filters">
+                  <Select
+                    label="Filter priority"
+                    value={priority}
+                    onChange={setPriority}
+                    options={['All priorities', 'High', 'Medium', 'Low'].map((value) => ({
+                      value,
+                      label: value,
+                    }))}
+                  />
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setSearch('');
+                      setPriority('All priorities');
+                      setAttention(false);
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                </div>
+              )}
+              {w.snapshot ? (
+                <Board
+                  tasks={filtered}
+                  allTasks={tasks}
+                  onSelect={setSelectedId}
+                  onCreate={() => setCreating(true)}
+                  canCreate={!!project?.contribute}
+                  filtered={!!search || attention || priority !== 'All priorities'}
+                />
+              ) : (
+                <div className="board-loading" role="status">
+                  <Icon name="loading" size={24} />
+                  {w.error ? 'The board is unavailable.' : 'Gathering your tasks…'}
+                  {w.error && <Button onClick={() => location.reload()}>Reload workspace</Button>}
+                </div>
+              )}
+              {project && (
+                <Composer key={w.projectId} project={project} userId={w.identity.user.id} />
+              )}
+            </>
           )}
-          {project && <Composer key={w.projectId} project={project} userId={w.identity.user.id} />}
         </main>
       </div>
       {task && project && (

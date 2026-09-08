@@ -1,4 +1,6 @@
-import type { Identity, Project } from '../lib/types';
+import { useQuery } from '@tanstack/react-query';
+import { readQuery } from '../lib/queries';
+import type { Identity, Project, Thread } from '../lib/types';
 import { Icon } from './Icon';
 import { IconButton, Modal } from './ui';
 import { AccountMenu } from './AccountMenu';
@@ -13,6 +15,8 @@ export function Sidebar({
   onNewProject,
   onSignOut,
   mobile,
+  selectedThreadId,
+  onThread,
 }: {
   identity: Identity;
   project: Project | undefined;
@@ -23,7 +27,16 @@ export function Sidebar({
   onNewProject: () => void;
   onSignOut: () => void;
   mobile: boolean;
+  selectedThreadId: string | null;
+  onThread: (id: string | null) => void;
 }) {
+  const threadQuery = useQuery({
+    ...readQuery<{ threads: Thread[] }>(`/projects/${project?.id}/threads`),
+    enabled: !!project,
+  });
+  const threads = (threadQuery.data?.threads ?? []).filter(
+    (thread) => thread.createdBy === identity.user.id,
+  );
   const orgs = [
     ...new Map(
       identity.projects.map((p) => [p.org_id, { id: p.org_id, name: p.org_name ?? p.org_id }]),
@@ -60,17 +73,89 @@ export function Sidebar({
           {identity.projects
             .filter((p) => p.org_id === project?.org_id)
             .map((p, i) => (
-              <button
-                key={p.id}
-                className={`project-nav ${p.id === project?.id ? 'is-current' : ''}`}
-                onClick={() => onProject(p.id)}
-              >
-                <span className={`project-color project-color-${i % 3}`}>
-                  <Icon name={i === 0 ? 'globe' : 'folder'} size={16} />
-                </span>
-                <span>{p.name}</span>
-                {p.id === project?.id && <span className="current-project-dot" />}
-              </button>
+              <div key={p.id} className="sidebar-project-group">
+                <button
+                  className={`project-nav ${p.id === project?.id ? 'is-current' : ''}`}
+                  aria-expanded={p.id === project?.id}
+                  onClick={() => onProject(p.id)}
+                >
+                  <span className={`project-color project-color-${i % 3}`}>
+                    <Icon name={i === 0 ? 'globe' : 'folder'} size={16} />
+                  </span>
+                  <span className="project-nav-title">{p.name}</span>
+                  <Icon name={p.id === project?.id ? 'down' : 'right'} size={13} />
+                </button>
+                {p.id === project?.id && (
+                  <div className="sidebar-threads">
+                    <div className="sidebar-threads-heading">
+                      <span>Your threads</span>
+                      {project.contribute && (
+                        <IconButton
+                          name="add"
+                          label={`New thread in ${p.name}`}
+                          onClick={() => onThread(null)}
+                        />
+                      )}
+                    </div>
+                    {threadQuery.isPending ? (
+                      <p className="sidebar-thread-hint" role="status">
+                        Loading threads…
+                      </p>
+                    ) : threadQuery.isError ? (
+                      <button
+                        className="sidebar-thread-hint"
+                        onClick={() => void threadQuery.refetch()}
+                      >
+                        Retry loading threads
+                      </button>
+                    ) : threads.length === 0 ? (
+                      <p className="sidebar-thread-hint">Your conversations will appear here.</p>
+                    ) : (
+                      threads.map((thread) => {
+                        const state = thread.turns?.[0]?.state;
+                        const status =
+                          state === 'waiting'
+                            ? 'Needs your input'
+                            : state === 'queued'
+                              ? 'Queued'
+                              : state === 'unknown'
+                                ? 'Reconnecting'
+                                : state === 'running'
+                                  ? 'Running'
+                                  : '';
+                        return (
+                          <button
+                            key={thread.id}
+                            className="sidebar-thread"
+                            aria-current={selectedThreadId === thread.id ? 'page' : undefined}
+                            title={`${thread.title}${status ? ` · ${status}` : ''}`}
+                            onClick={() => onThread(thread.id)}
+                          >
+                            <span className="sidebar-thread-icon" data-state={state}>
+                              <Icon
+                                name={
+                                  state === 'running'
+                                    ? 'loading'
+                                    : state === 'waiting'
+                                      ? 'attention'
+                                      : state === 'queued'
+                                        ? 'clock'
+                                        : state === 'unknown'
+                                          ? 'info'
+                                          : 'message'
+                                }
+                                size={15}
+                              />
+                            </span>
+                            <span className="sidebar-thread-title">{thread.title}</span>
+                            {status && <span className="sr-only"> · {status}</span>}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
             ))}
         </nav>
       </div>

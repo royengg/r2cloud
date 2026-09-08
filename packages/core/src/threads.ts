@@ -61,6 +61,14 @@ export async function readThreads(actor: Actor, projectId: string, threadId?: st
     threads: await db.conversationThread.findMany({
       where: { projectId, archivedAt: null },
       omit: { providerId: true, providerState: true },
+      include: {
+        turns: {
+          where: { stoppedAt: null },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { state: true },
+        },
+      },
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
       take: 100,
     }),

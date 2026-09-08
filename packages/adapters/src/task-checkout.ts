@@ -10,14 +10,23 @@ import { mkdir, readFile, writeFile, statfs, rename, rm } from 'node:fs/promises
 import { join, resolve } from 'node:path';
 
 export class TaskCheckout {
-  readonly path = '/vercel/sandbox/agent/repository';
+  get path() {
+    return this.purpose === 'preview'
+      ? '/vercel/sandbox/r2-previews/source'
+      : '/vercel/sandbox/agent/repository';
+  }
+  private get user() {
+    return this.purpose === 'preview' ? 'r2-preview' : 'r2-agent';
+  }
   readonly setup;
   constructor(
     private sandbox: Sandbox,
-    private grant: RunGrant,
+    private grant:
+      RunGrant | { config: Pick<RunGrant['config'], 'repository' | 'baseSha' | 'executionSetup'> },
     private account: ExecutionCredentials,
     private deadline: number,
     private previous?: { digest: string; headSha: string },
+    private purpose: 'implementation' | 'preview' = 'implementation',
   ) {
     this.setup = executionProfile.parse(grant.config.executionSetup?.config);
     if (digest(this.setup) !== grant.config.executionSetup?.digest)
@@ -30,7 +39,7 @@ export class TaskCheckout {
       cmd: 'runuser',
       args: [
         '-u',
-        'r2-agent',
+        this.user,
         '--',
         'env',
         `PATH=${sandboxPath}`,
@@ -46,6 +55,18 @@ export class TaskCheckout {
   }
   async prepare() {
     const g = this.grant;
+    if (this.purpose === 'preview') {
+      const initialized = await this.sandbox.currentSession().runCommand({
+        cmd: 'sh',
+        args: [
+          '-ec',
+          'id r2-preview >/dev/null 2>&1 || useradd --create-home --shell /bin/bash r2-preview; install -d -m 755 /vercel/sandbox/r2-previews; rm -rf /vercel/sandbox/r2-previews/source; install -d -m 700 -o r2-preview -g r2-preview /vercel/sandbox/r2-previews/source',
+        ],
+        sudo: true,
+        timeoutMs: 15000,
+      });
+      if (initialized.exitCode !== 0) throw new Error('Preview checkout could not be prepared.');
+    }
     if (!/^[-\w.]+\/[-\w.]+$/.test(g.config.repository) || !/^[a-f0-9]{40}$/.test(g.config.baseSha))
       throw new Error('Invalid repository identity.');
     const repo = await fetch(`https://api.github.com/repos/${g.config.repository}`, {
@@ -67,7 +88,7 @@ print('present' if os.path.isdir(p) else 'absent')`,
       timeoutMs: 10000,
     });
     if (existing.exitCode !== 0) throw new Error('The existing checkout cannot be reused.');
-    const reuse = (await existing.stdout()).trim() === 'present';
+    const reuse = this.purpose !== 'preview' && (await existing.stdout()).trim() === 'present';
     if (reuse) {
       const head = await this.run('git', ['rev-parse', 'HEAD']);
       const status = await this.run('git', ['status', '--porcelain']);
@@ -119,7 +140,15 @@ for root,dirs,files in os.walk('${this.path}',topdown=False,followlinks=False):
         ],
         ['-C', this.path, '-c', 'core.hooksPath=/dev/null', 'checkout', '--detach', 'FETCH_HEAD'],
       ])
-        if ((await this.run('git', args, '/vercel/sandbox/agent')).exitCode !== 0)
+        if (
+          (
+            await this.run(
+              'git',
+              args,
+              this.purpose === 'preview' ? this.path : '/vercel/sandbox/agent',
+            )
+          ).exitCode !== 0
+        )
           throw new Error('Repository preparation failed.');
       if (this.previous) {
         const bytes = await readFile(
@@ -164,7 +193,11 @@ for root,dirs,files in os.walk('${this.path}',topdown=False,followlinks=False):
     }
     if ((await this.run(this.setup.install.cmd, this.setup.install.args, this.cwd)).exitCode !== 0)
       throw new Error('Dependency installation failed. Check repository settings.');
-    return { checkout: this.path, cwd: this.cwd, taskId: g.taskId, generation: g.generation };
+    return {
+      checkout: this.path,
+      cwd: this.cwd,
+      ...('taskId' in g ? { taskId: g.taskId, generation: g.generation } : {}),
+    };
   }
   private get cwd() {
     return this.setup.directory === '.' ? this.path : `${this.path}/${this.setup.directory}`;
@@ -173,6 +206,8 @@ for root,dirs,files in os.walk('${this.path}',topdown=False,followlinks=False):
     summary: string,
     interrupted = false,
   ): Promise<Omit<RunResult, 'stopProof'> | undefined> {
+    if (this.purpose === 'preview' || !('runId' in this.grant))
+      throw new Error('Preview checkouts cannot export candidates.');
     const status = await this.run('git', ['status', '--porcelain']);
     const head = (await (await this.run('git', ['rev-parse', 'HEAD'])).stdout()).trim();
     if (

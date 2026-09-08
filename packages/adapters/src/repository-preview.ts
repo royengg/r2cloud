@@ -7,8 +7,9 @@ const supervisor = readFileSync(new URL('./preview-supervisor.ts', import.meta.u
 export class RepositoryPreview {
   constructor(
     private sandbox: Sandbox,
-    private setup: ExecutionProfile,
+    readonly setup: ExecutionProfile,
     private deadline: number,
+    private independent = false,
   ) {}
   async start(snapshot = false) {
     const timeout = Math.min(45000, this.deadline - Date.now() - 20000);
@@ -21,6 +22,7 @@ export class RepositoryPreview {
         '--',
         JSON.stringify({
           snapshot,
+          independent: this.independent,
           path: sandboxPath,
           directory: this.setup.directory,
           cmd: this.setup.dev.cmd,

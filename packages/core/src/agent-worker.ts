@@ -20,7 +20,8 @@ import { recordAgentEvents } from './agent-events';
 import { callAgentTool, waitForAgentResponse } from './agent-tools';
 import { claimAgentTask, finishAgentImplementation } from './agent-implementation';
 import { codexCredentials } from './managed-execution';
-import { event, lockProject } from './project-context';
+import { pinExecutionSetup } from './execution-setup';
+import { access, event, lockProject } from './project-context';
 
 export function agentControl(
   projectId: string,
@@ -30,8 +31,8 @@ export function agentControl(
   const checkouts = new Map<string, TaskCheckout>();
   const previews = new Map<string, RepositoryPreview>();
   async function previewState(grant: AgentGrant, state: string, error: string | null = null) {
-    const checkout = checkouts.get(grant.id);
-    requireThat(checkout && grant.runtimeId, 409, 'Start a task before opening its preview.');
+    const preview = previews.get(grant.id);
+    requireThat(preview && grant.runtimeId, 409, 'Start the project preview first.');
     await prisma.$transaction(async (db) => {
       await lockProject(db, grant.projectId);
       requireThat(
@@ -46,11 +47,11 @@ export function agentControl(
         create: {
           id: randomUUID(),
           runtimeId: grant.runtimeId!,
-          port: checkout.setup.port,
+          port: preview.setup.port,
           state,
           error,
         },
-        update: { state, error, port: checkout.setup.port },
+        update: { state, error, port: preview.setup.port },
       });
       await event(db, grant.projectId, null, grant.actorId, 'Preview updated', {
         threadId: grant.threadId,
@@ -59,7 +60,7 @@ export function agentControl(
   }
   async function startPreview(grant: AgentGrant, snapshot = false) {
     const preview = previews.get(grant.id);
-    requireThat(preview, 409, 'Start a task before opening its preview.');
+    requireThat(preview, 409, 'Start the project preview first.');
     await previewState(grant, 'starting');
     try {
       await preview.start(snapshot);
@@ -162,6 +163,46 @@ export function agentControl(
           };
         }
         if (p.tool === 'start_preview') {
+          if (!previews.has(grant.id)) {
+            requireThat(grant.runtimeId, 409, 'The preview runtime is unavailable.');
+            const config = await prisma.$transaction(async (db) => {
+              await lockProject(db, grant.projectId);
+              const project = await access(
+                db,
+                { id: grant.actorId },
+                grant.projectId,
+                'contribute',
+              );
+              requireThat(project.repo_id, 409, 'Connect a repository before opening a preview.');
+              const repository = await db.repositories.findUniqueOrThrow({
+                where: { id: project.repo_id },
+              });
+              return {
+                repository: repository.full_name,
+                baseSha: repository.base_sha,
+                executionSetup: await pinExecutionSetup(db, grant.projectId, grant.minutes, 0),
+              };
+            });
+            const deadline = grant.runtimeExpiresAt ?? Date.now() + grant.minutes * 60000;
+            const preview = new RepositoryPreview(
+              sandbox,
+              config.executionSetup.config,
+              deadline,
+              true,
+            );
+            await preview.stop();
+            const checkout = new TaskCheckout(
+              sandbox,
+              { config },
+              await authorize(grant),
+              deadline,
+              undefined,
+              'preview',
+            );
+            await checkout.prepare();
+            await authorize(grant);
+            previews.set(grant.id, preview);
+          }
           const result = await startPreview(grant);
           return {
             success: result.ready,

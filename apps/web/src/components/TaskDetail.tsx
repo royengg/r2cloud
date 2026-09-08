@@ -300,6 +300,18 @@ export function TaskDetail({
         )}
       </div>
       <footer className="detail-footer">
+        {task.state === 'blocked' &&
+          !candidate &&
+          task.run?.state === 'stopped' &&
+          project.contribute &&
+          (task.owner_id === userId || project.review) && (
+            <Button
+              busy={busy}
+              onClick={() => void onCommand({ action: 'release', version: task.version })}
+            >
+              Return to Todo
+            </Button>
+          )}
         {task.state === 'todo' ? (
           <>
             <span>Review before anything is published.</span>

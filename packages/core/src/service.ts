@@ -158,7 +158,7 @@ async function startTask(
   requireThat(
     occupied < repo.max_changes,
     409,
-    'Another change is awaiting completion in this repository. Its review or merge must finish first.',
+    'Another task holds this repository’s implementation slot. Continue that task, or return it to Todo if it is stopped without a candidate.',
   );
   const claimId = id();
   await db.claims.create({
@@ -235,6 +235,70 @@ export async function commandInTransaction(
   }
   const claim = await db.claims.findFirst({ where: { task_id: taskId, released_at: null } });
   requireThat(claim, 409, 'This task has no active claim.');
+  if (input.action === 'release') {
+    requireThat(
+      p.actor_kind === 'human' && (claim.owner_id === actor.id || p.review),
+      403,
+      'Only the owner or a project reviewer can release this task.',
+    );
+    requireThat(
+      t.state === 'blocked' && !t.candidate_id,
+      409,
+      'Only a stopped task without a candidate can return to Todo.',
+    );
+    requireThat(
+      !(await db.runs.count({
+        where: { claim_id: claim.id, OR: [{ stopped_at: null }, { stop_proof: null }] },
+      })),
+      409,
+      'Every execution must be confirmed stopped before releasing this task.',
+    );
+    requireThat(
+      !(await db.agentTurn.count({ where: { thread: { taskId }, stoppedAt: null } })),
+      409,
+      'Stop the task’s active agent turn before releasing it.',
+    );
+    const stoppedRuns = await db.runs.findMany({
+      where: { task_id: taskId, stopped_at: { not: null }, stop_proof: { not: null } },
+      select: { id: true },
+    });
+    requireThat(
+      !(await db.jobs.count({
+        where: {
+          task_id: taskId,
+          NOT: {
+            OR: [
+              { state: 'done' },
+              {
+                kind: 'execute',
+                state: 'blocked',
+                run_id: { in: stoppedRuns.map((run) => run.id) },
+              },
+            ],
+          },
+        },
+      })),
+      409,
+      'Resolve pending operations before releasing this task.',
+    );
+    requireThat(
+      !(await db.publications.count({ where: { task_id: taskId } })),
+      409,
+      'A published task cannot be released this way.',
+    );
+    await lockRow(db, 'repositories', claim.repo_id);
+    await db.approvals.updateMany({
+      where: { task_id: taskId, consumed_at: null },
+      data: { revoked_at: new Date() },
+    });
+    await db.claims.update({ where: { id: claim.id }, data: { released_at: new Date() } });
+    await db.tasks.update({
+      where: { id: taskId },
+      data: { state: 'todo', version: { increment: 1 } },
+    });
+    await event(db, projectId, taskId, actor.id, 'Stopped task returned to Todo');
+    return { id: taskId };
+  }
   if (input.action === 'changes') {
     requireThat(
       ['review', 'blocked'].includes(t.state),

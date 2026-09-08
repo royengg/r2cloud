@@ -8,6 +8,7 @@ export const taskInput = z
   })
   .strict();
 export const commandInput = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('release'), version: z.number().int().positive() }).strict(),
   z
     .object({
       action: z.literal('start'),

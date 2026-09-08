@@ -16,7 +16,7 @@ const definitions = {
   },
   start_preview: {
     description:
-      'Start or restart the configured repository dev server for the current task. Returns readiness for the project preview button; never invent a URL.',
+      'Start or restart the project preview without claiming an implementation task. Uses the current task checkout when available; otherwise starts an isolated checkout of the connected repository base commit. Returns readiness for the project preview button; never invent a URL.',
     schema: z.object({}).strict(),
   },
   ask_user: {

@@ -41,10 +41,12 @@ await new Promise<void>((resolve, reject) => {
     probe.close((error) => (error ? reject(error) : resolve())),
   );
 });
-const source = '/vercel/sandbox/agent/repository';
+const source = config.independent
+  ? '/vercel/sandbox/r2-previews/source'
+  : '/vercel/sandbox/agent/repository';
 if (lstatSync(source).isSymbolicLink() || realpathSync(source) !== source)
   throw Error('Invalid preview checkout');
-let user = 'r2-agent',
+let user = config.independent ? 'r2-preview' : 'r2-agent',
   directory = source;
 function run(command: string, args: string[]) {
   const timeout = deadline - Date.now();

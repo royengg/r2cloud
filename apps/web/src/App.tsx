@@ -23,7 +23,11 @@ export function App() {
     [search, setSearch] = useState(''),
     [priority, setPriority] = useState('All priorities'),
     [showFilters, setShowFilters] = useState(false),
-    [threadView, setThreadView] = useState<{ projectId: string; id: string | null } | null>(null),
+    [threadView, setThreadView] = useState<{
+      projectId: string;
+      id: string | null;
+      initialMessage?: string;
+    } | null>(null),
     [selectedId, setSelectedId] = useState<string | null>(null),
     [creating, setCreating] = useState(false),
     [newProject, setNewProject] = useState(false),
@@ -220,6 +224,7 @@ export function App() {
                   project={project}
                   userId={w.identity.user.id}
                   onBack={() => setThreadView(null)}
+                  initialMessage={threadView.initialMessage}
                   selectedThreadId={threadView.id}
                   onSelectThread={(id) =>
                     setThreadView((current) =>
@@ -327,7 +332,13 @@ export function App() {
                 </div>
               )}
               {project && (
-                <Composer key={w.projectId} project={project} userId={w.identity.user.id} />
+                <Composer
+                  key={w.projectId}
+                  project={project}
+                  onOpen={(initialMessage) =>
+                    setThreadView({ projectId: w.projectId, id: null, initialMessage })
+                  }
+                />
               )}
             </>
           )}

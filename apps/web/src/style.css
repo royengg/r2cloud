@@ -1024,7 +1024,7 @@ button .icon {
 }
 .composer-actions {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   gap: 10px;
 }
@@ -2505,33 +2505,6 @@ body[data-keyboard] .account-menu {
   }
 }
 
-.conversation-dialog[open] {
-  display: flex;
-  flex-direction: column;
-  width: min(760px, calc(100vw - 32px));
-  height: min(720px, calc(100dvh - 48px));
-  padding: 0;
-  overflow: hidden;
-}
-.conversation-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--color-border);
-}
-.conversation-header h2 {
-  font-size: var(--text-label);
-}
-.conversation-header p {
-  font-size: var(--text-caption);
-  color: var(--color-text-secondary);
-  overflow-wrap: anywhere;
-}
-.conversation-header > div {
-  flex: 1;
-  min-width: 0;
-}
 .conversation-messages {
   flex: 1;
   min-height: 0;
@@ -2576,19 +2549,7 @@ body[data-keyboard] .account-menu {
 .conversation-reply textarea:focus-visible {
   outline: none;
 }
-@media (prefers-reduced-motion: no-preference) {
-  body:not([data-keyboard]) .conversation-dialog[open] {
-    transition:
-      opacity 180ms ease,
-      transform 180ms var(--ease-out);
-    @starting-style {
-      opacity: 0;
-      transform: translateY(28px);
-    }
-  }
-}
 @media (max-width: 480px) {
-  .conversation-header,
   .conversation-reply {
     padding: 16px;
   }
@@ -2629,10 +2590,6 @@ body[data-keyboard] .account-menu {
   font-size: var(--text-caption);
 }
 
-.threaded-dialog[open] {
-  width: min(1020px, calc(100vw - 32px));
-  height: min(800px, calc(100dvh - 48px));
-}
 .thread-panel {
   display: flex;
   flex: 1;

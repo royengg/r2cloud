@@ -53,11 +53,11 @@ export function ThreadPanel({
   useLayoutEffect(() => {
     if (selectedThreadId !== undefined) {
       if (selectedThreadId === null) setModel(null);
-      setText('');
+      setText(selectedThreadId === null ? initialMessage : '');
       setEffort(null);
       setError('');
     }
-  }, [selectedThreadId]);
+  }, [selectedThreadId, initialMessage]);
   useLayoutEffect(() => {
     const field = input.current;
     if (!field) return;

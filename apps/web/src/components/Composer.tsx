@@ -1,14 +1,17 @@
 import { useState, type FormEvent } from 'react';
-import { Button, IconButton, Modal } from './ui';
 import { Icon } from './Icon';
-import { ThreadPanel } from './ThreadPanel';
 import type { Project } from '../lib/types';
-export function Composer({ project, userId }: { project: Project; userId: string }) {
+export function Composer({
+  project,
+  onOpen,
+}: {
+  project: Project;
+  onOpen: (message: string) => void;
+}) {
   const [text, setText] = useState('');
-  const [expanded, setExpanded] = useState(false);
   function open(event: FormEvent) {
     event.preventDefault();
-    setExpanded(true);
+    onOpen(text);
   }
   return (
     <div className="composer-area">
@@ -34,41 +37,15 @@ export function Composer({ project, userId }: { project: Project; userId: string
           maxLength={8000}
         />
         <div className="composer-actions">
-          <Button type="button" variant="ghost" icon="message" onClick={() => setExpanded(true)}>
-            Threads
-          </Button>
           <button
             className="composer-send"
-            aria-label="Open agent conversations"
+            aria-label="Open conversation"
             disabled={!project.contribute}
           >
             <Icon name="up" size={21} />
           </button>
         </div>
       </form>
-      {expanded && (
-        <Modal
-          label="Project conversations"
-          close={() => setExpanded(false)}
-          className="conversation-dialog threaded-dialog"
-        >
-          <header className="conversation-header">
-            <span className="composer-mark">
-              <Icon name="message" size={20} />
-            </span>
-            <div>
-              <h2>Conversations</h2>
-              <p>{project.name}</p>
-            </div>
-            <IconButton
-              name="close"
-              label="Close conversations"
-              onClick={() => setExpanded(false)}
-            />
-          </header>
-          <ThreadPanel project={project} userId={userId} initialMessage={text} />
-        </Modal>
-      )}
     </div>
   );
 }

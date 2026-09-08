@@ -1,6 +1,7 @@
 import { useState, lazy, Suspense } from 'react';
 import type { AgentTimeline as Timeline, AgentRequest } from '@r2cloud/contracts/agent';
 import { Button } from './ui';
+import { CodexLogo } from './CodexLogo';
 const Markdown = lazy(() => import('react-markdown'));
 function RichText({ children }: { children: string }) {
   return (
@@ -65,10 +66,11 @@ export function AgentTimeline({
           if (['userMessage', 'agentMessage', 'error'].includes(item.kind))
             return (
               <article
-                className={`agent-message ${item.kind === 'error' ? 'inline-error' : ''}`}
+                className={`agent-message ${item.kind === 'userMessage' ? 'agent-message-user' : 'agent-message-codex'} ${item.kind === 'error' ? 'inline-error' : ''}`}
                 key={item.id}
               >
-                <strong>
+                <strong className="agent-message-author">
+                  {item.kind !== 'userMessage' && <CodexLogo />}
                   {item.kind === 'userMessage' ? String(item.detail.authorName ?? 'You') : 'Codex'}
                 </strong>
                 {item.kind === 'userMessage' ? (

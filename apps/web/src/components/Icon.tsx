@@ -1,6 +1,7 @@
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   GithubIcon,
+  BrainIcon,
   Add01Icon,
   ArrowUp02Icon,
   ArrowUpRight01Icon,
@@ -35,6 +36,7 @@ import {
 } from '@hugeicons/core-free-icons';
 const icons = {
   github: GithubIcon,
+  brain: BrainIcon,
   add: Add01Icon,
   up: ArrowUp02Icon,
   external: ArrowUpRight01Icon,

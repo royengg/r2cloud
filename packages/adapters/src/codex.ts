@@ -108,10 +108,11 @@ export class CodexHarness extends EventEmitter {
   resume(key: string, threadId: string) {
     return this.transport.requestOnce(key, 'thread/resume', { threadId });
   }
-  input(key: string, threadId: string, text: string) {
+  input(key: string, threadId: string, text: string, effort?: string | null) {
     return this.transport.requestOnce<{ turn: { id: string; status: string } }>(key, 'turn/start', {
       threadId,
       input: [{ type: 'text', text }],
+      ...(effort ? { effort } : {}),
     });
   }
   interrupt(key: string, threadId: string, turnId: string) {

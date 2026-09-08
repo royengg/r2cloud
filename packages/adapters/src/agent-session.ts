@@ -347,7 +347,12 @@ export class AgentSession {
       rolloutPath = warm!.rolloutPath;
       timing('thread_ready');
       const offset = transport.cursor;
-      const { turn } = await harness.input(`${grant.id}:turn`, providerId, grant.message);
+      const { turn } = await harness.input(
+        `${grant.id}:turn`,
+        providerId,
+        grant.message,
+        grant.reasoningEffort,
+      );
       timing('turn_submitted');
       let interrupted = false;
       let finished = false;

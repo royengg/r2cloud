@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Icon } from './Icon';
 import { CodexLogo } from './CodexLogo';
 import type { CodexModel } from '@r2cloud/contracts/threads';
@@ -14,8 +14,75 @@ export function ModelPicker({
   onChange: (value: string | null) => void;
   disabled: boolean;
 }) {
-  const options = [{ model: '', displayName: 'Codex default' }, ...models];
-  const label = options.find((option) => option.model === (value ?? ''))?.displayName ?? value;
+  return (
+    <ChoicePicker
+      label="Model"
+      icon={<CodexLogo />}
+      value={value}
+      disabled={disabled}
+      onChange={onChange}
+      options={[
+        { value: '', label: 'Codex default' },
+        ...models.map((model) => ({ value: model.model, label: model.displayName })),
+      ]}
+    />
+  );
+}
+export function ThinkingPicker({
+  model,
+  value,
+  onChange,
+  disabled,
+}: {
+  model?: CodexModel;
+  value: string | null;
+  onChange: (value: string | null) => void;
+  disabled: boolean;
+}) {
+  const options = model?.supportedReasoningEfforts ?? [];
+  const name = (value: string) =>
+    ({ xhigh: 'Extra high', max: 'Maximum' })[value] ??
+    value.charAt(0).toUpperCase() + value.slice(1);
+  return (
+    <ChoicePicker
+      label="Thinking"
+      icon={<Icon name="brain" size={17} />}
+      value={value}
+      disabled={disabled || !options.length}
+      onChange={onChange}
+      options={[
+        {
+          value: '',
+          label: 'Auto',
+          description: model?.defaultReasoningEffort
+            ? `Use the model default: ${name(model.defaultReasoningEffort)}`
+            : 'Use the model’s default thinking level',
+        },
+        ...options.map((option) => ({
+          value: option.reasoningEffort,
+          label: name(option.reasoningEffort),
+          description: option.description,
+        })),
+      ]}
+    />
+  );
+}
+function ChoicePicker({
+  label: setting,
+  icon,
+  value,
+  onChange,
+  disabled,
+  options,
+}: {
+  label: string;
+  icon: ReactNode;
+  value: string | null;
+  onChange: (value: string | null) => void;
+  disabled: boolean;
+  options: { value: string; label: string; description?: string }[];
+}) {
+  const label = options.find((option) => option.value === (value ?? ''))?.label ?? value;
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -76,32 +143,33 @@ export function ModelPicker({
         ref={trigger}
         type="button"
         disabled={disabled}
-        aria-label={`Model, ${label}`}
+        aria-label={`${setting}, ${label}`}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         onClick={() => setOpen(!open)}
       >
-        <CodexLogo />
+        {icon}
         <span>{label}</span>
         <Icon name="down" size={16} />
       </button>
       {open && (
-        <div className="model-menu" id={menuId} role="menu" aria-label="Models">
+        <div className="model-menu" id={menuId} role="menu" aria-label={setting}>
           {options.map((option) => (
             <button
-              key={option.model}
+              key={option.value}
               type="button"
               role="menuitemradio"
-              aria-checked={option.model === (value ?? '')}
+              aria-checked={option.value === (value ?? '')}
               tabIndex={-1}
+              title={option.description}
               onClick={() => {
                 close();
-                if (option.model !== (value ?? '')) onChange(option.model || null);
+                if (option.value !== (value ?? '')) onChange(option.value || null);
               }}
             >
-              <span>{option.displayName}</span>
-              {option.model === (value ?? '') && <Icon name="check" size={16} />}
+              <span>{option.label}</span>
+              {option.value === (value ?? '') && <Icon name="check" size={16} />}
             </button>
           ))}
         </div>

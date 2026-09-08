@@ -44,6 +44,7 @@ export type AgentGrant = {
   actorId: string;
   connectionId: string;
   model: string | null;
+  reasoningEffort?: string | null;
   instructions: string;
   message: string;
   providerId: string | null;

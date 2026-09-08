@@ -4,7 +4,7 @@ import type { LivePreviewStatus } from '@r2cloud/contracts/preview';
 import { api } from '../lib/api';
 import { readQuery } from '../lib/queries';
 import { refreshRead } from '../lib/realtime';
-import { Button } from './ui';
+import { IconButton } from './ui';
 
 export function PreviewButton({
   projectId,
@@ -26,12 +26,9 @@ export function PreviewButton({
     const timer = setTimeout(() => void refreshRead(path), remaining + 100);
     return () => clearTimeout(timer);
   }, [path, preview?.expiresAt, preview?.state]);
-  if (!preview) return null;
+
   async function open() {
-    if (preview?.state === 'failed') {
-      onError(preview.error ?? 'The preview could not start.');
-      return;
-    }
+    if (preview?.state !== 'ready' || opening) return;
     const popup = window.open('about:blank', '_blank');
     if (!popup) {
       onError('Allow pop-ups to open the preview.');
@@ -56,22 +53,33 @@ export function PreviewButton({
       setOpening(false);
     }
   }
-  const starting = preview.state === 'starting';
+  const label = opening
+    ? 'Opening preview'
+    : query.isPending
+      ? 'Loading preview'
+      : !preview
+        ? 'Ask Codex to start a preview'
+        : preview.state === 'starting'
+          ? 'Starting preview'
+          : preview.state === 'stopped'
+            ? 'Preview ended. Ask Codex to restart it.'
+            : preview.state === 'failed'
+              ? (preview.error ?? 'Preview unavailable')
+              : 'Open preview in a separate tab';
+  const disabled = opening || preview?.state !== 'ready';
   return (
-    <Button
-      icon={preview.state === 'failed' ? 'attention' : 'globe'}
-      busy={opening || starting}
-      disabled={preview.state === 'stopped'}
-      onClick={() => void open()}
-      title="Open the running app in a separate tab"
+    <span
+      className="preview-button-hint"
+      title={label}
+      tabIndex={disabled ? 0 : undefined}
+      aria-label={disabled ? label : undefined}
     >
-      {starting
-        ? 'Starting preview'
-        : preview.state === 'stopped'
-          ? 'Preview ended'
-          : preview.state === 'failed'
-            ? 'Preview unavailable'
-            : 'Open preview'}
-    </Button>
+      <IconButton
+        name={opening || preview?.state === 'starting' ? 'loading' : 'globe'}
+        label={label}
+        disabled={disabled}
+        onClick={() => void open()}
+      />
+    </span>
   );
 }

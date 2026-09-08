@@ -13,6 +13,7 @@ export async function queueAgentTurn(
   projectId: string,
   threadId: string,
   message: string,
+  reasoningEffort?: string | null,
 ) {
   const project = await access(db, actor, projectId, 'contribute');
   const thread = await db.conversationThread.findFirst({
@@ -49,6 +50,17 @@ export async function queueAgentTurn(
     409,
     'Choose an available Codex model.',
   );
+  const selectedModel = thread.model
+    ? models.find((m) => m.model === thread.model)
+    : models.find((m) => m.isDefault);
+  requireThat(
+    !reasoningEffort ||
+      selectedModel?.supportedReasoningEfforts?.some(
+        (option) => option.reasoningEffort === reasoningEffort,
+      ),
+    409,
+    'Choose a supported thinking level for this model.',
+  );
   const previous = await db.agentTurn.findFirst({
     where: { threadId },
     orderBy: { createdAt: 'desc' },
@@ -70,6 +82,7 @@ export async function queueAgentTurn(
     actorId: actor.id,
     connectionId: connection.id,
     model: thread.model ?? models.find((m) => m.isDefault)?.model ?? null,
+    reasoningEffort: reasoningEffort ?? selectedModel?.defaultReasoningEffort ?? null,
     instructions: thread.instructions,
     message,
     providerId: null,

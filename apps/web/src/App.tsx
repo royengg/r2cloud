@@ -214,23 +214,12 @@ export function App() {
         <main id="main-content" className="board-workspace">
           {threadView?.projectId === w.projectId ? (
             <section className="project-thread-workspace">
-              <div className="project-thread-toolbar">
-                <Button variant="ghost" icon="board" onClick={() => setThreadView(null)}>
-                  Project board
-                </Button>
-                <Button
-                  icon="add"
-                  disabled={!project?.contribute}
-                  onClick={() => setThreadView({ projectId: w.projectId, id: null })}
-                >
-                  New thread
-                </Button>
-              </div>
               {project ? (
                 <ThreadPanel
                   key={project.id}
                   project={project}
                   userId={w.identity.user.id}
+                  onBack={() => setThreadView(null)}
                   selectedThreadId={threadView.id}
                   onSelectThread={(id) =>
                     setThreadView((current) =>

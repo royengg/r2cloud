@@ -3,7 +3,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import type { CodexModel } from '@r2cloud/contracts/threads';
 import type { Project, Comment, Thread } from '../lib/types';
 import { api } from '../lib/api';
-import { Avatar, Button, Status } from './ui';
+import { Avatar, Button, IconButton, Status } from './ui';
 import { Icon } from './Icon';
 import { useQuery } from '@tanstack/react-query';
 import { queryClient, readQuery } from '../lib/queries';
@@ -11,7 +11,7 @@ import { timelineQuery, mergeTimeline } from '../lib/timeline';
 import { refreshRead } from '../lib/realtime';
 import type { AgentTimeline as Timeline } from '@r2cloud/contracts/agent';
 import { AgentTimeline } from './AgentTimeline';
-import { ModelPicker } from './ModelPicker';
+import { ModelPicker, ThinkingPicker } from './ModelPicker';
 type Detail = {
   failure?: string | null;
   activity?: string | null;
@@ -27,6 +27,7 @@ export function ThreadPanel({
   initialMessage = '',
   selectedThreadId,
   onSelectThread,
+  onBack,
 }: {
   project: Project;
   taskId?: string;
@@ -34,6 +35,7 @@ export function ThreadPanel({
   initialMessage?: string;
   selectedThreadId?: string | null;
   onSelectThread?: (id: string | null) => void;
+  onBack?: () => void;
 }) {
   const [localSelected, setLocalSelected] = useState<string | null>(null);
   const selected = selectedThreadId === undefined ? localSelected : selectedThreadId;
@@ -41,6 +43,8 @@ export function ThreadPanel({
     setLocalSelected(id);
     onSelectThread?.(id);
   }
+  const [effort, setEffort] = useState<string | null>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
   const [model, setModel] = useState<string | null>(null);
   const [text, setText] = useState(initialMessage);
   const [busy, setBusy] = useState(false);
@@ -50,9 +54,28 @@ export function ThreadPanel({
     if (selectedThreadId !== undefined) {
       if (selectedThreadId === null) setModel(null);
       setText('');
+      setEffort(null);
       setError('');
     }
   }, [selectedThreadId]);
+  useLayoutEffect(() => {
+    const field = input.current;
+    if (!field) return;
+    const resize = () => {
+      field.style.height = 'auto';
+      field.style.height = `${Math.min(field.scrollHeight, 180)}px`;
+    };
+    resize();
+    let width = field.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (field.clientWidth !== width) {
+        width = field.clientWidth;
+        resize();
+      }
+    });
+    observer.observe(field);
+    return () => observer.disconnect();
+  }, [text]);
   const following = useRef(true);
   const feed = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
@@ -73,6 +96,15 @@ export function ThreadPanel({
   const loaded = !!listQuery.data;
   const detail = selected ? detailQuery.data : null;
   const timeline = selected ? streamQuery.data : null;
+  const selectedModel = detail ? detail.thread.model : model;
+  const modelInfo = selectedModel
+    ? models.find((model) => model.model === selectedModel)
+    : models.find((model) => model.isDefault);
+  const selectedEffort = modelInfo?.supportedReasoningEfforts?.some(
+    (option) => option.reasoningEffort === effort,
+  )
+    ? effort
+    : null;
   async function older() {
     if (!timeline?.nextBefore || historyBusy) return;
     setHistoryBusy(true);
@@ -155,6 +187,7 @@ export function ThreadPanel({
   function newThread() {
     setSelected(null);
     setModel(null);
+    setEffort(null);
     setText('');
     setError('');
   }
@@ -180,6 +213,7 @@ export function ThreadPanel({
         action: 'run',
         version: current.thread.version,
         body: text,
+        reasoningEffort: selectedEffort,
       });
       setText('');
       await Promise.all([
@@ -194,6 +228,7 @@ export function ThreadPanel({
     }
   }
   function changeModel(value: string | null) {
+    setEffort(null);
     if (!detail) {
       setModel(value);
       return;
@@ -207,13 +242,19 @@ export function ThreadPanel({
     });
   }
   const messages = detail?.messages ?? [];
+  const archiveAction = detail && (detail.thread.createdBy === userId || project.review) && (
+    <Button
+      variant="ghost"
+      disabled={busy || running}
+      onClick={() => void perform({ action: 'archive', version: detail.thread.version })}
+    >
+      Archive
+    </Button>
+  );
   return (
     <section className="thread-panel" aria-label="Agent conversations">
       {selectedThreadId === undefined && (
         <nav className="thread-navigation" aria-label="Conversation threads">
-          <Button icon="add" onClick={newThread} disabled={busy || !project.contribute}>
-            New thread
-          </Button>
           <div className="thread-list">
             {threads.map((thread) => (
               <button
@@ -236,6 +277,22 @@ export function ThreadPanel({
         </nav>
       )}
       <div className="thread-content">
+        <div className="project-thread-toolbar">
+          {onBack && (
+            <Button variant="ghost" icon="board" onClick={onBack}>
+              Project board
+            </Button>
+          )}
+          <div className="thread-header-actions">
+            {archiveAction}
+            <IconButton
+              name="add"
+              label="New thread"
+              disabled={busy || !project.contribute}
+              onClick={newThread}
+            />
+          </div>
+        </div>
         <header className="thread-heading">
           <div>
             <h3 title={detail?.thread.title}>
@@ -252,15 +309,6 @@ export function ThreadPanel({
                 threadId={detail.thread.id}
                 onError={setError}
               />
-            )}
-            {detail && (detail.thread.createdBy === userId || project.review) && (
-              <Button
-                variant="ghost"
-                disabled={busy || running}
-                onClick={() => void perform({ action: 'archive', version: detail.thread.version })}
-              >
-                Archive
-              </Button>
             )}
           </div>
         </header>
@@ -358,7 +406,8 @@ export function ThreadPanel({
           </label>
           <textarea
             id={`thread-message-${selected ?? 'new'}`}
-            rows={3}
+            ref={input}
+            rows={1}
             required
             maxLength={8000}
             placeholder="Describe the next step…"
@@ -367,17 +416,27 @@ export function ThreadPanel({
             disabled={busy || !project.contribute}
           />
           <div className="thread-toolbar">
-            <ModelPicker
-              models={models}
-              value={detail ? detail.thread.model : model}
-              onChange={changeModel}
-              disabled={
-                busy ||
-                running ||
-                !project.contribute ||
-                (!!selected && (!detail || (detail.thread.createdBy !== userId && !project.review)))
-              }
-            />
+            <div className="thread-settings">
+              {' '}
+              <ModelPicker
+                models={models}
+                value={detail ? detail.thread.model : model}
+                onChange={changeModel}
+                disabled={
+                  busy ||
+                  running ||
+                  !project.contribute ||
+                  (!!selected &&
+                    (!detail || (detail.thread.createdBy !== userId && !project.review)))
+                }
+              />
+              <ThinkingPicker
+                model={modelInfo}
+                value={selectedEffort}
+                onChange={setEffort}
+                disabled={busy || running || !project.contribute || (!!selected && !detail)}
+              />
+            </div>
             <div className="thread-actions">
               {running ? (
                 <Button

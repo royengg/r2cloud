@@ -3,6 +3,16 @@ export const codexModel = z.object({
   model: z.string().min(1).max(120),
   displayName: z.string().min(1).max(160),
   isDefault: z.boolean().default(false),
+  defaultReasoningEffort: z.string().max(32).optional(),
+  supportedReasoningEfforts: z
+    .array(
+      z.object({
+        reasoningEffort: z.string().min(1).max(32),
+        description: z.string().max(1000),
+      }),
+    )
+    .max(20)
+    .optional(),
 });
 export const codexModels = z.array(codexModel).max(100);
 export type CodexModel = z.infer<typeof codexModel>;
@@ -26,6 +36,7 @@ export const threadCommand = z.discriminatedUnion('action', [
   z
     .object({
       action: z.literal('run'),
+      reasoningEffort: z.string().min(1).max(32).nullable().optional(),
       version: z.number().int().positive(),
       taskVersion: z.number().int().positive().optional(),
       body: z.string().trim().min(1).max(8000),

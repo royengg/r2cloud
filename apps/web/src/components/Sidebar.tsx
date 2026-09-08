@@ -88,7 +88,6 @@ export function Sidebar({
                 {p.id === project?.id && (
                   <div className="sidebar-threads">
                     <div className="sidebar-threads-heading">
-                      <span>Your threads</span>
                       {project.contribute && (
                         <IconButton
                           name="add"

@@ -166,7 +166,7 @@ export async function changeThread(
       });
     } else {
       if (input.action === 'run') {
-        await queueAgentTurn(db, actor, projectId, thread.id, input.body);
+        await queueAgentTurn(db, actor, projectId, thread.id, input.body, input.reasoningEffort);
       } else
         await db.comments.create({
           data: {

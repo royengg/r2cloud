@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { readQuery } from '../lib/queries';
 import type { Identity, Project, Thread } from '../lib/types';
@@ -30,6 +31,7 @@ export function Sidebar({
   selectedThreadId: string | null;
   onThread: (id: string | null) => void;
 }) {
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const threadQuery = useQuery({
     ...readQuery<{ threads: Thread[] }>(`/projects/${project?.id}/threads`),
     enabled: !!project,
@@ -77,25 +79,42 @@ export function Sidebar({
                 <div className="sidebar-project-heading">
                   <button
                     className={`project-nav ${p.id === project?.id ? 'is-current' : ''}`}
-                    aria-expanded={p.id === project?.id}
                     onClick={() => onProject(p.id)}
                   >
                     <span className={`project-color project-color-${i % 3}`}>
                       <Icon name={i === 0 ? 'globe' : 'folder'} size={16} />
                     </span>
                     <span className="project-nav-title">{p.name}</span>
-                    <Icon name={p.id === project?.id ? 'down' : 'right'} size={13} />
                   </button>
                   {p.id === project?.id && project.contribute && (
                     <IconButton
                       name="add"
                       label={`New thread in ${p.name}`}
-                      onClick={() => onThread(null)}
+                      onClick={() => {
+                        setCollapsed((current) => ({ ...current, [p.id]: false }));
+                        onThread(null);
+                      }}
                     />
                   )}
+                  <IconButton
+                    name={p.id === project?.id && !collapsed[p.id] ? 'down' : 'right'}
+                    label={`${p.id === project?.id && !collapsed[p.id] ? 'Collapse' : 'Expand'} threads in ${p.name}`}
+                    aria-expanded={p.id === project?.id && !collapsed[p.id]}
+                    aria-controls={p.id === project?.id ? `project-threads-${p.id}` : undefined}
+                    onClick={() => {
+                      if (p.id !== project?.id) {
+                        setCollapsed((current) => ({ ...current, [p.id]: false }));
+                        onProject(p.id);
+                      } else setCollapsed((current) => ({ ...current, [p.id]: !current[p.id] }));
+                    }}
+                  />
                 </div>
                 {p.id === project?.id && (
-                  <div className="sidebar-threads">
+                  <div
+                    className="sidebar-threads"
+                    id={`project-threads-${p.id}`}
+                    hidden={!!collapsed[p.id]}
+                  >
                     {threadQuery.isPending ? (
                       <p className="sidebar-thread-hint" role="status">
                         Loading threads…

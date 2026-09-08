@@ -25,6 +25,7 @@ export const threadCommand = z.discriminatedUnion('action', [
   threadSettings
     .extend({
       action: z.literal('create'),
+      reasoningEffort: z.string().min(1).max(32).nullable().optional(),
       body: z.string().trim().min(1).max(8000).optional(),
       taskId: z.string().min(1).max(100).nullable().default(null),
     })

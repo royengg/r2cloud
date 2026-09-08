@@ -1024,11 +1024,14 @@ button .icon {
 }
 .composer-actions {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  justify-content: space-between;
   align-items: center;
   gap: 10px;
 }
 .composer-send {
+  margin-inline-start: auto;
+  flex-shrink: 0;
   display: grid;
   place-items: center;
   width: 37px;

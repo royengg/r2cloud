@@ -1,6 +1,10 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { api } from '../lib/api';
 import { refreshRead } from '../lib/realtime';
+import { useQuery } from '@tanstack/react-query';
+import type { CodexModel } from '@r2cloud/contracts/threads';
+import { readQuery } from '../lib/queries';
+import { ModelPicker, ThinkingPicker } from './ModelPicker';
 import { Icon } from './Icon';
 import type { Project } from '../lib/types';
 export function Composer({
@@ -11,6 +15,19 @@ export function Composer({
   onOpen: (threadId: string) => void;
 }) {
   const [text, setText] = useState('');
+  const [model, setModel] = useState<string | null>(null);
+  const [effort, setEffort] = useState<string | null>(null);
+  const path = `/projects/${project.id}/threads`;
+  const catalogue = useQuery(readQuery<{ models: CodexModel[] }>(path));
+  const models = catalogue.data?.models ?? [];
+  const modelInfo = model
+    ? models.find((option) => option.model === model)
+    : models.find((option) => option.isDefault);
+  const selectedEffort = modelInfo?.supportedReasoningEfforts?.some(
+    (option) => option.reasoningEffort === effort,
+  )
+    ? effort
+    : null;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const sending = useRef(false);
@@ -20,12 +37,12 @@ export function Composer({
     sending.current = true;
     setBusy(true);
     setError('');
-    const path = `/projects/${project.id}/threads`;
     try {
       const thread = await api<{ id: string }>(path, {
         action: 'create',
         title: text.trim().replace(/\s+/g, ' ').slice(0, 80),
-        model: null,
+        model,
+        reasoningEffort: selectedEffort,
         instructions: '',
         taskId: null,
         body: text.trim(),
@@ -63,6 +80,23 @@ export function Composer({
           maxLength={8000}
         />
         <div className="composer-actions">
+          <div className="thread-settings">
+            <ModelPicker
+              models={models}
+              value={model}
+              onChange={(value) => {
+                setModel(value);
+                setEffort(null);
+              }}
+              disabled={busy || !project.contribute || catalogue.isPending || catalogue.isError}
+            />
+            <ThinkingPicker
+              model={modelInfo}
+              value={selectedEffort}
+              onChange={setEffort}
+              disabled={busy || !project.contribute}
+            />
+          </div>
           <button
             className="composer-send"
             type="submit"

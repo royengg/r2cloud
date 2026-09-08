@@ -34,13 +34,23 @@ function stop() {
 }
 stop();
 if (config.stop) process.exit(0);
-await new Promise<void>((resolve, reject) => {
-  const probe = createServer();
-  probe.once('error', reject);
-  probe.listen(config.port, '127.0.0.1', () =>
-    probe.close((error) => (error ? reject(error) : resolve())),
-  );
-});
+const releaseDeadline = Math.min(deadline, Date.now() + 5000);
+while (true) {
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const probe = createServer();
+      probe.once('error', reject);
+      probe.listen(config.port, '127.0.0.1', () =>
+        probe.close((error) => (error ? reject(error) : resolve())),
+      );
+    });
+    break;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EADDRINUSE' || Date.now() >= releaseDeadline)
+      throw error;
+    await Bun.sleep(100);
+  }
+}
 const source = config.independent
   ? '/vercel/sandbox/r2-previews/source'
   : '/vercel/sandbox/agent/repository';
@@ -72,26 +82,24 @@ const cwd = config.directory === '.' ? directory : directory + '/' + config.dire
 const resolved = realpathSync(cwd);
 if (resolved !== directory && !resolved.startsWith(directory + '/'))
   throw Error('Invalid preview directory');
-const child = spawn(
-  'runuser',
-  [
-    '-u',
-    user,
-    '--',
-    'env',
-    'PATH=' + config.path,
-    'PORT=' + config.port,
-    'HOST=127.0.0.1',
-    config.cmd,
-    ...config.args,
-  ],
-  {
-    cwd,
-    detached: true,
-    stdio: 'ignore',
-    env: { PATH: config.path, HOME: '/home/' + user, LANG: 'C.UTF-8' },
+const uid = Number(run('id', ['-u', user]).toString().trim());
+const gid = Number(run('id', ['-g', user]).toString().trim());
+const child = spawn(config.cmd, config.args, {
+  cwd,
+  uid,
+  gid,
+  detached: true,
+  stdio: 'ignore',
+  env: {
+    PATH: config.path,
+    HOME: '/home/' + user,
+    USER: user,
+    LOGNAME: user,
+    LANG: 'C.UTF-8',
+    PORT: String(config.port),
+    HOST: '127.0.0.1',
   },
-);
+});
 await new Promise<void>((resolve, reject) => {
   child.once('spawn', resolve);
   child.once('error', reject);

@@ -49,7 +49,7 @@ function responseHeaders(headers: IncomingMessage['headers'], origin: string, po
   cleaned['content-security-policy'] =
     "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' " +
     origin.replace('https:', 'wss:') +
-    "; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+    "; worker-src blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
   cleaned['permissions-policy'] = 'camera=(), microphone=(), geolocation=(), payment=(), usb=()';
   if (headers['set-cookie'])
     cleaned['set-cookie'] = headers['set-cookie']

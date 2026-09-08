@@ -74,28 +74,28 @@ export function Sidebar({
             .filter((p) => p.org_id === project?.org_id)
             .map((p, i) => (
               <div key={p.id} className="sidebar-project-group">
-                <button
-                  className={`project-nav ${p.id === project?.id ? 'is-current' : ''}`}
-                  aria-expanded={p.id === project?.id}
-                  onClick={() => onProject(p.id)}
-                >
-                  <span className={`project-color project-color-${i % 3}`}>
-                    <Icon name={i === 0 ? 'globe' : 'folder'} size={16} />
-                  </span>
-                  <span className="project-nav-title">{p.name}</span>
-                  <Icon name={p.id === project?.id ? 'down' : 'right'} size={13} />
-                </button>
+                <div className="sidebar-project-heading">
+                  <button
+                    className={`project-nav ${p.id === project?.id ? 'is-current' : ''}`}
+                    aria-expanded={p.id === project?.id}
+                    onClick={() => onProject(p.id)}
+                  >
+                    <span className={`project-color project-color-${i % 3}`}>
+                      <Icon name={i === 0 ? 'globe' : 'folder'} size={16} />
+                    </span>
+                    <span className="project-nav-title">{p.name}</span>
+                    <Icon name={p.id === project?.id ? 'down' : 'right'} size={13} />
+                  </button>
+                  {p.id === project?.id && project.contribute && (
+                    <IconButton
+                      name="add"
+                      label={`New thread in ${p.name}`}
+                      onClick={() => onThread(null)}
+                    />
+                  )}
+                </div>
                 {p.id === project?.id && (
                   <div className="sidebar-threads">
-                    <div className="sidebar-threads-heading">
-                      {project.contribute && (
-                        <IconButton
-                          name="add"
-                          label={`New thread in ${p.name}`}
-                          onClick={() => onThread(null)}
-                        />
-                      )}
-                    </div>
                     {threadQuery.isPending ? (
                       <p className="sidebar-thread-hint" role="status">
                         Loading threads…

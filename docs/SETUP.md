@@ -121,4 +121,18 @@ Starting implementation launches the configured dev command. A ready preview app
 
 For the agent's `inspect_preview` tool, prepare the [browser bundle](../packages/adapters/browser/README.md) in the clean sandbox snapshot and select it with `R2_VERCEL_SNAPSHOT_ID`. The base image fallback does not include the browser. API and worker processes must share the private `.local/artifacts/previews` directory for screenshots. These pilot artifacts have access checks and integrity verification; production object storage and retention are still unfinished.
 
-The gateway, browser and session protocol have isolated integration coverage. Hosted HTTPS, HMR and access revocation still require end-to-end verification in the configured deployment.
+The gateway, browser and session protocol have isolated integration coverage. A real Chromium test through a Quick Tunnel verified HTTPS, Vite HMR without page reload, anonymous-access denial and disconnection after revocation. The complete selected-repository product journey still requires end-to-end verification.
+
+For temporary local testing, set `R2_PREVIEW_ROUTES_FILE` instead of `R2_PREVIEW_DOMAIN` in the API and gateway. This private JSON file maps each preview to its own Quick Tunnel address:
+
+```json
+[
+  {
+    "id": "<preview UUID>",
+    "origin": "https://<assigned-host>.trycloudflare.com",
+    "expiresAt": 1789000000000
+  }
+]
+```
+
+Each tunnel points to the loopback gateway. Use a fresh hostname for each runtime, publish route updates atomically, and remove expired routes and tunnel processes. Exact hostname matching and normal preview authorization both apply. The local development helper manages at most two tunnels for the configured pilot project; scripts and its environment remain local-only. Quick Tunnels are temporary testing infrastructure with changing addresses and no uptime guarantee.

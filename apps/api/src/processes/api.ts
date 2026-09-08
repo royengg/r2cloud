@@ -39,6 +39,7 @@ if (repositoryConnection && !/^[a-z0-9-]+$/.test(repositoryConnection.appSlug))
   throw new Error('Invalid GitHub App slug.');
 const { server } = createHttpServer({
   previewDomain: process.env.R2_PREVIEW_DOMAIN,
+  previewRoutesFile: process.env.R2_PREVIEW_ROUTES_FILE,
   identity,
   repositoryConnection,
   codexLogin: process.env.R2_CODEX_LOGIN_ENABLED === 'true',

@@ -20,6 +20,6 @@ export function protectedRoutes(options: AppOptions) {
   router.use(workspacesRoutes());
   router.use(tasksRoutes());
   router.use(threadRoutes());
-  router.use(livePreviewRoutes(options.previewDomain));
+  router.use(livePreviewRoutes(options.previewDomain, options.previewRoutesFile));
   return router;
 }

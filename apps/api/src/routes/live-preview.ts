@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { requireThat } from '@r2cloud/contracts/domain';
-import { previewOrigin } from '@r2cloud/contracts/preview';
+import { configuredPreviewOrigin } from '../preview/origins';
 import { readLivePreview, issueLivePreview } from '@r2cloud/core/live-preview';
 import { readPreviewScreenshot } from '@r2cloud/core/preview-inspection';
 
-export function livePreviewRoutes(domain?: string) {
+export function livePreviewRoutes(domain?: string, routesFile?: string) {
+  const originFor = configuredPreviewOrigin(domain, routesFile);
   const router = Router();
   router.get('/projects/:projectId/preview-screenshots/:itemId', async (req, res) => {
     const bytes = await readPreviewScreenshot(
@@ -31,8 +31,7 @@ export function livePreviewRoutes(domain?: string) {
     );
   });
   router.post('/projects/:projectId/previews/:previewId/open', async (req, res) => {
-    requireThat(domain, 503, 'The preview gateway is not configured.');
-    const origin = previewOrigin(domain, String(req.params.previewId));
+    const origin = await originFor(String(req.params.previewId));
     const { ticket } = await issueLivePreview(
       res.locals.actor,
       String(req.params.projectId),

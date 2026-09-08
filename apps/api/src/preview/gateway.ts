@@ -52,8 +52,11 @@ async function ticketBody(req: IncomingMessage) {
     throw new Fault(400, 'Invalid preview ticket.');
   }
 }
-export function createPreviewGateway(domain: string, dependencies: Dependencies) {
-  previewOrigin(domain, '00000000-0000-0000-0000-000000000000');
+export function createPreviewGateway(
+  domain: string | ((host: string) => Promise<{ id: string; origin: string }>),
+  dependencies: Dependencies,
+) {
+  if (typeof domain === 'string') previewOrigin(domain, '00000000-0000-0000-0000-000000000000');
   const viewers = new Map<
     string,
     { id: string; token: string; streams: Set<() => void>; checking: boolean }
@@ -70,8 +73,9 @@ export function createPreviewGateway(domain: string, dependencies: Dependencies)
     }
     return check;
   }
-  function identity(req: IncomingMessage) {
+  async function identity(req: IncomingMessage) {
     const host = req.headers.host ?? '';
+    if (typeof domain !== 'string') return domain(host);
     const id = host.slice(0, -(domain.length + 1));
     const origin = previewOrigin(domain, id);
     requireThat(host === new URL(origin).host, 404, 'Preview not found.');
@@ -111,7 +115,7 @@ export function createPreviewGateway(domain: string, dependencies: Dependencies)
     else target.destroy();
   }
   async function forward(req: IncomingMessage, target: ServerResponse | Duplex, head?: Buffer) {
-    const { id, origin } = identity(req);
+    const { id, origin } = await identity(req);
     sameOrigin(req, origin, head !== undefined);
     requireThat(
       req.url?.startsWith('/') && !req.url.startsWith('//') && !req.url.startsWith(prefix),
@@ -161,7 +165,7 @@ export function createPreviewGateway(domain: string, dependencies: Dependencies)
   }
   const server = createServer(async (req, res) => {
     try {
-      const { id, origin } = identity(req);
+      const { id, origin } = await identity(req);
       if (req.url === prefix + 'open' && req.method === 'GET') {
         const nonce = randomBytes(24).toString('base64');
         res.writeHead(200, {

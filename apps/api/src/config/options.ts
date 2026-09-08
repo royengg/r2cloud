@@ -14,6 +14,7 @@ if (process.env.R2_DEV_ORIGIN) {
 }
 export type AppOptions = {
   previewDomain?: string;
+  previewRoutesFile?: string;
   codexLogin?: boolean;
   identity?: ProductIdentity;
   repositoryConnection?: ConnectionConfig;

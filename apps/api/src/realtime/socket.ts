@@ -86,7 +86,9 @@ export function attachRealtime(server: HttpServer, options: AppOptions) {
               }),
             ),
           ];
-          const board = events.some((event) => event.kind !== 'Agent timeline updated');
+          const board = events.some(
+            (event) => !['Agent timeline updated', 'Preview updated'].includes(event.kind),
+          );
           for (const subscriber of group!.sockets)
             subscriber.emit('snapshot-required', {
               cursor: String(group!.cursor),

@@ -72,7 +72,9 @@ Private Git bundles and candidate manifests bind evidence to immutable changes. 
 
 The checked publication policy binds a designated human reviewer’s approval to the exact task, repository, base/head, artifact digest and requested action. Changed candidates require new approval. Merge requires separate authorisation and verified repository facts. Agents cannot approve either action.
 
-The live publisher, required-check reconciliation and verified GitHub merge integration are unfinished. Existing policies and fixture tests are foundations, not proof of a working end-to-end publication flow. Authenticated previews must use a separate origin, scoped access and isolated browser state; that service is also unfinished.
+The live publisher, required-check reconciliation and verified GitHub merge integration are unfinished. Existing policies and fixture tests are foundations, not proof of a working end-to-end publication flow.
+
+Live previews use a separate origin per runtime and session-bound, project-scoped access grants. A private gateway forwards HTTP and WebSockets through Vercel's authenticated connection without exposing the repository port. Coding handoff restarts the preview from a separate copy while the exported checkout remains sealed. Agent browser inspection uses a separate user and network namespace with a relay restricted to the preview port. Screenshots are immutable local artifacts served through project access checks. Hosted end-to-end verification and production artifact storage remain unfinished.
 
 See [setup](SETUP.md) for configuration.
 

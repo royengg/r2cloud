@@ -11,7 +11,7 @@ import { join, resolve } from 'node:path';
 
 export class TaskCheckout {
   readonly path = '/vercel/sandbox/agent/repository';
-  private setup;
+  readonly setup;
   constructor(
     private sandbox: Sandbox,
     private grant: RunGrant,

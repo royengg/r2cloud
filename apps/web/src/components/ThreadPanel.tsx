@@ -1,3 +1,4 @@
+import { PreviewButton } from './PreviewButton';
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { CodexModel } from '@r2cloud/contracts/threads';
 import type { Project, Comment } from '../lib/types';
@@ -231,15 +232,25 @@ export function ThreadPanel({
           <div>
             <h3 title={detail?.thread.title}>{detail?.thread.title ?? 'New conversation'}</h3>
           </div>
-          {detail && (detail.thread.createdBy === userId || project.review) && (
-            <Button
-              variant="ghost"
-              disabled={busy || running}
-              onClick={() => void perform({ action: 'archive', version: detail.thread.version })}
-            >
-              Archive
-            </Button>
-          )}
+          <div className="thread-heading-actions">
+            {detail && (
+              <PreviewButton
+                key={detail.thread.id}
+                projectId={project.id}
+                threadId={detail.thread.id}
+                onError={setError}
+              />
+            )}
+            {detail && (detail.thread.createdBy === userId || project.review) && (
+              <Button
+                variant="ghost"
+                disabled={busy || running}
+                onClick={() => void perform({ action: 'archive', version: detail.thread.version })}
+              >
+                Archive
+              </Button>
+            )}
+          </div>
         </header>
         {detail?.failure && (
           <p className="inline-error thread-error" role="alert">
@@ -291,6 +302,7 @@ export function ThreadPanel({
             )}
             {timeline && (
               <AgentTimeline
+                projectId={project.id}
                 timeline={timeline}
                 respond={control}
                 disabled={busy || !project.contribute || timeline.actorId !== userId}

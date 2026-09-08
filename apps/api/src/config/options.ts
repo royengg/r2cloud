@@ -13,6 +13,7 @@ if (process.env.R2_DEV_ORIGIN) {
   origins.add(origin.origin);
 }
 export type AppOptions = {
+  previewDomain?: string;
   codexLogin?: boolean;
   identity?: ProductIdentity;
   repositoryConnection?: ConnectionConfig;

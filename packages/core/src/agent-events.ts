@@ -47,7 +47,14 @@ export async function recordAgentEvents(grant: AgentGrant, events: ProviderEvent
               summary: rawItem.summary,
               text: Array.isArray(rawItem.summary) ? rawItem.summary.join('\n') : '',
             }
-          : rawItem;
+          : rawItem.tool === 'inspect_preview' && Array.isArray(rawItem.contentItems)
+            ? {
+                ...rawItem,
+                contentItems: rawItem.contentItems.filter(
+                  (content: { type?: string }) => content.type !== 'inputImage',
+                ),
+              }
+            : rawItem;
       const sourceId = String(
         p.itemId ?? item.id ?? (message.method === 'turn/plan/updated' ? 'plan' : ''),
       );

@@ -5,15 +5,13 @@ const refreshing = new Map<string, { pending: boolean; promise: Promise<void> }>
 export function refreshRead(path: string): Promise<void> {
   const query = queryClient.getQueryCache().find({ queryKey: ['api', path], exact: true });
   if (!query?.isActive()) {
-    return queryClient
-      .cancelQueries({ queryKey: ['api', path], exact: true })
-      .then(() =>
-        queryClient.invalidateQueries({
-          queryKey: ['api', path],
-          exact: true,
-          refetchType: 'none',
-        }),
-      );
+    return queryClient.cancelQueries({ queryKey: ['api', path], exact: true }).then(() =>
+      queryClient.invalidateQueries({
+        queryKey: ['api', path],
+        exact: true,
+        refetchType: 'none',
+      }),
+    );
   }
   const current = refreshing.get(path);
   if (current) {
@@ -55,7 +53,9 @@ export function projectRealtime(
       if (
         event.reset ||
         (selectedThread
-          ? (event.threads?.includes(selectedThread) && path.endsWith('/timeline')) || event.board
+          ? (event.threads?.includes(selectedThread) &&
+              (path.endsWith('/timeline') || path.endsWith('/preview'))) ||
+            event.board
           : event.board)
       )
         void refreshRead(path);

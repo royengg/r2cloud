@@ -23,10 +23,12 @@ function RichText({ children }: { children: string }) {
 }
 
 export function AgentTimeline({
+  projectId,
   timeline,
   respond,
   disabled,
 }: {
+  projectId: string;
   timeline: Timeline;
   respond: (body: unknown) => Promise<void>;
   disabled: boolean;
@@ -39,12 +41,27 @@ export function AgentTimeline({
     create_task: 'Creating a task',
     start_task: 'Preparing implementation',
     ask_user: 'Asking a question',
+    inspect_preview: 'Inspecting the preview',
+    start_preview: 'Starting the preview',
   };
   return (
     <>
       {timeline.items
         .filter((item) => item.kind !== 'userMessage' || item.text)
         .map((item) => {
+          if (item.kind === 'previewInspection')
+            return (
+              <details className="agent-activity" key={item.id}>
+                <summary>Preview screenshot · {String(item.detail.path ?? '/')}</summary>
+                <img
+                  src={`/api/projects/${encodeURIComponent(projectId)}/preview-screenshots/${encodeURIComponent(item.id)}`}
+                  alt={`Preview of ${String(item.detail.path ?? '/')}`}
+                  loading="lazy"
+                  style={{ maxWidth: '100%', height: 'auto', borderRadius: 12 }}
+                />
+                <pre>{item.text}</pre>
+              </details>
+            );
           if (['userMessage', 'agentMessage', 'error'].includes(item.kind))
             return (
               <article

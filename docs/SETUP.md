@@ -59,7 +59,7 @@ The API refuses to start if it inherits this App secret. Do not put it in the sh
 
 In **Connections**, a project administrator authorises the App, selects a verified repository and confirms attachment. The broker checks the signed-in GitHub identity and repository access; client-supplied repository names or installation IDs do not establish access. Empty repositories need an initial commit. The current discovery list is bounded; selected-repository installations keep it within the pilot limit.
 
-Save repository execution settings in the same panel: directory, install/dev/test commands, port, health path and limits. Saving settings does not start a sandbox. The managed coding pilot currently imports public repositories only. Preview settings are stored, but live previews are not yet served.
+Save repository execution settings in the same panel: directory, install/dev/test commands, port, health path and limits. Saving settings does not start a sandbox. The managed coding pilot currently imports public repositories only. Live previews also require the isolated gateway below.
 
 ## Personal Codex connection
 
@@ -103,4 +103,22 @@ Set `R2_TRACE_TURNS=1` only when measuring stage latency. Logs contain turn iden
 
 Open a project or task thread and send a message. Conversation starts a lightweight runtime; repository checkout and dependency installation wait for a checked implementation grant. Approve the named task inline to begin code work. Follow-up messages reuse the warm runtime where permitted. Stop and uncertain outcomes retain ownership until execution is confirmed quiescent or stopped.
 
-The managed worker is the production execution entry point; simulated workflow, publisher and preview helpers are local-only. Authenticated previews, private-repository credential custody, live publication and verified merge reconciliation remain unfinished. [Architecture](ARCHITECTURE.md) explains the boundaries; [status](STATUS.md) records what has actually been validated.
+The managed worker is the production execution entry point; simulated workflow and publisher helpers are local-only. Private-repository credential custody, live publication and verified merge reconciliation remain unfinished. [Architecture](ARCHITECTURE.md) explains the boundaries; [status](STATUS.md) records what has actually been validated.
+
+## Live previews
+
+Apply the database migrations before starting the updated API and worker. Set `R2_PREVIEW_DOMAIN` to a dedicated preview suffix, such as `preview.example.net`, in both the API and gateway environments. It must be separate from the product origin. Route `*.preview.example.net` over HTTPS to the gateway, preserving the original Host header and WebSocket upgrades. A single development tunnel hostname does not provide these wildcard origins.
+
+The gateway also needs `DATABASE_URL` and the worker's scoped Vercel token, team and project IDs. Run it with those variables loaded:
+
+```sh
+bun apps/api/src/processes/live-preview.ts
+```
+
+It listens only on `127.0.0.1:4311`. The HTTPS ingress must run on the same host or supply an equivalent private connection. The repository app remains on a private sandbox port; do not expose that port publicly as a substitute for the gateway.
+
+Starting implementation launches the configured dev command. A ready preview appears in the thread header. Opening it exchanges a one-use ticket for a session-bound cookie; project access, session expiry and runtime availability are rechecked during viewing. HMR travels through the same authenticated connection. Previews end with the sandbox and do not extend its idle allowance.
+
+For the agent's `inspect_preview` tool, prepare the [browser bundle](../packages/adapters/browser/README.md) in the clean sandbox snapshot and select it with `R2_VERCEL_SNAPSHOT_ID`. The base image fallback does not include the browser. API and worker processes must share the private `.local/artifacts/previews` directory for screenshots. These pilot artifacts have access checks and integrity verification; production object storage and retention are still unfinished.
+
+The gateway, browser and session protocol have isolated integration coverage. Hosted HTTPS, HMR and access revocation still require end-to-end verification in the configured deployment.

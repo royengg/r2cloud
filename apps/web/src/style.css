@@ -3125,3 +3125,22 @@ body[data-keyboard] .account-menu {
     outline-color: Highlight;
   }
 }
+
+.thread-heading > .thread-heading-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+.thread-heading-actions .button {
+  padding: 8px 11px;
+  font-size: var(--text-caption);
+}
+@media (max-width: 680px) {
+  .thread-heading > .thread-heading-actions {
+    flex-shrink: 1;
+    max-width: 55%;
+  }
+}

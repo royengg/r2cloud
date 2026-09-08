@@ -1,0 +1,8 @@
+{
+  "name": "r2cloud-sandbox-browser",
+  "private": true,
+  "dependencies": {
+    "@sparticuz/chromium": "149.0.0",
+    "playwright-core": "1.63.0"
+  }
+}

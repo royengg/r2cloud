@@ -1,3 +1,4 @@
+import { livePreviewRoutes } from './live-preview';
 import { threadRoutes } from './threads';
 import { Router } from 'express';
 import { codexRoutes } from './codex';
@@ -19,5 +20,6 @@ export function protectedRoutes(options: AppOptions) {
   router.use(workspacesRoutes());
   router.use(tasksRoutes());
   router.use(threadRoutes());
+  router.use(livePreviewRoutes(options.previewDomain));
   return router;
 }

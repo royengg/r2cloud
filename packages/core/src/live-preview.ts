@@ -148,10 +148,8 @@ export async function authorizeLivePreview(previewId: string, token: string) {
     previewId,
     runtimeId: preview.runtimeId,
     sandboxName: allocation.name,
+    configHash: allocation.configHash,
     port: preview.port,
-    expiresAt: Math.min(
-      grant.expiresAt.getTime(),
-      preview.runtime.idleUntil?.getTime() ?? Infinity,
-    ),
+    expiresAt: grant.expiresAt.getTime(),
   };
 }

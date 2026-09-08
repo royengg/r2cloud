@@ -1,6 +1,6 @@
 # Current status
 
-Last reviewed: 7 September 2026. r2cloud is an early development preview. The configured cloud coding pilot works; the complete preview-to-publication-to-merge journey does not yet work end to end.
+Last reviewed: 8 September 2026. r2cloud is an early development preview. The configured cloud coding pilot works; the complete preview-to-publication-to-merge journey does not yet work end to end.
 
 ## Available
 
@@ -19,7 +19,7 @@ Last reviewed: 7 September 2026. r2cloud is an early development preview. The co
 ## Still unfinished
 
 1. Validate the unified harness’s live implementation/approval/correction journey, substantive acceptance criteria and interrupted work recovery. Unsaved edits can be lost if a sandbox disappears before export.
-2. Authenticated live previews, isolated browser inspection, immutable screenshots, downloadable diff/artifact review and production object storage.
+2. Deploy and validate the implemented preview gateway, isolated browser inspection and immutable screenshots end to end. Downloadable diff/artifact review and production object storage remain unimplemented.
 3. Private repository credential custody, the live GitHub publisher, required checks, uncertain-response reconciliation and verified merge updates.
 4. Renewable Codex/Vercel credentials, enabled/versioned skills mounting, batch UI and production process/database isolation.
 5. Repository revocation/refresh, retention and pagination beyond agent timelines. Board snapshots remain broad; realtime event polling is shared per project within each API process.
@@ -34,10 +34,11 @@ Native conversation checkpoints are private backend data, capped at 4 MiB. Timel
 
 ## Verification
 
-- **Local tests:** 92 Postgres/HTTP/Socket.IO and mocked-provider tests passed. They cover ownership, access, approvals, generation checks, streaming, runtime reuse, concurrent waiting threads, shutdown and failure recovery.
+- **Local tests:** 104 Postgres/HTTP/Socket.IO and mocked-provider tests passed. They cover ownership, access, approvals, generation checks, streaming, runtime reuse, concurrent waiting threads, shutdown, preview grants and proxy transport, screenshot access and failure recovery.
 - **Browser:** the authentication/product journey passed 13 axe audits. The shared picker passed three additional audits plus keyboard, mobile, modal, reduced-motion and forced-colors checks. Streaming tests cover strict-origin WebSockets, idle request suppression, reconnects, transient HTTP errors and scroll stability. Screen-reader testing was not available.
 - **Build:** TypeScript, Vite and design-system validation passed.
 - **Real integrations:** repository attachment; subscription-backed Vercel turns; a public-repository checkout/edit/build/export run; native history restoration across sandboxes; two conversation turns sharing a warm sandbox; and confirmed idle cleanup. Warm coding/correction handoff has local and mocked-provider coverage, not a completed live journey.
 - **Database:** the Neon cutover preserved the existing data and migration history, verified per-table checksums, and exercised pooled Prisma board reads and interactive transactions.
+- **Preview integration:** real Vercel tests verified private dev-server access, retained preview handoff, isolated Chromium screenshots and blocked access to another sandbox port. The preview control passed rendered checks at mobile and desktop widths. Native Codex restoration and image tool responses passed with a simulated provider. Hosted HTTPS/HMR and the complete product browser-tool journey remain unverified.
 
 Tests, scripts, credentials, backups and screenshots remain local-only. Historical proposals are archived locally and in Git history. [Setup](SETUP.md) contains operational instructions; [architecture](ARCHITECTURE.md) describes the current boundaries.

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { previewInspection } from '@r2cloud/contracts/preview-inspection';
 import { prisma, json } from '@r2cloud/database';
 import { requireThat, type Actor } from '@r2cloud/contracts/domain';
 import type { AgentGrant } from '@r2cloud/contracts/agent';
@@ -8,6 +9,16 @@ import { id, digest } from '@r2cloud/contracts/hash';
 import { setTimeout as pause } from 'node:timers/promises';
 
 const definitions = {
+  inspect_preview: {
+    description:
+      'Inspect a path in the running project preview. Returns an accessibility snapshot, JavaScript errors and a screenshot from an isolated browser. External websites and product login sessions are unavailable.',
+    schema: previewInspection,
+  },
+  start_preview: {
+    description:
+      'Start or restart the configured repository dev server for the current task. Returns readiness for the project preview button; never invent a URL.',
+    schema: z.object({}).strict(),
+  },
   ask_user: {
     description: 'Ask a focused question inline and wait for the user’s answer in this thread.',
     schema: z.object({ question: z.string().min(1).max(2000) }).strict(),
@@ -185,6 +196,8 @@ export async function callAgentTool(
       text: Buffer.from(content.content, 'base64').toString('utf8'),
     };
   }
+  if (name === 'start_preview') return { preview: true };
+  if (name === 'inspect_preview') return input;
   if (name === 'project_context')
     return {
       projectId: project.id,

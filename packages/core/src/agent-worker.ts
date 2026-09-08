@@ -1,3 +1,7 @@
+import { randomUUID } from 'node:crypto';
+import { RepositoryPreview } from '@r2cloud/adapters/repository-preview';
+import { inspectPreview } from '@r2cloud/adapters/preview-browser';
+import { savePreviewInspection } from './preview-inspection';
 import { turnTiming } from '@r2cloud/contracts/turn-timing';
 import { prisma, json } from '@r2cloud/database';
 import type { AgentGrant } from '@r2cloud/contracts/agent';
@@ -24,6 +28,50 @@ export function agentControl(
   owner: string,
 ): SessionControl {
   const checkouts = new Map<string, TaskCheckout>();
+  const previews = new Map<string, RepositoryPreview>();
+  async function previewState(grant: AgentGrant, state: string, error: string | null = null) {
+    const checkout = checkouts.get(grant.id);
+    requireThat(checkout && grant.runtimeId, 409, 'Start a task before opening its preview.');
+    await prisma.$transaction(async (db) => {
+      await lockProject(db, grant.projectId);
+      requireThat(
+        await db.agentRuntime.count({
+          where: { id: grant.runtimeId, owner, stoppedAt: null, expiresAt: { gt: new Date() } },
+        }),
+        409,
+        'The preview runtime lease ended.',
+      );
+      await db.livePreview.upsert({
+        where: { runtimeId: grant.runtimeId },
+        create: {
+          id: randomUUID(),
+          runtimeId: grant.runtimeId!,
+          port: checkout.setup.port,
+          state,
+          error,
+        },
+        update: { state, error, port: checkout.setup.port },
+      });
+      await event(db, grant.projectId, null, grant.actorId, 'Preview updated', {
+        threadId: grant.threadId,
+      });
+    });
+  }
+  async function startPreview(grant: AgentGrant, snapshot = false) {
+    const preview = previews.get(grant.id);
+    requireThat(preview, 409, 'Start a task before opening its preview.');
+    await previewState(grant, 'starting');
+    try {
+      await preview.start(snapshot);
+    } catch {
+      const error =
+        'The dev server did not become ready. Check the repository dev command, port and health path.';
+      await previewState(grant, 'failed', error);
+      return { ready: false, error };
+    }
+    await previewState(grant, 'ready');
+    return { ready: true };
+  }
   const candidates = new Map<string, Omit<RunResult, 'stopProof'>>();
   const authorize = async (grant: AgentGrant) => {
     requireThat(grant.projectId === projectId, 403, 'This worker is scoped to another project.');
@@ -47,8 +95,21 @@ export function agentControl(
         },
       }));
     },
+    async suspendPreview(grant) {
+      if (previews.has(grant.id)) {
+        await previewState(grant, 'starting');
+        await previews.get(grant.id)!.stop();
+      }
+    },
+    async handoffPreview(grant) {
+      if (previews.has(grant.id)) await startPreview(grant, true);
+    },
     async closed(grant, proof) {
       if (!grant.runtimeId) return;
+      await prisma.livePreview.updateMany({
+        where: { runtimeId: grant.runtimeId },
+        data: { state: 'stopped' },
+      });
       await prisma.agentRuntime.updateMany({
         where: { id: grant.runtimeId, owner, stoppedAt: null },
         data: { state: 'stopped', stoppedAt: new Date(), stopProof: proof },
@@ -82,6 +143,31 @@ export function agentControl(
       const p = message.params ?? {};
       if (message.method === 'item/tool/call') {
         const result = await callAgentTool(grant, String(message.id), p.tool, p.arguments);
+        if (p.tool === 'inspect_preview') {
+          requireThat(grant.runtimeId, 409, 'Start the project preview first.');
+          const preview = await prisma.livePreview.findUnique({
+            where: { runtimeId: grant.runtimeId },
+          });
+          requireThat(preview?.state === 'ready', 409, 'The project preview is not ready.');
+          const inspection = await inspectPreview(sandbox, preview.port, result);
+          await authorize(grant);
+          await savePreviewInspection(grant, String(message.id), inspection);
+          const { screenshot, ...detail } = inspection;
+          return {
+            success: true,
+            contentItems: [
+              { type: 'inputText', text: JSON.stringify(detail) },
+              { type: 'inputImage', imageUrl: 'data:image/png;base64,' + screenshot },
+            ],
+          };
+        }
+        if (p.tool === 'start_preview') {
+          const result = await startPreview(grant);
+          return {
+            success: result.ready,
+            contentItems: [{ type: 'inputText', text: JSON.stringify(result) }],
+          };
+        }
         if (p.tool === 'start_task') {
           const run = await claimAgentTask(
             grant,
@@ -118,9 +204,18 @@ export function agentControl(
           );
           const prepared = await checkout.prepare();
           checkouts.set(grant.id, checkout);
+          previews.set(
+            grant.id,
+            new RepositoryPreview(
+              sandbox,
+              checkout.setup,
+              grant.runtimeExpiresAt ?? Date.now() + grant.minutes * 60000,
+            ),
+          );
+          const preview = await startPreview(grant);
           return {
             success: true,
-            contentItems: [{ type: 'inputText', text: JSON.stringify(prepared) }],
+            contentItems: [{ type: 'inputText', text: JSON.stringify({ ...prepared, preview }) }],
           };
         }
         return {
@@ -264,6 +359,7 @@ export function agentControl(
         );
       });
       checkouts.delete(grant.id);
+      previews.delete(grant.id);
       candidates.delete(grant.id);
     },
   };

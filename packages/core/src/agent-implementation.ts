@@ -125,23 +125,18 @@ export async function finishAgentImplementation(
     const task = await db.tasks.findUniqueOrThrow({ where: { id: run.task_id } });
     requireThat(task.generation === run.generation, 409, 'Implementation generation changed.');
     let candidateId: string | undefined;
+    if (!result) {
+      const config = run.manifest as unknown as RunGrant['config'];
+      if (config.previousCandidate)
+        candidateId = (
+          await db.candidates.findFirst({
+            where: { id: config.previousCandidate, project_id: grant.projectId, task_id: task.id },
+          })
+        )?.id;
+    }
     if (result) {
       const m = result.manifest;
-      const config = run.manifest as unknown as RunGrant['config'];
-      requireThat(
-        m.runId === run.id &&
-          m.taskId === task.id &&
-          m.projectId === grant.projectId &&
-          m.orgId === grant.orgId &&
-          m.generation === run.generation &&
-          m.baseSha === config.baseSha &&
-          m.repository === config.repository &&
-          m.targetRef === config.targetRef &&
-          !m.fixture &&
-          result.evidence.snapshotDigest === m.artifactDigest,
-        409,
-        'Candidate identity does not match the execution.',
-      );
+      validateResult(grant, run, result);
       candidateId = id();
       await db.candidates.create({
         data: {
@@ -174,11 +169,91 @@ export async function finishAgentImplementation(
       grant.projectId,
       task.id,
       null,
-      candidateId ? 'Ready for your review' : 'Implementation stopped',
+      state === 'review' ? 'Ready for your review' : 'Implementation stopped',
       {
         threadId: grant.threadId,
         error: error ?? (!candidateId ? 'No repository changes were produced.' : undefined),
       },
     );
+  });
+}
+
+function validateResult(
+  grant: AgentGrant,
+  run: { id: string; task_id: string; generation: number; manifest: unknown },
+  result: Omit<RunResult, 'stopProof'>,
+) {
+  const m = result.manifest;
+  const config = run.manifest as unknown as RunGrant['config'];
+  requireThat(
+    m.runId === run.id &&
+      m.taskId === run.task_id &&
+      m.projectId === grant.projectId &&
+      m.orgId === grant.orgId &&
+      m.generation === run.generation &&
+      m.baseSha === config.baseSha &&
+      m.repository === config.repository &&
+      m.targetRef === config.targetRef &&
+      !m.fixture &&
+      result.evidence.snapshotDigest === m.artifactDigest,
+    409,
+    'Candidate identity does not match the execution.',
+  );
+}
+
+export async function saveAgentArtifact(
+  grant: AgentGrant,
+  result: Omit<RunResult, 'stopProof'>,
+  owner: string,
+  source: 'candidate' | 'recovery',
+  interrupted = false,
+) {
+  const projectId = grant.projectId;
+  await prisma.$transaction(async (db) => {
+    await lockProject(db, projectId);
+    requireThat(
+      await db.agentTurn.count({
+        where: {
+          id: grant.id,
+          projectId,
+          stoppedAt: null,
+          state: { in: ['running', 'waiting'] },
+          ...(grant.runtimeId ? { runtime: { owner, stoppedAt: null } } : {}),
+        },
+      }),
+      409,
+      'Recovery ownership changed.',
+    );
+    const run = await db.runs.findFirst({
+      where: {
+        id: result.manifest.runId,
+        project_id: projectId,
+        task_id: result.manifest.taskId,
+        generation: result.manifest.generation,
+        stopped_at: null,
+        manifest: { path: ['agentTurnId'], equals: grant.id },
+        claims: { tasks: { generation: result.manifest.generation } },
+      },
+    });
+    requireThat(run, 409, 'Recovery generation changed.');
+    validateResult(grant, run, result);
+    await db.agentItem.upsert({
+      where: { turnId_sourceId: { turnId: grant.id, sourceId: source } },
+      create: {
+        id: `${source}:${grant.id}`,
+        turnId: grant.id,
+        sourceId: source,
+        kind: source === 'recovery' ? 'recovery' : 'evidence',
+        text:
+          source === 'recovery'
+            ? ''
+            : interrupted
+              ? 'Changes saved for recovery'
+              : 'Changes prepared for review',
+        status: 'completed',
+        detail: json(result),
+      },
+      update: source === 'recovery' ? { detail: json(result) } : {},
+    });
   });
 }

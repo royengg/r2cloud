@@ -235,7 +235,13 @@ export class VercelCodexExecution implements ExecutionBackend {
             throw new Error('Previous candidate artifact is invalid.');
           await session.writeFiles([{ path: '/tmp/r2cloud-previous.bundle', content: bundle }]);
           for (const args of [
-            ['-c', 'core.hooksPath=/dev/null', 'fetch', '/tmp/r2cloud-previous.bundle', 'HEAD'],
+            [
+              '-c',
+              'core.hooksPath=/dev/null',
+              'fetch',
+              '/tmp/r2cloud-previous.bundle',
+              previous.headSha,
+            ],
             ['-c', 'core.hooksPath=/dev/null', 'checkout', '--detach', previous.headSha],
           ])
             if ((await run('git', args, checkout)).exitCode !== 0)

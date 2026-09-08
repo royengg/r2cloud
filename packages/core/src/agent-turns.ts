@@ -180,7 +180,7 @@ export async function agentTimeline(
       const items = await db.agentItem.findMany({
         where: {
           turn: { threadId, projectId },
-          kind: { not: 'checkpoint' },
+          kind: { notIn: ['checkpoint', 'recovery'] },
           ...(incremental ? { id: { in: changedIds } } : {}),
           ...(page.before ? { revision: { lt: BigInt(page.before) } } : {}),
         },

@@ -18,7 +18,11 @@ import {
 import { activeAgentTurn } from './agent-turns';
 import { recordAgentEvents } from './agent-events';
 import { callAgentTool, waitForAgentResponse } from './agent-tools';
-import { claimAgentTask, finishAgentImplementation } from './agent-implementation';
+import {
+  claimAgentTask,
+  finishAgentImplementation,
+  saveAgentArtifact,
+} from './agent-implementation';
 import { codexCredentials } from './managed-execution';
 import { previewCheckoutConfig } from './live-preview';
 import { event, lockProject } from './project-context';
@@ -74,15 +78,26 @@ export function agentControl(
     return { ready: true, source: preview.source };
   }
   const candidates = new Map<string, Omit<RunResult, 'stopProof'>>();
-  const authorize = async (grant: AgentGrant) => {
+  const verifyLease = async (grant: AgentGrant) => {
     requireThat(grant.projectId === projectId, 403, 'This worker is scoped to another project.');
     await activeAgentTurn(grant);
     await refreshAgentRuntimeLease(grant, owner);
     await prisma.agentTurn.update({ where: { id: grant.id }, data: { heartbeatAt: new Date() } });
+  };
+  const authorize = async (grant: AgentGrant) => {
+    await verifyLease(grant);
     return codexCredentials(projectId, grant.actorId, grant.connectionId, vault);
   };
   return {
     authorize,
+    async checkpoint(grant) {
+      const checkout = checkouts.get(grant.id);
+      if (!checkout) return false;
+      await verifyLease(grant);
+      const result = await checkout.checkpoint();
+      if (result) await saveAgentArtifact(grant, result, owner, 'recovery');
+      return true;
+    },
     async authorizeRuntime(grant) {
       await authorizeAgentRuntime(grant, owner);
       return codexCredentials(projectId, grant.actorId, grant.connectionId, vault);
@@ -281,33 +296,27 @@ export function agentControl(
     },
     async settle(grant, _sandbox, summary, interrupted) {
       if (candidates.has(grant.id)) return;
-      await authorize(grant);
+      await verifyLease(grant);
       const candidate = await checkouts.get(grant.id)?.candidate(summary, interrupted);
       if (candidate) {
         candidates.set(grant.id, candidate);
-        await prisma.agentItem.upsert({
-          where: { turnId_sourceId: { turnId: grant.id, sourceId: 'candidate' } },
-          create: {
-            id: `candidate:${grant.id}`,
-            turnId: grant.id,
-            sourceId: 'candidate',
-            kind: 'evidence',
-            text: 'Changes prepared for review',
-            status: 'completed',
-            detail: json(candidate),
-          },
-          update: {},
-        });
+        await saveAgentArtifact(grant, candidate, owner, 'candidate', interrupted);
       }
     },
     async persist(grant, providerId, state) {
-      await authorize(grant);
+      await verifyLease(grant);
       requireThat(state.length <= 4 * 1024 * 1024, 400, 'Session state exceeds its limit.');
       await prisma.$transaction(async (db) => {
         await lockProject(db, projectId);
         requireThat(
           await db.agentTurn.count({
-            where: { id: grant.id, stoppedAt: null, state: { in: ['running', 'waiting'] } },
+            where: {
+              id: grant.id,
+              projectId,
+              stoppedAt: null,
+              state: { in: ['running', 'waiting'] },
+              ...(grant.runtimeId ? { runtime: { owner, stoppedAt: null } } : {}),
+            },
           }),
           409,
           'The agent session is no longer active.',
@@ -332,12 +341,21 @@ export function agentControl(
     },
     async finish(grant, stopProof, error, keepWarm) {
       requireThat(grant.projectId === projectId, 403, 'This worker is scoped to another project.');
-      const recorded = await prisma.agentItem.findUnique({
-        where: { turnId_sourceId: { turnId: grant.id, sourceId: 'candidate' } },
+      const recorded = await prisma.agentItem.findMany({
+        where: { turnId: grant.id, sourceId: { in: ['candidate', 'recovery'] } },
       });
       const candidate =
         candidates.get(grant.id) ??
-        (recorded?.detail as unknown as Omit<RunResult, 'stopProof'> | undefined);
+        ((
+          recorded.find((item) => item.sourceId === 'candidate') ??
+          recorded.find((item) => item.sourceId === 'recovery')
+        )?.detail as unknown as Omit<RunResult, 'stopProof'> | undefined);
+      if (
+        candidate &&
+        !candidates.has(grant.id) &&
+        !recorded.some((item) => item.sourceId === 'candidate')
+      )
+        error = `${error ?? 'Execution stopped.'} The latest recovery snapshot was saved; review it and rerun checks before continuing.`;
       if (grant.runtimeId)
         requireThat(
           await prisma.agentRuntime.count({ where: { id: grant.runtimeId, owner } }),

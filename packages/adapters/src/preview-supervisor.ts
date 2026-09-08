@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync, lstatSync, realpathSync, rmSync
 import { createServer } from 'node:net';
 const config = JSON.parse(process.argv.at(-1)!);
 const deadline = Date.now() + config.timeout;
-const root = '/tmp/r2cloud-control';
+const root = '/tmp/r2cloud-preview-control';
 mkdirSync(root, { recursive: true, mode: 0o700 });
 const state = root + '/preview-process.json';
 function birth(pid: number) {
@@ -82,12 +82,8 @@ const cwd = config.directory === '.' ? directory : directory + '/' + config.dire
 const resolved = realpathSync(cwd);
 if (resolved !== directory && !resolved.startsWith(directory + '/'))
   throw Error('Invalid preview directory');
-const uid = Number(run('id', ['-u', user]).toString().trim());
-const gid = Number(run('id', ['-g', user]).toString().trim());
-const child = spawn(config.cmd, config.args, {
+const child = spawn('runuser', ['-u', user, '--', config.cmd, ...config.args], {
   cwd,
-  uid,
-  gid,
   detached: true,
   stdio: 'ignore',
   env: {

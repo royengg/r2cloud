@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { previewInspection } from '@r2cloud/contracts/preview-inspection';
 import { prisma, json } from '@r2cloud/database';
 import { requireThat, type Actor } from '@r2cloud/contracts/domain';
-import type { AgentGrant } from '@r2cloud/contracts/agent';
+import { agentWorkDeadline, type AgentGrant } from '@r2cloud/contracts/agent';
 import { access, lockProject, event } from './project-context';
 import { activeAgentTurn } from './agent-turns';
 import { id, digest } from '@r2cloud/contracts/hash';
@@ -118,8 +118,7 @@ export async function waitForAgentResponse(
     });
     return request;
   });
-  const deadline =
-    (grant.runtimeExpiresAt ?? (grant.startedAt ?? Date.now()) + grant.minutes * 60000) - 30000;
+  const deadline = agentWorkDeadline(grant);
   while (Date.now() < deadline) {
     const turn = await activeAgentTurn(grant);
     if (turn.stopRequested) throw new Error('Turn stopped while waiting for a response.');

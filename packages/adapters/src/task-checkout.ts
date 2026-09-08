@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import type { Sandbox } from '@vercel/sandbox';
 import type { RunGrant, RunResult } from '@r2cloud/contracts/adapters';
 import { executionProfile } from '@r2cloud/contracts/execution';
@@ -5,9 +6,11 @@ import { digest } from '@r2cloud/contracts/hash';
 import { sandboxPath, installBun } from './sandbox-bun';
 import { codexNetworkPolicy } from './codex-network';
 import type { ExecutionCredentials } from './vercel-execution';
-import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile, statfs, rename, rm } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, readFile, open, statfs, rename, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+
+const recoveryScript = readFileSync(new URL('./recovery-snapshot.ts', import.meta.url), 'utf8');
 
 export class TaskCheckout {
   get path() {
@@ -32,8 +35,8 @@ export class TaskCheckout {
     if (digest(this.setup) !== grant.config.executionSetup?.digest)
       throw new Error('Repository setup changed.');
   }
-  private async run(cmd: string, args: string[], cwd = this.path) {
-    const timeout = Math.min(180000, this.deadline - Date.now() - 15000);
+  private async run(cmd: string, args: string[], cwd = this.path, limitMs = 180000) {
+    const timeout = Math.min(limitMs, this.deadline - Date.now() - 15000);
     if (timeout < 1000) throw new Error('Execution time limit reached.');
     return this.sandbox.currentSession().runCommand({
       cmd: 'runuser',
@@ -44,7 +47,7 @@ export class TaskCheckout {
         'env',
         `PATH=${sandboxPath}`,
         cmd,
-        ...(cmd === 'git' ? ['-c', `safe.directory=${this.path}`] : []),
+        ...(cmd === 'git' ? ['--no-optional-locks', '-c', `safe.directory=${this.path}`] : []),
         ...args,
       ],
       sudo: true,
@@ -163,7 +166,13 @@ for root,dirs,files in os.walk('${this.path}',topdown=False,followlinks=False):
           .currentSession()
           .writeFiles([{ path: '/tmp/r2cloud-previous.bundle', content: bytes }]);
         for (const args of [
-          ['-c', 'core.hooksPath=/dev/null', 'fetch', '/tmp/r2cloud-previous.bundle', 'HEAD'],
+          [
+            '-c',
+            'core.hooksPath=/dev/null',
+            'fetch',
+            '/tmp/r2cloud-previous.bundle',
+            this.previous.headSha,
+          ],
           ['-c', 'core.hooksPath=/dev/null', 'checkout', '--detach', this.previous.headSha],
         ])
           if ((await this.run('git', args)).exitCode !== 0)
@@ -202,51 +211,100 @@ for root,dirs,files in os.walk('${this.path}',topdown=False,followlinks=False):
   private get cwd() {
     return this.setup.directory === '.' ? this.path : `${this.path}/${this.setup.directory}`;
   }
-  async candidate(
+  private recoveryTree: string | undefined;
+  private recoveryResult: Omit<RunResult, 'stopProof'> | undefined;
+  async checkpoint() {
+    return this.capture(
+      'Edits saved before interruption. Review and rerun checks before publication.',
+      true,
+      true,
+    );
+  }
+  async candidate(summary: string, interrupted = false) {
+    return this.capture(summary, interrupted);
+  }
+  private async capture(
     summary: string,
     interrupted = false,
+    recovery = false,
   ): Promise<Omit<RunResult, 'stopProof'> | undefined> {
     if (this.purpose === 'preview' || !('runId' in this.grant))
       throw new Error('Preview checkouts cannot export candidates.');
-    const status = await this.run('git', ['status', '--porcelain']);
-    const head = (await (await this.run('git', ['rev-parse', 'HEAD'])).stdout()).trim();
-    if (
-      !(await status.stdout()).trim() &&
-      head === (this.previous?.headSha ?? this.grant.config.baseSha)
-    )
-      return;
     const checks: { name: string; exitCode: number }[] = [];
-    for (const test of interrupted ? [] : this.setup.tests)
-      checks.push({
-        name: test.cmd,
-        exitCode: (await this.run(test.cmd, test.args, this.cwd)).exitCode,
-      });
-    for (const args of [
-      ['-c', 'core.hooksPath=/dev/null', 'add', '--all'],
-      [
-        '-c',
-        'core.hooksPath=/dev/null',
-        '-c',
-        'user.name=R2Cloud Agent',
-        '-c',
-        'user.email=agent@r2cloud.invalid',
-        'commit',
-        '--allow-empty',
-        '-m',
-        `Task ${this.grant.taskId}`,
-      ],
-      [
-        '-c',
-        'core.hooksPath=/dev/null',
-        'bundle',
-        'create',
-        '/tmp/r2cloud-candidate.bundle',
-        'HEAD',
-      ],
-    ])
-      if ((await this.run('git', args)).exitCode !== 0) throw new Error('Candidate export failed.');
-    const headSha = (await (await this.run('git', ['rev-parse', 'HEAD'])).stdout()).trim();
-    if (!/^[a-f0-9]{40}$/.test(headSha)) throw new Error('Invalid candidate commit.');
+    let headSha: string;
+    let tree: string | undefined;
+    if (recovery) {
+      const captured = await this.run(
+        'bun',
+        [
+          '-e',
+          recoveryScript,
+          '--',
+          JSON.stringify({
+            runId: this.grant.runId,
+            baseSha: this.grant.config.baseSha,
+            previous: !!this.previous,
+            tree: this.recoveryTree,
+          }),
+        ],
+        this.path,
+        25000,
+      );
+      if (captured.exitCode !== 0) throw new Error('Recovery snapshot export failed.');
+      const snapshot = JSON.parse(await captured.stdout()) as { tree?: string; headSha?: string };
+      if (!snapshot.headSha) return this.recoveryResult;
+      tree = snapshot.tree;
+      headSha = snapshot.headSha;
+      if (!tree || !/^[a-f0-9]{40}$/.test(tree) || !/^[a-f0-9]{40}$/.test(headSha))
+        throw new Error('Recovery snapshot identity is invalid.');
+    } else {
+      const status = await this.run('git', ['status', '--porcelain']);
+      const currentHead = await this.run('git', ['rev-parse', 'HEAD']);
+      if (status.exitCode !== 0 || currentHead.exitCode !== 0)
+        throw new Error('Checkout state could not be read.');
+      const head = (await currentHead.stdout()).trim();
+      if (
+        !(await status.stdout()).trim() &&
+        head === this.grant.config.baseSha &&
+        !this.previous &&
+        !this.recoveryTree
+      )
+        return;
+      for (const test of interrupted ? [] : this.setup.tests)
+        checks.push({
+          name: test.cmd,
+          exitCode: (await this.run(test.cmd, test.args, this.cwd)).exitCode,
+        });
+
+      for (const args of [
+        ['-c', 'core.hooksPath=/dev/null', 'add', '--all'],
+        [
+          '-c',
+          'core.hooksPath=/dev/null',
+          '-c',
+          'user.name=R2Cloud Agent',
+          '-c',
+          'user.email=agent@r2cloud.invalid',
+          'commit',
+          '--allow-empty',
+          '-m',
+          `Task ${this.grant.taskId}`,
+        ],
+        [
+          '-c',
+          'core.hooksPath=/dev/null',
+          'bundle',
+          'create',
+          '/tmp/r2cloud-candidate.bundle',
+          'HEAD',
+          `^${this.grant.config.baseSha}`,
+        ],
+      ])
+        if ((await this.run('git', args)).exitCode !== 0)
+          throw new Error('Candidate export failed.');
+      headSha = (await (await this.run('git', ['rev-parse', 'HEAD'])).stdout()).trim();
+      if (!/^[a-f0-9]{40}$/.test(headSha)) throw new Error('Invalid candidate commit.');
+    }
     const root = resolve('.local/artifacts');
     await mkdir(root, { recursive: true, mode: 0o700 });
     const disk = await statfs(root);
@@ -266,15 +324,27 @@ for root,dirs,files in os.walk('${this.path}',topdown=False,followlinks=False):
     }
     const artifact = Buffer.concat(chunks);
     const artifactDigest = createHash('sha256').update(artifact).digest('hex');
-    const temp = join(root, this.grant.runId + '.partial');
+    const temp = join(root, this.grant.runId + '-' + randomUUID() + '.partial');
     try {
-      await writeFile(temp, artifact, { flag: 'wx', mode: 0o600 });
+      const file = await open(temp, 'wx', 0o600);
+      try {
+        await file.writeFile(artifact);
+        await file.sync();
+      } finally {
+        await file.close();
+      }
       await rename(temp, join(root, artifactDigest + '.bundle'));
+      const directory = await open(root, 'r');
+      try {
+        await directory.sync();
+      } finally {
+        await directory.close();
+      }
     } finally {
       await rm(temp, { force: true });
     }
     const g = this.grant;
-    return {
+    const result: Omit<RunResult, 'stopProof'> = {
       manifest: {
         orgId: g.orgId,
         projectId: g.projectId,
@@ -306,5 +376,10 @@ for root,dirs,files in os.walk('${this.path}',topdown=False,followlinks=False):
         preview: { available: false, fixture: false },
       },
     };
+    if (recovery) {
+      this.recoveryTree = tree;
+      this.recoveryResult = result;
+    }
+    return result;
   }
 }

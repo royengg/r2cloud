@@ -57,3 +57,10 @@ export type AgentGrant = {
   runtimeId?: string;
   runtimeExpiresAt?: number;
 };
+
+export function agentWorkDeadline(grant: AgentGrant) {
+  return (
+    (grant.runtimeExpiresAt ?? (grant.startedAt ?? Date.now()) + grant.minutes * 60000) -
+    Math.min(90000, grant.minutes * 15000)
+  );
+}

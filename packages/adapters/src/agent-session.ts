@@ -1,19 +1,20 @@
 import { turnTiming } from '@r2cloud/contracts/turn-timing';
 import { APIError, Snapshot, type Sandbox } from '@vercel/sandbox';
 import type { CodexModel } from '@r2cloud/contracts/threads';
-import type { AgentGrant } from '@r2cloud/contracts/agent';
+import { agentWorkDeadline, type AgentGrant } from '@r2cloud/contracts/agent';
 import { SetupRequired, Uncertain } from '@r2cloud/contracts/adapters';
 import { sandboxDigest, VercelSandboxes, type SandboxJournal } from './vercel';
 import { codexBridge, VercelCodexTransport } from './vercel-codex-transport';
 import { CodexHarness } from './codex';
 import type { ExecutionCredentials } from './vercel-execution';
 import { setTimeout as pause } from 'node:timers/promises';
-import { restoreSessionTools } from './session-tools';
+import { restoreSessionTools, snapshotSession } from './session-tools';
 import { hash } from '@r2cloud/contracts/hash';
 
 export type SessionControl = {
   authorize(grant: AgentGrant): Promise<ExecutionCredentials>;
   stopped(grant: AgentGrant): Promise<boolean>;
+  checkpoint?(grant: AgentGrant): Promise<boolean>;
   models?(grant: AgentGrant, models: CodexModel[]): Promise<void>;
   events(grant: AgentGrant, events: { seq: number; message: Record<string, any> }[]): Promise<void>;
   request(grant: AgentGrant, message: Record<string, any>, sandbox: Sandbox): Promise<unknown>;
@@ -119,8 +120,10 @@ export class AgentSession {
     let providerId: string | undefined;
     let rolloutPath: string | undefined;
     let error: string | undefined;
+    let saveConversation: (() => Promise<void>) | undefined;
     const deadline =
       grant.runtimeExpiresAt ?? (grant.startedAt ?? Date.now()) + grant.minutes * 60000;
+    const workDeadline = agentWorkDeadline(grant);
     let revoked = false;
     let checking = false;
     const monitor = setInterval(() => {
@@ -141,6 +144,8 @@ export class AgentSession {
     try {
       const auth = await this.control.authorize(grant);
       timing('authorized');
+      if (Date.now() >= workDeadline)
+        throw new SetupRequired('The sandbox is too close to expiry to start another turn.');
       if (auth.expiresAt < deadline + 60000)
         throw new SetupRequired('Reconnect Codex; the current credential expires too soon.');
       if (warm && (warm.actorId !== grant.actorId || warm.connectionId !== grant.connectionId))
@@ -379,6 +384,46 @@ export class AgentSession {
           )
             throw new SetupRequired(`Codex could not load /${skill.name}.`);
       }
+      saveConversation = async () => {
+        if (!rolloutPath) {
+          const read = await transport.requestOnce<{ thread: { path?: string } }>(
+            `${grant.id}:read`,
+            'thread/read',
+            { threadId: providerId, includeTurns: false },
+          );
+          rolloutPath = read.thread.path;
+        }
+        if (
+          !rolloutPath ||
+          (!rolloutPath.startsWith('/home/r2-agent/.codex/') &&
+            rolloutPath !== '/tmp/r2cloud-resume.jsonl')
+        )
+          throw new Error('Native session snapshot is unavailable.');
+        const stream = await session.readFile(
+          { path: rolloutPath },
+          { signal: AbortSignal.timeout(15000) },
+        );
+        if (!stream) throw new Error('Native session snapshot is missing.');
+        const chunks: Buffer[] = [];
+        let size = 0;
+        for await (const chunk of stream) {
+          const bytes = Buffer.from(chunk);
+          size += bytes.length;
+          if (size > 4 * 1024 * 1024) throw new Error('This session reached its storage limit.');
+          chunks.push(bytes);
+        }
+        await this.control.persist(
+          grant,
+          providerId!,
+          snapshotSession(Buffer.concat(chunks).toString(), providerId!, this.tools),
+        );
+        timing('checkpoint_saved');
+      };
+      let lastCheckpoint = 0;
+      const checkpoint = async () => {
+        if (await this.control.checkpoint?.(grant)) await saveConversation!();
+        lastCheckpoint = Date.now();
+      };
       const offset = transport.cursor;
       const { turn } = await harness.input(
         `${grant.id}:turn`,
@@ -390,9 +435,10 @@ export class AgentSession {
       timing('turn_submitted');
       let interrupted = false;
       let finished = false;
-      while (Date.now() < deadline - 15000) {
+      while (Date.now() < Math.min(deadline - 15000, workDeadline + 10000)) {
         if (revoked) throw new Error('Provider access was revoked.');
-        if (!interrupted && (await this.control.stopped(grant))) {
+        if (!interrupted && (Date.now() >= workDeadline || (await this.control.stopped(grant)))) {
+          error = Date.now() >= workDeadline ? 'Sandbox time limit reached.' : 'Turn stopped.';
           interrupted = true;
           await harness.interrupt(`${grant.id}:interrupt`, providerId, turn.id);
         }
@@ -435,6 +481,8 @@ export class AgentSession {
             if (m.method && m.id !== undefined) {
               let response: unknown;
               try {
+                await checkpoint();
+                if (Date.now() >= workDeadline) throw new Error('Sandbox time limit reached.');
                 response = await this.control.request(grant, m, sandbox);
               } catch (e) {
                 response =
@@ -451,53 +499,27 @@ export class AgentSession {
             if (m.method === 'turn/completed' && m.params?.turn?.id === turn.id) {
               finished = true;
               if (m.params.turn.status !== 'completed')
-                error = interrupted
+                error ??= interrupted
                   ? 'Turn stopped.'
                   : 'The agent turn did not finish successfully.';
             }
           }
         }
         if (finished) break;
+        if (!interrupted && Date.now() - lastCheckpoint >= 30000) await checkpoint();
         if (await transport.read('exit.json'))
           throw new Uncertain('The agent process stopped unexpectedly.');
         await pause(200);
       }
       if (!finished) throw new Uncertain('The agent reached its time limit.');
       timing('provider_completion_observed');
-      if (interrupted) error = 'Turn stopped.';
-      if (!rolloutPath) {
-        const read = await transport.requestOnce<{ thread: { path?: string } }>(
-          `${grant.id}:read`,
-          'thread/read',
-          { threadId: providerId, includeTurns: false },
-        );
-        rolloutPath = read.thread.path;
-      }
-      if (
-        !rolloutPath ||
-        (!rolloutPath.startsWith('/home/r2-agent/.codex/') &&
-          rolloutPath !== '/tmp/r2cloud-resume.jsonl')
-      )
-        throw new Error('Native session snapshot is unavailable.');
-      const stream = await session.readFile(
-        { path: rolloutPath },
-        { signal: AbortSignal.timeout(15000) },
-      );
-      if (!stream) throw new Error('Native session snapshot is missing.');
-      const chunks: Buffer[] = [];
-      let size = 0;
-      for await (const chunk of stream) {
-        const bytes = Buffer.from(chunk);
-        size += bytes.length;
-        if (size > 4 * 1024 * 1024) throw new Error('This session reached its storage limit.');
-        chunks.push(bytes);
-      }
-      await this.control.persist(grant, providerId, Buffer.concat(chunks).toString());
-      timing('checkpoint_saved');
+      if (interrupted) error ??= 'Turn stopped.';
+      await saveConversation();
       const implementation = (await this.control.hasImplementation?.(grant)) ?? !grant.runtimeId;
       if (implementation || error) {
         await this.control.suspendPreview?.(grant);
         await this.quiesce(sandbox);
+        await this.control.checkpoint?.(grant);
         const reply = await transport.read<{ text: string }>('message.json');
         await this.control.settle(grant, sandbox, reply?.text ?? '', !!error);
         await this.quiesce(sandbox);
@@ -506,10 +528,10 @@ export class AgentSession {
             cmd: 'python3',
             args: [
               '-c',
-              `import os,stat
+              `import os,pwd
 parent='/vercel/sandbox/agent'
-os.chown(parent,0,0)
-os.chmod(parent,0o555)
+os.chown(parent,0,pwd.getpwnam('r2-agent').pw_gid)
+os.chmod(parent,0o1775)
 p=parent+'/repository'
 if os.path.islink(p): raise RuntimeError('Invalid checkout')
 if os.path.isdir(p):
@@ -530,11 +552,13 @@ if os.path.isdir(p):
           await this.control.handoffPreview?.(grant, sandbox);
         }
       }
-      keepWarm = !!grant.runtimeId && !error && Date.now() < deadline - 60000;
+      keepWarm = !!grant.runtimeId && !error && Date.now() < workDeadline - 30000;
     } catch (e) {
       if (sandbox) {
         try {
           await this.quiesce(sandbox);
+          await saveConversation?.().catch(() => {});
+          await this.control.checkpoint?.(grant).catch(() => {});
           await this.control.settle(
             grant,
             sandbox,

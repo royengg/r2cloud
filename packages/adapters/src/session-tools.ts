@@ -1,3 +1,15 @@
+export function snapshotSession(state: string, providerId: string, tools: unknown[]) {
+  const end = state.lastIndexOf('\n');
+  if (!state.endsWith('\n')) {
+    try {
+      JSON.parse(state.slice(end + 1));
+    } catch {
+      state = state.slice(0, end + 1);
+    }
+  }
+  return restoreSessionTools(state, providerId, tools);
+}
+
 export function restoreSessionTools(state: string, providerId: string, tools: unknown[]) {
   let found = false;
   const lines = state.split('\n').map((line) => {

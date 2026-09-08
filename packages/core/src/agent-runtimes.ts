@@ -1,5 +1,5 @@
 import { prisma, type DB } from '@r2cloud/database';
-import type { AgentGrant } from '@r2cloud/contracts/agent';
+import { agentWorkDeadline, type AgentGrant } from '@r2cloud/contracts/agent';
 import type { AgentSession, SessionControl } from '@r2cloud/adapters/agent-session';
 import { requireThat } from '@r2cloud/contracts/domain';
 import { access, lockProject } from './project-context';
@@ -14,7 +14,8 @@ export async function reserveAgentRuntime(db: DB, grant: AgentGrant, owner: stri
       existing.actorId !== grant.actorId ||
       existing.connectionId !== grant.connectionId ||
       (existing.idleUntil?.getTime() ?? 0) <= Date.now() ||
-      existing.expiresAt.getTime() < Date.now() + 60000
+      agentWorkDeadline({ ...grant, runtimeExpiresAt: existing.expiresAt.getTime() }) <
+        Date.now() + 30000
     ) {
       await db.agentRuntime.update({ where: { id: existing.id }, data: { state: 'stopping' } });
       return null;

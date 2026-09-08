@@ -20,8 +20,8 @@ import { recordAgentEvents } from './agent-events';
 import { callAgentTool, waitForAgentResponse } from './agent-tools';
 import { claimAgentTask, finishAgentImplementation } from './agent-implementation';
 import { codexCredentials } from './managed-execution';
-import { pinExecutionSetup } from './execution-setup';
-import { access, event, lockProject } from './project-context';
+import { previewCheckoutConfig } from './live-preview';
+import { event, lockProject } from './project-context';
 
 export function agentControl(
   projectId: string,
@@ -31,7 +31,7 @@ export function agentControl(
   const checkouts = new Map<string, TaskCheckout>();
   const previews = new Map<string, RepositoryPreview>();
   async function previewState(grant: AgentGrant, state: string, error: string | null = null) {
-    const preview = previews.get(grant.id);
+    const preview = previews.get(grant.runtimeId ?? grant.id);
     requireThat(preview && grant.runtimeId, 409, 'Start the project preview first.');
     await prisma.$transaction(async (db) => {
       await lockProject(db, grant.projectId);
@@ -58,8 +58,8 @@ export function agentControl(
       });
     });
   }
-  async function startPreview(grant: AgentGrant, snapshot = false) {
-    const preview = previews.get(grant.id);
+  async function startPreview(grant: AgentGrant, snapshot?: boolean) {
+    const preview = previews.get(grant.runtimeId ?? grant.id);
     requireThat(preview, 409, 'Start the project preview first.');
     await previewState(grant, 'starting');
     try {
@@ -68,10 +68,10 @@ export function agentControl(
       const error =
         'The dev server did not become ready. Check the repository dev command, port and health path.';
       await previewState(grant, 'failed', error);
-      return { ready: false, error };
+      return { ready: false, error, source: preview.source };
     }
     await previewState(grant, 'ready');
-    return { ready: true };
+    return { ready: true, source: preview.source };
   }
   const candidates = new Map<string, Omit<RunResult, 'stopProof'>>();
   const authorize = async (grant: AgentGrant) => {
@@ -97,16 +97,18 @@ export function agentControl(
       }));
     },
     async suspendPreview(grant) {
-      if (previews.has(grant.id)) {
+      if (previews.has(grant.runtimeId ?? grant.id)) {
         await previewState(grant, 'starting');
-        await previews.get(grant.id)!.stop();
+        await previews.get(grant.runtimeId ?? grant.id)!.stop();
       }
     },
     async handoffPreview(grant) {
-      if (previews.has(grant.id)) await startPreview(grant, true);
+      if (checkouts.has(grant.id) && previews.has(grant.runtimeId ?? grant.id))
+        await startPreview(grant, true);
     },
     async closed(grant, proof) {
       if (!grant.runtimeId) return;
+      previews.delete(grant.runtimeId);
       await prisma.livePreview.updateMany({
         where: { runtimeId: grant.runtimeId },
         data: { state: 'stopped' },
@@ -157,38 +159,33 @@ export function agentControl(
           return {
             success: true,
             contentItems: [
-              { type: 'inputText', text: JSON.stringify(detail) },
+              {
+                type: 'inputText',
+                text: JSON.stringify({ ...detail, source: previews.get(grant.runtimeId)?.source }),
+              },
               { type: 'inputImage', imageUrl: 'data:image/png;base64,' + screenshot },
             ],
           };
         }
         if (p.tool === 'start_preview') {
-          if (!previews.has(grant.id)) {
+          if (!previews.has(grant.runtimeId ?? grant.id)) {
             requireThat(grant.runtimeId, 409, 'The preview runtime is unavailable.');
-            const config = await prisma.$transaction(async (db) => {
-              await lockProject(db, grant.projectId);
-              const project = await access(
-                db,
-                { id: grant.actorId },
-                grant.projectId,
-                'contribute',
-              );
-              requireThat(project.repo_id, 409, 'Connect a repository before opening a preview.');
-              const repository = await db.repositories.findUniqueOrThrow({
-                where: { id: project.repo_id },
-              });
-              return {
-                repository: repository.full_name,
-                baseSha: repository.base_sha,
-                executionSetup: await pinExecutionSetup(db, grant.projectId, grant.minutes, 0),
-              };
-            });
+            const config = await previewCheckoutConfig(
+              { id: grant.actorId, kind: 'human' },
+              grant.projectId,
+              grant.threadId,
+              grant.minutes,
+            );
             const deadline = grant.runtimeExpiresAt ?? Date.now() + grant.minutes * 60000;
             const preview = new RepositoryPreview(
               sandbox,
               config.executionSetup.config,
               deadline,
               true,
+              {
+                kind: config.previous ? 'task-candidate' : 'repository-base',
+                commit: config.previous?.headSha ?? config.baseSha,
+              },
             );
             await preview.stop();
             const checkout = new TaskCheckout(
@@ -196,12 +193,12 @@ export function agentControl(
               { config },
               await authorize(grant),
               deadline,
-              undefined,
+              config.previous,
               'preview',
             );
             await checkout.prepare();
             await authorize(grant);
-            previews.set(grant.id, preview);
+            previews.set(grant.runtimeId ?? grant.id, preview);
           }
           const result = await startPreview(grant);
           return {
@@ -246,11 +243,13 @@ export function agentControl(
           const prepared = await checkout.prepare();
           checkouts.set(grant.id, checkout);
           previews.set(
-            grant.id,
+            grant.runtimeId ?? grant.id,
             new RepositoryPreview(
               sandbox,
               checkout.setup,
               grant.runtimeExpiresAt ?? Date.now() + grant.minutes * 60000,
+              false,
+              { kind: 'task-checkout' },
             ),
           );
           const preview = await startPreview(grant);
@@ -400,7 +399,6 @@ export function agentControl(
         );
       });
       checkouts.delete(grant.id);
-      previews.delete(grant.id);
       candidates.delete(grant.id);
     },
   };

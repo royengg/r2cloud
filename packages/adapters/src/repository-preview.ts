@@ -5,13 +5,19 @@ import { sandboxPath } from './sandbox-bun';
 
 const supervisor = readFileSync(new URL('./preview-supervisor.ts', import.meta.url), 'utf8');
 export class RepositoryPreview {
+  private retained = false;
   constructor(
     private sandbox: Sandbox,
     readonly setup: ExecutionProfile,
     private deadline: number,
     private independent = false,
+    readonly source?: {
+      kind: 'repository-base' | 'task-candidate' | 'task-checkout';
+      commit?: string;
+    },
   ) {}
-  async start(snapshot = false) {
+  async start(snapshot = this.retained) {
+    if (snapshot) this.retained = true;
     const timeout = Math.min(45000, this.deadline - Date.now() - 20000);
     if (timeout < 1000) throw new Error('The sandbox is about to expire.');
     const result = await this.sandbox.currentSession().runCommand({

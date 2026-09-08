@@ -1,8 +1,9 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { prisma, type DB } from '@r2cloud/database';
 import { hash } from '@r2cloud/contracts/hash';
-import { requireThat, type Actor } from '@r2cloud/contracts/domain';
-import { access } from './project-context';
+import { requireThat, type Actor, type CandidateManifest } from '@r2cloud/contracts/domain';
+import { access, lockProject } from './project-context';
+import { pinExecutionSetup } from './execution-setup';
 
 const secret = () => randomBytes(32).toString('base64url');
 
@@ -152,4 +153,58 @@ export async function authorizeLivePreview(previewId: string, token: string) {
     port: preview.port,
     expiresAt: grant.expiresAt.getTime(),
   };
+}
+
+export async function previewCheckoutConfig(
+  actor: Actor,
+  projectId: string,
+  threadId: string,
+  minutes: number,
+) {
+  return prisma.$transaction(async (db) => {
+    await lockProject(db, projectId);
+    const project = await access(db, actor, projectId, 'contribute');
+    requireThat(project.repo_id, 409, 'Connect a repository before opening a preview.');
+    const repository = await db.repositories.findUniqueOrThrow({
+      where: { id: project.repo_id },
+    });
+    const thread = await db.conversationThread.findUniqueOrThrow({
+      where: { id: threadId, projectId },
+    });
+    const task = thread.taskId
+      ? await db.tasks.findFirst({
+          where: { id: thread.taskId, project_id: projectId },
+        })
+      : null;
+    let previous: { digest: string; headSha: string } | undefined;
+    let baseSha = repository.base_sha;
+    if (task?.candidate_id) {
+      const candidate = await db.candidates.findFirst({
+        where: {
+          id: task.candidate_id,
+          task_id: task.id,
+          project_id: projectId,
+          generation: task.generation,
+        },
+      });
+      requireThat(candidate, 409, 'The task candidate is unavailable.');
+      const manifest = candidate.manifest as unknown as CandidateManifest;
+      requireThat(
+        manifest.repository === repository.full_name &&
+          /^[a-f0-9]{40}$/.test(manifest.baseSha) &&
+          /^[a-f0-9]{40}$/.test(manifest.headSha) &&
+          /^[a-f0-9]{64}$/.test(manifest.artifactDigest),
+        409,
+        'The task preview candidate is invalid.',
+      );
+      baseSha = manifest.baseSha;
+      previous = { digest: manifest.artifactDigest, headSha: manifest.headSha };
+    }
+    return {
+      repository: repository.full_name,
+      baseSha,
+      previous,
+      executionSetup: await pinExecutionSetup(db, projectId, minutes, 0),
+    };
+  });
 }

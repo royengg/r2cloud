@@ -24,7 +24,6 @@ export function ThreadPanel({
   project,
   taskId,
   userId,
-  initialMessage = '',
   selectedThreadId,
   onSelectThread,
   onBack,
@@ -32,7 +31,6 @@ export function ThreadPanel({
   project: Project;
   taskId?: string;
   userId: string;
-  initialMessage?: string;
   selectedThreadId?: string | null;
   onSelectThread?: (id: string | null) => void;
   onBack?: () => void;
@@ -46,18 +44,18 @@ export function ThreadPanel({
   const [effort, setEffort] = useState<string | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const [model, setModel] = useState<string | null>(null);
-  const [text, setText] = useState(initialMessage);
+  const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [historyBusy, setHistoryBusy] = useState(false);
   useLayoutEffect(() => {
     if (selectedThreadId !== undefined) {
       if (selectedThreadId === null) setModel(null);
-      setText(selectedThreadId === null ? initialMessage : '');
+      setText('');
       setEffort(null);
       setError('');
     }
-  }, [selectedThreadId, initialMessage]);
+  }, [selectedThreadId]);
   useLayoutEffect(() => {
     const field = input.current;
     if (!field) return;

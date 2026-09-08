@@ -119,6 +119,7 @@ export async function changeThread(
       await event(db, projectId, input.taskId, actor.id, 'Conversation started', {
         threadId: thread.id,
       });
+      if (input.body) await queueAgentTurn(db, actor, projectId, thread.id, input.body);
       return { id: thread.id };
     }
     const thread = await db.conversationThread.findFirst({

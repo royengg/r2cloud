@@ -1,3 +1,4 @@
+import { ReviewPanel } from './ReviewPanel';
 import { ThreadPanel } from './ThreadPanel';
 import { useState } from 'react';
 import type { Command } from '@r2cloud/contracts/domain';
@@ -27,6 +28,7 @@ export function TaskDetail({
   onCommand: (input: Command) => Promise<boolean>;
   onPreview: () => Promise<void>;
 }) {
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [view, setView] = useState('overview'),
     [correction, setCorrection] = useState(false),
     [feedback, setFeedback] = useState(''),
@@ -143,6 +145,9 @@ export function TaskDetail({
             )}
             {candidate && (
               <>
+                <Button icon="branch" onClick={() => setReviewOpen(true)}>
+                  Review saved changes
+                </Button>
                 <section className="candidate-preview">
                   <div className="preview-caption">
                     <div>
@@ -499,6 +504,19 @@ export function TaskDetail({
               {confirmation === 'publish' ? 'Approve publication' : 'Approve merge'}
             </Button>
           </div>
+        </Modal>
+      )}
+      {reviewOpen && candidate && (
+        <Modal
+          label="Saved task changes"
+          className="repository-review"
+          close={() => setReviewOpen(false)}
+        >
+          <ReviewPanel
+            projectId={project.id}
+            initialSnapshot={candidate.id}
+            close={() => setReviewOpen(false)}
+          />
         </Modal>
       )}
     </Modal>

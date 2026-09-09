@@ -1,3 +1,4 @@
+import { ReviewPanel } from './components/ReviewPanel';
 import { useEffect, useState } from 'react';
 import { AuthScreen, WorkspaceSetup } from './components/AuthScreen';
 import { Select } from './components/Select';
@@ -17,6 +18,7 @@ import { useWorkspace } from './lib/useWorkspace';
 import { api } from './lib/api';
 export function App() {
   const w = useWorkspace();
+  const [repositoryReview, setRepositoryReview] = useState(false);
   const [mobile, setMobile] = useState(() => innerWidth < 900),
     [sidebarOpen, setSidebarOpen] = useState(() => innerWidth >= 900),
     [attention, setAttention] = useState(false),
@@ -203,6 +205,11 @@ export function App() {
               {w.snapshot?.participants.slice(0, 4).map((person, i) => (
                 <Avatar key={person.id} name={person.name} tone={i} />
               ))}
+              <IconButton
+                name="branch"
+                label="Repository changes and pull requests"
+                onClick={() => setRepositoryReview(true)}
+              />
               <button
                 className="participant-plus"
                 aria-label="View project participants"
@@ -359,6 +366,19 @@ export function App() {
           }
           onPreview={preview}
         />
+      )}
+      {repositoryReview && project && (
+        <Modal
+          label="Repository review"
+          close={() => setRepositoryReview(false)}
+          className="repository-review"
+        >
+          <ReviewPanel
+            key={project.id}
+            projectId={project.id}
+            close={() => setRepositoryReview(false)}
+          />
+        </Modal>
       )}
       {newProject && context && (
         <NewProject

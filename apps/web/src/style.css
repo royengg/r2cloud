@@ -3374,3 +3374,243 @@ body[data-keyboard] .account-menu {
   font-size: var(--text-caption);
   color: var(--color-text-secondary);
 }
+
+.review-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 48%;
+  min-width: 340px;
+  min-height: 0;
+  overflow: auto;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-canvas);
+  font-size: var(--text-label);
+}
+.review-heading,
+.review-heading > div,
+.review-file-heading,
+.review-feedback {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.review-heading,
+.review-file-heading,
+.review-feedback {
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+.review-heading {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--color-canvas);
+}
+.review-heading strong {
+  font-size: var(--text-body);
+}
+.review-tabs {
+  display: flex;
+  padding: 8px 12px;
+  gap: 4px;
+}
+.review-tabs button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  border-radius: 8px;
+  min-height: 40px;
+}
+.review-tabs button[aria-pressed='true'],
+.review-files button[aria-pressed='true'] {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-hover);
+}
+.review-summary {
+  padding: 4px 16px 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+.review-summary p {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0 6px;
+}
+.review-summary p span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.review-summary small,
+.review-file-heading small,
+.review-history small {
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+}
+.review-files {
+  padding: 8px;
+  max-height: 220px;
+  overflow: auto;
+  flex-shrink: 0;
+}
+.review-files button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 38px;
+  border: 0;
+  padding: 8px;
+  background: transparent;
+  border-radius: 8px;
+  text-align: left;
+}
+.review-files button > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.review-counts {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-caption);
+}
+.review-added {
+  color: var(--color-completed-ink);
+}
+.review-removed {
+  color: var(--color-danger-ink);
+}
+.review-diff {
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.review-file-heading strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.review-file-heading small {
+  flex-shrink: 0;
+}
+.review-code {
+  overflow: auto;
+  max-height: 65vh;
+}
+.review-line {
+  display: flex;
+  min-width: max-content;
+  min-height: 24px;
+  font:
+    12px/24px ui-monospace,
+    monospace;
+}
+.review-line code {
+  white-space: pre;
+  padding-right: 16px;
+  font: inherit;
+}
+.review-line code > span {
+  display: inline-block;
+  width: 20px;
+}
+.review-line-number {
+  display: flex;
+  justify-content: space-between;
+  flex: 0 0 76px;
+  width: 76px;
+  padding: 0 10px;
+  border: 0;
+  border-right: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  margin-right: 8px;
+}
+.review-line-added {
+  background: var(--color-completed);
+}
+.review-line-removed {
+  background: var(--color-danger);
+}
+.review-line-hunk {
+  background: var(--color-todo);
+  color: var(--color-todo-ink);
+}
+.review-feedback {
+  position: sticky;
+  bottom: 0;
+  background: var(--color-canvas);
+  border-top: 1px solid var(--color-border);
+}
+.review-history {
+  padding: 8px 16px;
+}
+.review-history > button {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 0;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: transparent;
+}
+.review-history > button > span {
+  min-width: 0;
+}
+.review-history strong,
+.review-history small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.review-history small {
+  margin-top: 6px;
+}
+.review-notice {
+  margin: 0;
+  padding: 16px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+.review-empty,
+.review-pr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  padding: 40px 24px;
+  margin: auto 0;
+}
+.review-empty p,
+.review-pr p {
+  max-width: 360px;
+  color: var(--color-text-secondary);
+  line-height: 1.7;
+  margin: 0;
+}
+.review-pr h3 {
+  margin: 0;
+}
+.thread-panel {
+  position: relative;
+}
+.modal.repository-review {
+  width: min(1100px, 96vw);
+  height: 90dvh;
+  padding: 0;
+  overflow: hidden;
+}
+.repository-review .review-panel {
+  height: 100%;
+  min-width: 0;
+  border: 0;
+}

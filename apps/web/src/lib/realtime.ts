@@ -49,6 +49,11 @@ export function projectRealtime(
     for (const query of queryClient.getQueryCache().findAll()) {
       const path = String(query.queryKey[1] ?? '');
       if (!path.startsWith(prefix)) continue;
+      if (
+        path.startsWith(`${prefix}review?`) &&
+        new URLSearchParams(path.split('?')[1]).has('snapshot')
+      )
+        continue;
       const selectedThread = /^threads\/([^/]+)/.exec(path.slice(prefix.length))?.[1];
       if (
         event.reset ||

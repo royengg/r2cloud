@@ -1,3 +1,4 @@
+import { ReviewPanel } from './ReviewPanel';
 import { SkillTextarea } from './SkillTextarea';
 import type { Skill } from '@r2cloud/contracts/skills';
 import { PreviewButton } from './PreviewButton';
@@ -37,6 +38,7 @@ export function ThreadPanel({
   onSelectThread?: (id: string | null) => void;
   onBack?: () => void;
 }) {
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [localSelected, setLocalSelected] = useState<string | null>(null);
   const selected = selectedThreadId === undefined ? localSelected : selectedThreadId;
   function setSelected(id: string | null) {
@@ -304,6 +306,14 @@ export function ThreadPanel({
             </h3>
           </div>
           <div className="thread-heading-actions">
+            {selected && (
+              <IconButton
+                name="branch"
+                label="Review saved changes"
+                aria-pressed={reviewOpen}
+                onClick={() => setReviewOpen(!reviewOpen)}
+              />
+            )}
             {detail && (
               <PreviewButton
                 key={detail.thread.id}
@@ -471,6 +481,23 @@ export function ThreadPanel({
           </p>
         )}
       </div>
+      {reviewOpen && selected && (
+        <ReviewPanel
+          key={selected}
+          projectId={project.id}
+          threadId={selected}
+          close={() => setReviewOpen(false)}
+          onFeedback={
+            project.contribute
+              ? (feedback) => {
+                  setText((current) => (current ? `${current}\n\n${feedback}` : feedback));
+                  setReviewOpen(false);
+                  requestAnimationFrame(() => input.current?.focus());
+                }
+              : undefined
+          }
+        />
+      )}
     </section>
   );
 }

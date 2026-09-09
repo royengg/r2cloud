@@ -1,3 +1,9 @@
+import {
+  executionProfile,
+  ensureExecutionSetup,
+  readExecutionSetup,
+  saveExecutionSetup,
+} from './execution-setup';
 import { z } from 'zod';
 import { previewInspection } from '@r2cloud/contracts/preview-inspection';
 import { prisma, json } from '@r2cloud/database';
@@ -9,6 +15,13 @@ import { id, digest } from '@r2cloud/contracts/hash';
 import { setTimeout as pause } from 'node:timers/promises';
 
 const definitions = {
+  repository_setup: {
+    description:
+      'Call with {} to inspect or automatically detect repository startup settings; do not supply config unless detection or startup has failed, or the user requested an override. Supply a repository-relative directory to resolve an ambiguous monorepo. To change commands, supply config and obtain inline user approval. Saved command overrides apply to subsequent runs; existing implementation checks remain pinned. Read repository instructions and environment examples when detection or startup fails. Never invent secret values.',
+    schema: z
+      .object({ directory: z.string().max(200).optional(), config: executionProfile.optional() })
+      .strict(),
+  },
   inspect_preview: {
     description:
       'Inspect a path in the running project preview. Returns an accessibility snapshot, JavaScript errors and a screenshot from an isolated browser. External websites and product login sessions are unavailable.',
@@ -16,7 +29,7 @@ const definitions = {
   },
   start_preview: {
     description:
-      'Start or restart the project preview without claiming an implementation task. Uses the current task checkout when available; otherwise restores the task’s saved candidate when available, or the connected repository base commit. The response identifies which source is served; merging is not required to preview a candidate. Returns readiness for the project preview button; never invent a URL.',
+      'Start or restart the project preview without claiming an implementation task. Automatically detects missing setup; call this first for preview requests rather than configuring commands yourself. Uses the current task checkout when available; otherwise restores the task’s saved candidate when available, or the connected repository base commit. The response identifies which source is served; merging is not required to preview a candidate. Returns readiness for the project preview button; never invent a URL.',
     schema: z.object({}).strict(),
   },
   ask_user: {
@@ -148,6 +161,31 @@ export async function callAgentTool(
   const input = def.schema.parse(args) as Record<string, any>;
   const actor = { id: grant.actorId } as Actor;
   const project = await access(prisma, actor, grant.projectId, 'contribute');
+  if (name === 'repository_setup') {
+    if (input.config) {
+      const previous = await prisma.execution_profiles.findUnique({
+        where: { project_id: grant.projectId },
+        select: { version: true },
+      });
+      const response = await waitForAgentResponse(
+        grant,
+        callId,
+        'approval',
+        'Use these repository setup commands?',
+        { config: input.config },
+      );
+      requireThat(response.approved, 403, 'Repository setup was not approved.');
+      await saveExecutionSetup(actor, grant.projectId, `setup:${grant.id}:${callId}`, {
+        version: previous?.version ?? 0,
+        config: input.config,
+      });
+    } else await ensureExecutionSetup(actor, grant.projectId, input.directory);
+    const setup = await readExecutionSetup(actor, grant.projectId);
+    return {
+      profile: setup.profile,
+      note: 'Settings apply to new runs. Existing implementation checks remain pinned. Supply missing app secrets explicitly; setup does not create them.',
+    };
+  }
   if (name === 'ask_user') {
     const response = await waitForAgentResponse(grant, callId, 'question', input.question, {
       questions: [{ id: 'answer', question: input.question }],

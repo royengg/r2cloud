@@ -14,10 +14,11 @@ const template: ExecutionProfile = {
   maxBudgetCents: 0,
   vcpus: 2,
 };
-type Setup = { profile: { version: number; config: ExecutionProfile } | null };
+type Setup = { profile: { version: number; config: ExecutionProfile; source?: string } | null };
 export function ExecutionSetup({ projectId, manage }: { projectId: string; manage: boolean }) {
   const [profile, setProfile] = useState<ExecutionProfile>(template);
   const [version, setVersion] = useState(0);
+  const [source, setSource] = useState('automatic');
   const [ready, setReady] = useState(false);
   const [advanced, setAdvanced] = useState('');
   const [error, setError] = useState('');
@@ -32,6 +33,7 @@ export function ExecutionSetup({ projectId, manage }: { projectId: string; manag
         const config = executionProfile.parse(next.profile?.config ?? template);
         setProfile(config);
         setVersion(next.profile?.version ?? 0);
+        setSource(next.profile?.source ?? 'automatic');
         setAdvanced(
           JSON.stringify(
             { install: config.install, dev: config.dev, tests: config.tests },
@@ -78,10 +80,11 @@ export function ExecutionSetup({ projectId, manage }: { projectId: string; manag
       queryClient.setQueryData(
         readQuery<Setup>(`/projects/${projectId}/execution-setup`).queryKey,
         {
-          profile: { version: result.version, config: parsed.data },
+          profile: { version: result.version, config: parsed.data, source: 'manual' },
         },
       );
       setVersion(result.version);
+      setSource('manual');
       setProfile(parsed.data);
       setNotice('Settings saved. No sandbox was started.');
     } catch (e) {
@@ -107,10 +110,10 @@ export function ExecutionSetup({ projectId, manage }: { projectId: string; manag
               void save();
             }}
           >
-            {!version && (
+            {source === 'automatic' && (
               <p className="subtle">
-                Start from the Bun + Vite template. Check the commands for your repository before
-                saving.
+                Setup is detected automatically when needed. You can also ask the agent to configure
+                it. Saving this form creates an explicit override.
               </p>
             )}
             <fieldset disabled={!manage || busy}>
@@ -164,7 +167,7 @@ export function ExecutionSetup({ projectId, manage }: { projectId: string; manag
                   />
                 </label>
               </details>
-              {manage && <Button busy={busy}>Save execution settings</Button>}
+              {manage && <Button busy={busy}>Save setup override</Button>}
             </fieldset>
             <p className="subtle">
               {profile.vcpus} vCPUs · Subscription usage only · No paid overage

@@ -1,5 +1,16 @@
 import { spawn, execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync, lstatSync, realpathSync, rmSync } from 'node:fs';
+import {
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  lstatSync,
+  realpathSync,
+  rmSync,
+  openSync,
+  closeSync,
+  readSync,
+  fstatSync,
+} from 'node:fs';
 import { createServer } from 'node:net';
 const config = JSON.parse(process.argv.at(-1)!);
 const deadline = Date.now() + config.timeout;
@@ -82,10 +93,12 @@ const cwd = config.directory === '.' ? directory : directory + '/' + config.dire
 const resolved = realpathSync(cwd);
 if (resolved !== directory && !resolved.startsWith(directory + '/'))
   throw Error('Invalid preview directory');
+const logPath = root + '/preview.log';
+const log = openSync(logPath, 'w', 0o600);
 const child = spawn('runuser', ['-u', user, '--', config.cmd, ...config.args], {
   cwd,
   detached: true,
-  stdio: 'ignore',
+  stdio: ['ignore', log, log],
   env: {
     PATH: config.path,
     HOME: '/home/' + user,
@@ -100,13 +113,20 @@ await new Promise<void>((resolve, reject) => {
   child.once('spawn', resolve);
   child.once('error', reject);
 });
+closeSync(log);
 writeFileSync(state, JSON.stringify({ pid: child.pid, birth: birth(child.pid!) }), { mode: 0o600 });
 child.unref();
+function failed() {
+  stop();
+  const file = openSync(logPath, 'r');
+  const bytes = Buffer.alloc(Math.min(4000, fstatSync(file).size));
+  readSync(file, bytes, 0, bytes.length, Math.max(0, fstatSync(file).size - bytes.length));
+  closeSync(file);
+  process.stdout.write(bytes);
+  process.exit(1);
+}
 while (Date.now() < deadline) {
-  if (!birth(child.pid!)) {
-    stop();
-    process.exit(1);
-  }
+  if (!birth(child.pid!)) failed();
   try {
     const response = await fetch('http://127.0.0.1:' + config.port + config.healthPath, {
       redirect: 'manual',
@@ -117,5 +137,4 @@ while (Date.now() < deadline) {
   } catch {}
   await Bun.sleep(300);
 }
-stop();
-process.exit(1);
+failed();

@@ -59,7 +59,7 @@ The API refuses to start if it inherits this App secret. Do not put it in the sh
 
 In **Connections**, a project administrator authorises the App, selects a verified repository and confirms attachment. The broker checks the signed-in GitHub identity and repository access; client-supplied repository names or installation IDs do not establish access. Empty repositories need an initial commit. The current discovery list is bounded; selected-repository installations keep it within the pilot limit.
 
-Save repository execution settings in the same panel: directory, install/dev/test commands, port, health path and limits. Saving settings does not start a sandbox. The managed coding pilot currently imports public repositories only. Live previews also require the isolated gateway below.
+Repository setup is detected on the first preview or implementation request from the connected commit’s package manifests and lockfiles. Common JavaScript web apps are supported; ambiguous workspaces require an app directory. Detected commands are cached until the repository revision changes. Ask the agent to inspect or configure setup in the thread, or save an explicit override in Connections. Existing overrides take precedence. Missing secrets and external services require explicit configuration; detection does not provision them. Saving settings does not start a sandbox. The managed coding pilot currently imports public repositories only. Live previews also require the isolated gateway below.
 
 ## Personal Codex connection
 

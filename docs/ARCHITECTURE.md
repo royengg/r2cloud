@@ -80,6 +80,8 @@ The live publisher, required-check reconciliation and verified GitHub merge inte
 
 Live previews use a separate origin per runtime and session-bound, project-scoped access grants. A private gateway forwards HTTP and WebSockets through Vercel's authenticated connection without exposing the repository port. Coding handoff restarts the preview from a separate copy while the exported checkout remains sealed. Preview process records live outside the native bridge control directory, so restarting Codex does not orphan the retained dev server. Agent browser inspection uses a separate user and network namespace with a relay restricted to the preview port. Screenshots are immutable local artifacts served through project access checks. Hosted end-to-end verification and production artifact storage remain unfinished.
 
+Repository setup discovery reads bounded manifest metadata at the connected commit without starting a sandbox or model turn. Concurrent discovery is deduplicated and cached in the execution profile by repository revision and detector version. Saving an explicit override wins over discovery, including concurrent saves. The project-scoped `repository_setup` tool can select an app or request approval for custom commands; existing implementation checks remain pinned. Dependency installation and dev startup stay inside the sandbox, and failed startup returns a bounded log excerpt for diagnosis.
+
 See [setup](SETUP.md) for configuration.
 
 ## Product constraints

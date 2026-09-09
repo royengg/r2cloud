@@ -200,8 +200,16 @@ for root,dirs,files in os.walk('${this.path}',topdown=False,followlinks=False):
       )
         throw new Error('Bun setup failed.');
     }
-    if ((await this.run(this.setup.install.cmd, this.setup.install.args, this.cwd)).exitCode !== 0)
-      throw new Error('Dependency installation failed. Check repository settings.');
+    const installDirectory = this.setup.install.directory ?? this.setup.directory;
+    const installed = await this.run(
+      this.setup.install.cmd,
+      this.setup.install.args,
+      installDirectory === '.' ? this.path : `${this.path}/${installDirectory}`,
+    );
+    if (installed.exitCode !== 0)
+      throw new Error(
+        `Dependency installation failed. ${(await installed.stderr()).slice(-4000)}`.trim(),
+      );
     return {
       checkout: this.path,
       cwd: this.cwd,

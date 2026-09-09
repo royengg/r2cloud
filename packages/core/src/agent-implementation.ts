@@ -1,3 +1,4 @@
+import { ensureExecutionSetup } from './execution-setup';
 import { prisma, json } from '@r2cloud/database';
 import { requireThat, type Actor } from '@r2cloud/contracts/domain';
 import type { AgentGrant } from '@r2cloud/contracts/agent';
@@ -21,6 +22,12 @@ export async function claimAgentTask(
     where: { id: input.taskId, project_id: grant.projectId },
   });
   requireThat(task, 404, 'Task not found in this project.');
+  const connection = await prisma.provider_connections.findUnique({
+    where: { id: grant.connectionId },
+    select: { mode: true },
+  });
+  if (connection?.mode !== 'fixture')
+    await ensureExecutionSetup({ id: grant.actorId, kind: 'human' }, grant.projectId);
   const response = await waitForAgentResponse(
     grant,
     callId,

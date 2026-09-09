@@ -29,7 +29,7 @@ const command = z
 export const executionProfile = z
   .object({
     directory: relativePath,
-    install: command,
+    install: command.extend({ directory: relativePath.optional() }),
     dev: command,
     tests: z.array(command).min(1).max(10),
     port: z.number().int().min(1024).max(65535),

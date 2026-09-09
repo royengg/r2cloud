@@ -44,7 +44,7 @@ export class RepositoryPreview {
     });
     if (result.exitCode !== 0)
       throw new Error(
-        'The dev server did not become ready. Check its command, port and health path in repository settings.',
+        `The dev server did not become ready. Check the command, port, health path and required environment variables. ${(await result.stdout()).slice(-4000)}`.trim(),
       );
   }
   async stop() {

@@ -270,7 +270,16 @@ export class VercelCodexExecution implements ExecutionBackend {
       });
       await progress('Installing project dependencies');
       await once('install', setup.install, async () => {
-        const result = await run(setup.install.cmd, setup.install.args, cwd, 180000);
+        const result = await run(
+          setup.install.cmd,
+          setup.install.args,
+          setup.install.directory && setup.install.directory !== '.'
+            ? `${checkout}/${setup.install.directory}`
+            : setup.install.directory === '.'
+              ? checkout
+              : cwd,
+          180000,
+        );
         if (result.exitCode !== 0)
           throw new Error(
             'Dependency installation failed. Check the repository execution settings.',

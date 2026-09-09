@@ -2,7 +2,7 @@ import { agentResourceUsage } from './agent-runtimes';
 import { receipt } from './receipt';
 import { pinThread } from './thread-context';
 import { access, event, type AccessibleProject } from './project-context';
-import { pinExecutionSetup } from './execution-setup';
+import { ensureExecutionSetup, pinExecutionSetup } from './execution-setup';
 import { type DB, type tasks, Prisma, prisma, json } from '@r2cloud/database';
 import { lockRow } from '@r2cloud/database/locking';
 import {
@@ -184,6 +184,13 @@ export async function command(
   input: Command,
 ) {
   input = commandInput.parse(input);
+  if (input.action === 'start' || input.action === 'changes') {
+    const managed = await prisma.provider_connections.count({
+      where: { project_id: projectId, user_id: actor.id, enabled: true, mode: 'managed' },
+    });
+    if (managed && !(input.action === 'start' && input.budgetCents > 0))
+      await ensureExecutionSetup(actor, projectId);
+  }
   return receipt(actor, projectId, key, { taskId, input }, async (db) => {
     return commandInTransaction(db, actor, projectId, taskId, input);
   });

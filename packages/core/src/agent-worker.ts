@@ -68,9 +68,8 @@ export function agentControl(
     await previewState(grant, 'starting');
     try {
       await preview.start(snapshot);
-    } catch {
-      const error =
-        'The dev server did not become ready. Check the repository dev command, port and health path.';
+    } catch (cause) {
+      const error = cause instanceof Error ? cause.message : 'The dev server did not become ready.';
       await previewState(grant, 'failed', error);
       return { ready: false, error, source: preview.source };
     }

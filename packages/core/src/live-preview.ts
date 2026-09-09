@@ -3,7 +3,7 @@ import { prisma, type DB } from '@r2cloud/database';
 import { hash } from '@r2cloud/contracts/hash';
 import { requireThat, type Actor, type CandidateManifest } from '@r2cloud/contracts/domain';
 import { access, lockProject } from './project-context';
-import { pinExecutionSetup } from './execution-setup';
+import { ensureExecutionSetup, pinExecutionSetup } from './execution-setup';
 
 const secret = () => randomBytes(32).toString('base64url');
 
@@ -161,6 +161,7 @@ export async function previewCheckoutConfig(
   threadId: string,
   minutes: number,
 ) {
+  await ensureExecutionSetup(actor, projectId);
   return prisma.$transaction(async (db) => {
     await lockProject(db, projectId);
     const project = await access(db, actor, projectId, 'contribute');

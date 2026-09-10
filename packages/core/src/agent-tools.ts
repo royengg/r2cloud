@@ -75,7 +75,7 @@ const definitions = {
   },
   start_task: {
     description:
-      'Request exclusive implementation of a specific task. Obtain the task version first. The checked service grants the isolated checkout after confirmation.',
+      'Request implementation ownership of a specific task in an isolated checkout. Other tasks can run independently within organisation resource limits. Obtain the task version first. The checked service grants the isolated checkout after confirmation.',
     schema: z
       .object({
         taskId: z.string().min(1).max(100),

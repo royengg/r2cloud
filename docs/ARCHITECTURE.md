@@ -44,11 +44,15 @@ HTTP commands persist state and event/job intent together. One browser socket se
 
 ## Threads and implementation ownership
 
+A personal `ConversationWorkspace` groups threads within a project. The sidebar lists workspaces; the conversation tab strip lists only the selected workspace’s threads. Creation checks project access and workspace ownership, and a composite foreign key prevents cross-project thread assignment. Existing threads migrate into one default workspace per author/project.
+
 A `ConversationThread` retains native Codex identity and private rollout state. An `AgentTurn` tracks one message’s execution, independently of task business state. A partial unique index prevents competing active turns in one thread. Ordered `AgentItem` records hold the visible timeline; `AgentRequest` records hold inline questions and decisions.
 
-There is one native harness for conversation, planning and implementation. Project tools supply board context and bounded public repository reads. Ordinary messages create no task or implementation claim. The checked `start_task` operation requests human confirmation, validates task version, dependencies and limits, and acquires ownership before preparing a writable checkout.
+There is one native harness for conversation, planning and implementation. Project tools supply board context and bounded public repository reads. Ordinary messages create no task or implementation claim. Requested task creation saves immediately; identical requests in the same thread reuse the saved task. The checked `start_task` operation checks task version, ownership, dependencies and resource capacity before requesting human confirmation. It rechecks admission under the organisation/project lock after approval and acquires task ownership before preparing a writable checkout. Waiting for implementation approval does not acquire a task claim; the conversation runtime still consumes resources.
 
-Postgres enforces one active implementation claim per task and one active execution per claim. Browser closure and product review do not release claims. Task generations reject stale implementation results. Repository concurrency is a policy, independent of task identity.
+Postgres enforces one active implementation claim per task and one active execution per claim. Browser closure and product review do not release claims. Task generations reject stale implementation results. Claims preserve task ownership and candidate history; they do not reserve repository capacity. Independent tasks on the same repository can execute concurrently in separate sandboxes/checkouts, even while other tasks are blocked or awaiting review. A correction restores only its own task's candidate.
+
+Admission counts live resources through `agentResourceUsage`: warm/active runtimes, turns without runtimes, and standalone executions without confirmed stop. `organisations.max_runs` bounds that usage, with the current turn/runtime excluded when converting an admitted conversation into implementation. Both new tasks and corrections check this budget while holding the organisation lock, so concurrent requests across projects cannot oversubscribe it. A stopped task alone consumes no capacity; an associated live or uncertain sandbox still does. Keep the partial unique indexes for one owner per task and one execution per claim. The legacy `repositories.max_changes` column is unused and retained for schema/rolling compatibility; changing it no longer affects admission.
 
 ## Warm sandbox lifecycle
 
@@ -76,7 +80,7 @@ Private Git bundles and candidate manifests bind evidence to immutable changes. 
 
 The checked publication policy binds a designated human reviewer’s approval to the exact task, repository, base/head, artifact digest and requested action. Changed candidates require new approval. Merge requires separate authorisation and verified repository facts. Agents cannot approve either action.
 
-The live publisher, required-check reconciliation and verified GitHub merge integration are unfinished. Existing policies and fixture tests are foundations, not proof of a working end-to-end publication flow.
+Parallel candidates can share a pinned base and may conflict during integration. A live publisher must reconcile against the current target branch and required checks before merging; implementation admission must not serialize repository ownership to avoid that responsibility. The live publisher, required-check reconciliation and verified GitHub merge integration are unfinished. Existing policies and fixture tests are foundations, not proof of a working end-to-end publication flow.
 
 Live previews use a separate origin per runtime and session-bound, project-scoped access grants. A private gateway forwards HTTP and WebSockets through Vercel's authenticated connection without exposing the repository port. Coding handoff restarts the preview from a separate copy while the exported checkout remains sealed. Preview process records live outside the native bridge control directory, so restarting Codex does not orphan the retained dev server. Agent browser inspection uses a separate user and network namespace with a relay restricted to the preview port. Screenshots are immutable local artifacts served through project access checks. Hosted end-to-end verification and production artifact storage remain unfinished.
 
@@ -88,7 +92,7 @@ See [setup](SETUP.md) for configuration.
 
 The product serves teams and nontechnical founders building websites and web applications. Todo, Ongoing and Completed are the main board columns; review and blockers stay within Ongoing. Work is individual or an explicitly authorised, bounded batch. Agents never pick unrestricted autonomous work. Production deployment is outside the initial scope.
 
-The pilot supports one configured project, public repositories and existing Vercel Hobby capacity, with no paid upgrade or API-key fallback. The worker processes up to two turns concurrently; database admission still enforces organisation limits and counts warm allocations. An inline question in one thread does not block another admitted thread. Repository concurrency (`repositories.max_changes`) is a separate configurable policy.
+The pilot supports one configured project, public repositories and existing Vercel Hobby capacity, with no paid upgrade or API-key fallback. The worker processes up to two turns concurrently; database admission still enforces organisation limits and counts warm allocations. An inline question in one thread does not block another admitted thread. Independent repository tasks share the organisation resource budget; saved claims are not a concurrency limit.
 
 Additional providers and connected local runners are future extensions. Hosted credential renewal, entitlement, billing, production budget, scale, residency and broader repository-stack support remain open. [DESIGN.md](../DESIGN.md) defines the interface system.
 

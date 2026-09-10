@@ -1,16 +1,16 @@
 # Current status
 
-Last reviewed: 9 September 2026. r2cloud is an early development preview. The configured cloud coding pilot works; the complete preview-to-publication-to-merge journey does not yet work end to end.
+Last reviewed: 10 September 2026. r2cloud is an early development preview. The configured cloud coding pilot works; the complete preview-to-publication-to-merge journey does not yet work end to end.
 
 ## Available
 
 - GitHub sign-in, workspace/project creation, invitations and separate contribution, publication-review and merge permissions.
 - Shared Kanban boards, task outcomes and acceptance criteria, search/filters, review state and task-linked agent activity.
 - GitHub App repository discovery and attachment, automatic setup for common JavaScript web apps, explicit repository setup overrides, and personal Codex device login. Agents can detect or propose setup in the thread; custom commands require inline approval.
-- Project/task threads with model selection, streamed Markdown replies, activity, inline questions/implementation decisions and Stop.
+- Personal conversation workspaces within projects, with scoped thread tabs, model/thinking selection, streamed replies, inline decisions and Stop. Thread removal preserves task/execution history.
 - One native Codex session per thread, project-aware tools, and no implementation claim for ordinary conversation.
 - Slash-skill suggestions in both composers, six bundled instruction files and enabled project instruction skills. Queued turns pin skill versions and contents; the worker mounts them for native Codex selection. Importing custom skill bundles and managing skills through the UI are not implemented.
-- Authoritative task claims, version/generation checks, bounded execution and durable operation intent. Owners can return blocked tasks without candidates to Todo once execution is confirmed stopped and pending operations are resolved.
+- Authoritative task claims, version/generation checks, bounded execution and durable operation intent. Independent tasks use isolated checkouts and share live organisation resource limits; blocked/review candidates retain ownership without reserving repository capacity. Implementation admission is checked before and after approval. Owners can return blocked tasks without candidates to Todo once execution is confirmed stopped and pending operations are resolved.
 - Authenticated worker-to-Codex streaming, batched timeline persistence and optional credential-free prepared snapshots.
 - Vercel sandbox reuse with two-minute idle expiry and a ten-minute total limit. Account changes and ambiguous failures require confirmed retirement before replacement.
 - Public repository checkout, pinned dependency setup, configured checks and immutable Git bundle export. Periodic recovery snapshots preserve edits independently of final export; interrupted work returns as a blocked candidate. Coding handoff quiesces processes and seals the retained checkout read-only.

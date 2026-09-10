@@ -1,4 +1,4 @@
-import { agentResourceUsage } from './agent-runtimes';
+import { checkExecutionCapacity, checkTaskStart } from './implementation-admission';
 import { receipt } from './receipt';
 import { pinThread } from './thread-context';
 import { access, event, type AccessibleProject } from './project-context';
@@ -61,12 +61,7 @@ async function queueRun(
       409,
       'The managed execution worker is not available.',
     );
-  const turn = agentTurnId
-    ? await db.agentTurn.findUnique({ where: { id: agentTurnId }, select: { runtimeId: true } })
-    : null;
-  const active = await agentResourceUsage(db, p.org_id, turn?.runtimeId ?? undefined, agentTurnId);
-  const org = await db.organisations.findUniqueOrThrow({ where: { id: p.org_id } });
-  requireThat(active < org.max_runs, 409, 'The organisation has reached its concurrent run limit.');
+  await checkExecutionCapacity(db, p.org_id, agentTurnId);
   const skills = await db.skills.findMany({
     where: { project_id: p.id, enabled: true },
     select: { id: true, version: true, digest: true },
@@ -144,22 +139,7 @@ async function startTask(
   agentTurnId?: string,
 ) {
   requireThat(p.repo_id, 409, 'Connect a repository before starting this task.');
-  requireThat(t.state === 'todo', 409, 'This task already has an implementation owner.');
-  const deps = await db.dependencies.count({
-    where: {
-      task_id: t.id,
-      tasks_dependencies_org_id_project_id_depends_onTotasks: { state: { not: 'completed' } },
-    },
-  });
-  requireThat(!deps, 409, 'Complete the prerequisite tasks before starting this work.');
-  await lockRow(db, 'repositories', p.repo_id);
-  const repo = await db.repositories.findUniqueOrThrow({ where: { id: p.repo_id } });
-  const occupied = await db.claims.count({ where: { repo_id: p.repo_id, released_at: null } });
-  requireThat(
-    occupied < repo.max_changes,
-    409,
-    'Another task holds this repository’s implementation slot. Continue that task, or return it to Todo if it is stopped without a candidate.',
-  );
+  await checkTaskStart(db, t);
   const claimId = id();
   await db.claims.create({
     data: {

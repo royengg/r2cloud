@@ -1,12 +1,63 @@
 import { ensureExecutionSetup } from './execution-setup';
-import { prisma, json } from '@r2cloud/database';
+import { prisma, json, type DB } from '@r2cloud/database';
 import { requireThat, type Actor } from '@r2cloud/contracts/domain';
 import type { AgentGrant } from '@r2cloud/contracts/agent';
 import type { RunGrant, RunResult } from '@r2cloud/contracts/adapters';
 import { commandInTransaction } from './service';
+import { checkExecutionCapacity, checkTaskStart } from './implementation-admission';
 import { access, event, lockProject } from './project-context';
 import { waitForAgentResponse } from './agent-tools';
 import { digest, id } from '@r2cloud/contracts/hash';
+
+async function checkAgentImplementation(
+  db: DB,
+  grant: AgentGrant,
+  input: { taskId: string; version: number },
+) {
+  const project = await access(db, { id: grant.actorId }, grant.projectId, 'contribute');
+  const turn = await db.agentTurn.findUniqueOrThrow({ where: { id: grant.id } });
+  requireThat(
+    !turn.stoppedAt && !turn.stopRequested,
+    409,
+    'This turn is no longer accepting work.',
+  );
+  const existing = await db.runs.findFirst({
+    where: { project_id: grant.projectId, manifest: { path: ['agentTurnId'], equals: grant.id } },
+  });
+  requireThat(!existing, 409, 'This turn already owns an implementation.');
+  const task = await db.tasks.findFirst({
+    where: { id: input.taskId, project_id: grant.projectId },
+  });
+  requireThat(task, 404, 'Task not found in this project.');
+  requireThat(
+    task.version === input.version,
+    409,
+    'This task has changed. Refresh and review the latest version.',
+  );
+  requireThat(project.repo_id, 409, 'Connect a repository before starting this task.');
+  const thread = await db.conversationThread.findUniqueOrThrow({ where: { id: grant.threadId } });
+  requireThat(!thread.taskId || thread.taskId === task.id, 409, 'Thread task changed.');
+  if (task.state === 'todo') {
+    await checkTaskStart(db, task);
+  } else {
+    const claim = await db.claims.findFirst({
+      where: { task_id: task.id, owner_id: grant.actorId, released_at: null },
+    });
+    requireThat(claim, 403, 'Only the implementation owner can continue this task.');
+    requireThat(
+      ['review', 'blocked'].includes(task.state),
+      409,
+      'Corrections can start when this candidate is ready for review.',
+    );
+    requireThat(
+      !(await db.runs.count({ where: { claim_id: claim.id, stopped_at: null } })),
+      409,
+      'The previous execution has not been confirmed stopped.',
+    );
+  }
+  await checkExecutionCapacity(db, project.org_id, grant.id);
+  return { task, thread };
+}
 
 export async function claimAgentTask(
   grant: AgentGrant,
@@ -18,10 +69,10 @@ export async function claimAgentTask(
     403,
     'This thread is attached to another task.',
   );
-  const task = await prisma.tasks.findFirst({
-    where: { id: input.taskId, project_id: grant.projectId },
+  const { task } = await prisma.$transaction(async (db) => {
+    await lockProject(db, grant.projectId);
+    return checkAgentImplementation(db, grant, input);
   });
-  requireThat(task, 404, 'Task not found in this project.');
   const connection = await prisma.provider_connections.findUnique({
     where: { id: grant.connectionId },
     select: { mode: true },
@@ -39,28 +90,7 @@ export async function claimAgentTask(
   return prisma.$transaction(async (db) => {
     await lockProject(db, grant.projectId);
     const actor = { id: grant.actorId } as Actor;
-    await access(db, actor, grant.projectId, 'contribute');
-    const turn = await db.agentTurn.findUniqueOrThrow({ where: { id: grant.id } });
-    requireThat(
-      !turn.stoppedAt && !turn.stopRequested,
-      409,
-      'This turn is no longer accepting work.',
-    );
-    const existing = await db.runs.findFirst({
-      where: { project_id: grant.projectId, manifest: { path: ['agentTurnId'], equals: grant.id } },
-    });
-    requireThat(!existing, 409, 'This turn already owns an implementation.');
-    const current = await db.tasks.findUniqueOrThrow({ where: { id: task.id } });
-    const thread = await db.conversationThread.findUniqueOrThrow({ where: { id: grant.threadId } });
-    requireThat(!thread.taskId || thread.taskId === task.id, 409, 'Thread task changed.');
-    if (current.state !== 'todo')
-      requireThat(
-        await db.claims.count({
-          where: { task_id: task.id, owner_id: grant.actorId, released_at: null },
-        }),
-        403,
-        'Only the implementation owner can continue this task.',
-      );
+    const { task: current, thread } = await checkAgentImplementation(db, grant, input);
     await db.conversationThread.update({ where: { id: thread.id }, data: { taskId: task.id } });
     const result = await commandInTransaction(
       db,

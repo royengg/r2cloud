@@ -3134,9 +3134,9 @@ body[data-keyboard] .account-menu {
   color: var(--color-text);
 }
 .sidebar-thread[aria-current='page'] {
-  background: var(--color-accent-soft);
-  border-color: color-mix(in srgb, var(--color-accent) 20%, transparent);
-  color: var(--color-accent-hover);
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
   font-weight: 600;
 }
 .sidebar-thread-title {

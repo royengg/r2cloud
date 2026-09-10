@@ -1,5 +1,6 @@
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
+  Delete02Icon,
   GithubIcon,
   BrainIcon,
   Add01Icon,
@@ -35,6 +36,7 @@ import {
   Loading03Icon,
 } from '@hugeicons/core-free-icons';
 const icons = {
+  delete: Delete02Icon,
   github: GithubIcon,
   brain: BrainIcon,
   add: Add01Icon,

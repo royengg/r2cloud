@@ -6,7 +6,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import type { CodexModel } from '@r2cloud/contracts/threads';
 import type { Project, Comment, Thread } from '../lib/types';
 import { api } from '../lib/api';
-import { Avatar, Button, IconButton, Status } from './ui';
+import { Avatar, Button, IconButton, Modal, Status } from './ui';
 import { Icon } from './Icon';
 import { useQuery } from '@tanstack/react-query';
 import { queryClient, readQuery } from '../lib/queries';
@@ -38,6 +38,7 @@ export function ThreadPanel({
   onSelectThread?: (id: string | null) => void;
   onBack?: () => void;
 }) {
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [localSelected, setLocalSelected] = useState<string | null>(null);
   const selected = selectedThreadId === undefined ? localSelected : selectedThreadId;
@@ -246,55 +247,51 @@ export function ThreadPanel({
     });
   }
   const messages = detail?.messages ?? [];
-  const archiveAction = detail && (detail.thread.createdBy === userId || project.review) && (
-    <Button
-      variant="ghost"
-      disabled={busy || running}
-      onClick={() => void perform({ action: 'archive', version: detail.thread.version })}
-    >
-      Archive
-    </Button>
-  );
   return (
     <section className="thread-panel" aria-label="Agent conversations">
-      {selectedThreadId === undefined && (
-        <nav className="thread-navigation" aria-label="Conversation threads">
-          <div className="thread-list">
-            {threads.map((thread) => (
-              <button
-                key={thread.id}
-                type="button"
-                title={thread.title}
-                aria-pressed={selected === thread.id}
-                disabled={busy}
-                onClick={() => {
-                  setSelected(thread.id);
-                  setText('');
-                  setError('');
-                }}
-              >
-                <Icon name="message" size={17} />
-                <span>{thread.title}</span>
-              </button>
-            ))}
-          </div>
-        </nav>
-      )}
       <div className="thread-content">
         <div className="project-thread-toolbar">
-          {onBack && (
-            <Button variant="ghost" icon="board" onClick={onBack}>
-              Project board
-            </Button>
-          )}
+          {onBack && <IconButton name="board" label="Project board" onClick={onBack} />}
+          <nav className="thread-tabs" aria-label="Conversation threads">
+            {threads.map((thread) => {
+              const active = !!thread.turns?.length;
+              return (
+                <button
+                  key={thread.id}
+                  type="button"
+                  title={thread.title}
+                  aria-label={`${thread.title}${active ? ' — Agent running' : ''}`}
+                  aria-current={selected === thread.id ? 'page' : undefined}
+                  disabled={busy}
+                  onClick={() => {
+                    setSelected(thread.id);
+                    setText('');
+                    setError('');
+                  }}
+                >
+                  <Icon name={active ? 'loading' : 'message'} size={16} />
+                  <span>{thread.title}</span>
+                </button>
+              );
+            })}
+            {!selected && <span className="thread-tab-draft">New conversation</span>}
+          </nav>
           <div className="thread-header-actions">
-            {archiveAction}
             <IconButton
               name="add"
               label="New thread"
               disabled={busy || !project.contribute}
               onClick={newThread}
             />
+            {detail && (detail.thread.createdBy === userId || project.review) && (
+              <IconButton
+                name="delete"
+                label={running ? 'Stop the agent before deleting this thread' : 'Delete thread'}
+                className="thread-delete"
+                disabled={busy || running || !project.contribute}
+                onClick={() => setDeleteOpen(true)}
+              />
+            )}
           </div>
         </div>
         <header className="thread-heading">
@@ -452,13 +449,16 @@ export function ThreadPanel({
             </div>
             <div className="thread-actions">
               {running ? (
-                <Button
+                <button
                   type="button"
+                  className="button button-primary thread-stop"
+                  aria-label="Stop agent"
+                  title="Stop agent"
                   disabled={busy || timeline?.actorId !== userId}
                   onClick={() => void control({ action: 'stop' })}
                 >
-                  Stop
-                </Button>
+                  <span aria-hidden="true" />
+                </button>
               ) : (
                 <Button
                   type="submit"
@@ -481,6 +481,39 @@ export function ThreadPanel({
           </p>
         )}
       </div>
+      {deleteOpen && detail && (
+        <Modal
+          label="Delete thread"
+          className="confirmation-modal"
+          close={() => !busy && setDeleteOpen(false)}
+        >
+          <h2>Delete this thread?</h2>
+          <p>
+            “{detail.thread.title}” will be removed from the workspace. Task changes and execution
+            history are kept.
+          </p>
+          {error && (
+            <p role="alert" className="inline-error">
+              {error}
+            </p>
+          )}
+          <div className="modal-actions">
+            <Button disabled={busy} onClick={() => setDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="thread-delete-confirm"
+              busy={busy}
+              onClick={async () => {
+                if (await perform({ action: 'archive', version: detail.thread.version }))
+                  setDeleteOpen(false);
+              }}
+            >
+              Delete thread
+            </Button>
+          </div>
+        </Modal>
+      )}
       {reviewOpen && selected && (
         <ReviewPanel
           key={selected}

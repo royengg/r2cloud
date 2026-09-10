@@ -2599,48 +2599,56 @@ body[data-keyboard] .account-menu {
   min-height: 0;
   overflow: hidden;
 }
-.thread-navigation {
-  width: 210px;
-  flex-shrink: 0;
-  background: var(--color-surface-muted);
-  padding: 16px 12px;
-  overflow-y: auto;
-}
-.thread-list {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 6px;
-  margin-top: 16px;
-}
-.thread-list button {
+.thread-tabs {
   display: flex;
-  min-width: 0;
-  max-width: 100%;
   align-items: center;
-  gap: 9px;
-  padding: 12px;
-  min-height: 44px;
-  border: 0;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.thread-tabs button,
+.thread-tab-draft {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  max-width: 200px;
+  min-height: 40px;
+  padding: 8px 12px;
   border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-text-secondary);
-  text-align: left;
+  font-size: var(--text-caption);
 }
-.thread-list button .icon,
-.thread-heading > .button {
+.thread-tabs button .icon {
   flex-shrink: 0;
 }
-.thread-list button span {
-  min-width: 0;
-  flex: 1;
+.thread-tabs button span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.thread-list button[aria-pressed='true'] {
-  background: var(--color-surface);
+.thread-tabs button[aria-current],
+.thread-tab-draft {
+  background: var(--color-accent-soft);
   color: var(--color-accent-hover);
-  box-shadow: var(--shadow-card);
+}
+.thread-delete-confirm.button {
+  background: var(--color-danger);
+  color: var(--color-danger-ink);
+  border-color: var(--color-danger-ink);
+}
+@media (hover: hover) {
+  .thread-tabs button:hover {
+    background: var(--color-surface-muted);
+  }
+  .thread-header-actions .thread-delete:hover:not(:disabled),
+  .thread-delete-confirm.button:hover:not(:disabled) {
+    color: var(--color-danger-ink);
+    background: var(--color-danger);
+  }
 }
 .thread-content {
   display: flex;
@@ -2706,37 +2714,7 @@ body[data-keyboard] .account-menu {
 .thread-error {
   padding: 12px 24px;
 }
-@media (hover: hover) and (pointer: fine) {
-  .thread-list button:hover {
-    background: var(--color-accent-soft);
-    color: var(--color-accent-hover);
-  }
-}
 @media (max-width: 680px) {
-  .thread-panel {
-    flex-direction: column;
-  }
-  .thread-navigation {
-    width: auto;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px;
-    overflow-x: auto;
-    flex-shrink: 0;
-  }
-  .thread-navigation > .button {
-    width: auto;
-    flex-shrink: 0;
-  }
-  .thread-list {
-    display: flex;
-    margin: 0;
-  }
-  .thread-list button {
-    max-width: 160px;
-    flex-shrink: 0;
-  }
   .thread-heading {
     padding: 16px;
   }
@@ -3331,6 +3309,25 @@ body[data-keyboard] .account-menu {
 
 .thread-toolbar > .thread-actions {
   margin-inline-start: auto;
+}
+
+.thread-actions .thread-stop {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  padding: 0;
+  border-radius: var(--radius-pill);
+}
+.thread-stop > span {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: currentColor;
+}
+@media (prefers-reduced-motion: no-preference) {
+  body:not([data-keyboard]) .thread-stop:active:not(:disabled) {
+    transform: scale(0.96);
+  }
 }
 
 .skill-composer {

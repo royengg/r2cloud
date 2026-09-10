@@ -1,9 +1,20 @@
+import { createConversationWorkspace } from '@r2cloud/core/conversation-workspaces';
 import { agentTimeline, agentCommand } from '@r2cloud/core/agent-turns';
 import { z } from 'zod';
 import { Router } from 'express';
 import { readThreads, changeThread } from '@r2cloud/core/threads';
 export function threadRoutes() {
   const router = Router();
+  router.post('/projects/:projectId/conversation-workspaces', async (req, res) => {
+    res.json(
+      await createConversationWorkspace(
+        res.locals.actor,
+        String(req.params.projectId),
+        req.get('Idempotency-Key') ?? '',
+        req.body,
+      ),
+    );
+  });
   router.get('/projects/:projectId/threads', async (req, res) => {
     res.json(await readThreads(res.locals.actor, String(req.params.projectId)));
   });

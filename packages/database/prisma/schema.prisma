@@ -180,6 +180,7 @@ model project_access {
 }
 
 model projects {
+  conversationWorkspaces ConversationWorkspace[]
   threads               ConversationThread[]
   executionRuntime      ExecutionRuntime?
   codexConnections      CodexConnection[]
@@ -337,6 +338,7 @@ model tasks {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model users {
   livePreviewGrants LivePreviewGrant[]
+  conversationWorkspaces ConversationWorkspace[]
   conversationThreads   ConversationThread[]
   codexConnections      CodexConnection[]
   executionProfiles     execution_profiles[]
@@ -558,7 +560,24 @@ model ExecutionRuntime {
   @@map("execution_runtime")
 }
 
+model ConversationWorkspace {
+  id        String   @id
+  projectId String   @map("project_id")
+  createdBy String   @map("created_by")
+  title     String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  project   projects @relation(fields: [projectId], references: [id], onDelete: NoAction)
+  author    users    @relation(fields: [createdBy], references: [id], onDelete: NoAction)
+  threads   ConversationThread[]
+
+  @@unique([id, projectId])
+  @@index([projectId, createdBy, createdAt])
+  @@map("conversation_workspaces")
+}
+
 model ConversationThread {
+  workspaceId String @map("workspace_id")
+  workspace ConversationWorkspace @relation(fields: [workspaceId, projectId], references: [id, projectId], onDelete: NoAction)
   turns AgentTurn[]
   providerId String? @map("provider_id")
   providerState String? @map("provider_state")
@@ -580,6 +599,7 @@ model ConversationThread {
   comments     comments[]
 
   @@unique([id, projectId])
+  @@index([workspaceId, updatedAt])
   @@index([projectId, updatedAt])
   @@map("conversation_threads")
 }

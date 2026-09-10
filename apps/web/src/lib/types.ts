@@ -92,7 +92,15 @@ export const statuses: Record<string, string> = {
 export const columnFor = (task: Task) =>
   task.state === 'todo' ? 'todo' : task.state === 'completed' ? 'completed' : 'ongoing';
 
+export type ConversationWorkspace = {
+  id: string;
+  projectId: string;
+  createdBy: string;
+  title: string;
+};
+
 export type Thread = {
+  workspaceId: string;
   id: string;
   title: string;
   model: string | null;

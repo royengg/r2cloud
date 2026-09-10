@@ -58,7 +58,7 @@ export async function readThreads(actor: Actor, projectId: string, threadId?: st
         .map(({ users, ...m }) => ({ ...m, name: users.name, role: users.kind })),
     };
   }
-  const [threads, models, skills] = await Promise.all([
+  const [threads, models, skills, workspaces] = await Promise.all([
     db.conversationThread.findMany({
       where: { projectId, archivedAt: null },
       omit: { providerId: true, providerState: true },
@@ -75,9 +75,14 @@ export async function readThreads(actor: Actor, projectId: string, threadId?: st
     }),
     availableModels(db, actor, projectId),
     availableSkills(db, projectId),
+    db.conversationWorkspace.findMany({
+      where: { projectId, createdBy: actor.id },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    }),
   ]);
   return {
     threads,
+    workspaces,
     models,
     skills: skills.map(({ name, description, source }) => ({
       name,
@@ -115,9 +120,26 @@ export async function changeThread(
           409,
           'This model is not available to your Codex account.',
         );
+      const workspaceId = input.workspaceId ?? `default:${projectId}:${actor.id}`;
+      if (input.workspaceId && workspaceId !== `default:${projectId}:${actor.id}`) {
+        requireThat(
+          await db.conversationWorkspace.count({
+            where: { id: workspaceId, projectId, createdBy: actor.id },
+          }),
+          404,
+          'Workspace not found.',
+        );
+      } else {
+        await db.conversationWorkspace.upsert({
+          where: { id: workspaceId },
+          create: { id: workspaceId, projectId, createdBy: actor.id, title: 'Workspace' },
+          update: {},
+        });
+      }
       const thread = await db.conversationThread.create({
         data: {
           id: id(),
+          workspaceId,
           orgId: project.org_id,
           projectId,
           taskId: input.taskId,

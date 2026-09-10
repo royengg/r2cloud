@@ -28,6 +28,7 @@ export function ThreadPanel({
   taskId,
   userId,
   selectedThreadId,
+  workspaceId,
   onSelectThread,
   onBack,
 }: {
@@ -35,16 +36,19 @@ export function ThreadPanel({
   taskId?: string;
   userId: string;
   selectedThreadId?: string | null;
-  onSelectThread?: (id: string | null) => void;
+  workspaceId?: string;
+  onSelectThread?: (id: string | null, workspaceId?: string) => void;
   onBack?: () => void;
 }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [localWorkspaceId, setLocalWorkspaceId] = useState<string>();
   const [localSelected, setLocalSelected] = useState<string | null>(null);
   const selected = selectedThreadId === undefined ? localSelected : selectedThreadId;
   function setSelected(id: string | null) {
     setLocalSelected(id);
-    onSelectThread?.(id);
+    setLocalWorkspaceId(activeWorkspaceId);
+    onSelectThread?.(id, activeWorkspaceId);
   }
   const [effort, setEffort] = useState<string | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -60,7 +64,7 @@ export function ThreadPanel({
       setEffort(null);
       setError('');
     }
-  }, [selectedThreadId]);
+  }, [selectedThreadId, workspaceId]);
   useLayoutEffect(() => {
     const field = input.current;
     if (!field) return;
@@ -94,8 +98,13 @@ export function ThreadPanel({
     ...timelineQuery(`${path}/${selected}/timeline`),
     enabled: !!selected,
   });
+  const activeWorkspaceId =
+    workspaceId ??
+    listQuery.data?.threads.find((thread) => thread.id === selected)?.workspaceId ??
+    localWorkspaceId ??
+    `default:${project.id}:${userId}`;
   const threads = (listQuery.data?.threads ?? []).filter(
-    (thread) => !taskId || thread.taskId === taskId,
+    (thread) => (!taskId || thread.taskId === taskId) && thread.workspaceId === activeWorkspaceId,
   );
   const models = listQuery.data?.models ?? [];
   const loaded = !!listQuery.data;
@@ -206,6 +215,7 @@ export function ThreadPanel({
       if (!current) {
         const created = await api<{ id: string }>(path, {
           action: 'create',
+          workspaceId: activeWorkspaceId,
           title: text.trim().replace(/\s+/g, ' ').slice(0, 80),
           model,
           instructions: '',

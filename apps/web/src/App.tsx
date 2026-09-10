@@ -27,6 +27,7 @@ export function App() {
     [showFilters, setShowFilters] = useState(false),
     [threadView, setThreadView] = useState<{
       projectId: string;
+      workspaceId?: string;
       id: string | null;
     } | null>(null),
     [selectedId, setSelectedId] = useState<string | null>(null),
@@ -170,8 +171,11 @@ export function App() {
           }}
           onProject={selectProject}
           selectedThreadId={threadView?.projectId === w.projectId ? threadView.id : null}
-          onThread={(id) => {
-            setThreadView({ projectId: w.projectId, id });
+          selectedWorkspaceId={
+            threadView?.projectId === w.projectId ? threadView.workspaceId : undefined
+          }
+          onThread={(id, workspaceId) => {
+            setThreadView({ projectId: w.projectId, id, workspaceId });
             setSelectedId(null);
             if (mobile) setSidebarOpen(false);
           }}
@@ -231,9 +235,12 @@ export function App() {
                   userId={w.identity.user.id}
                   onBack={() => setThreadView(null)}
                   selectedThreadId={threadView.id}
-                  onSelectThread={(id) =>
+                  workspaceId={threadView.workspaceId}
+                  onSelectThread={(id, workspaceId) =>
                     setThreadView((current) =>
-                      current === threadView ? { projectId: w.projectId, id } : current,
+                      current === threadView
+                        ? { projectId: w.projectId, id, workspaceId }
+                        : current,
                     )
                   }
                 />

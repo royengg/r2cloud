@@ -63,7 +63,7 @@ const definitions = {
   },
   create_task: {
     description:
-      'Propose creating a task the user requested. The user confirms the exact task before it is saved.',
+      'Create a task the user requested. This saves it immediately; identical requests in this thread return the existing task. Use the returned task ID and version to start implementation, which requires separate approval.',
     schema: z
       .object({
         title: z.string().trim().min(1).max(160),
@@ -294,14 +294,6 @@ export async function callAgentTool(
     };
   }
   if (name === 'create_task') {
-    const response = await waitForAgentResponse(
-      grant,
-      callId,
-      'approval',
-      `Create task: ${input.title}`,
-      input,
-    );
-    requireThat(response.approved, 403, 'Task creation was not approved.');
     return prisma.$transaction(async (db) => {
       await lockProject(db, project.id);
       await access(db, actor, project.id, 'contribute');
@@ -317,7 +309,43 @@ export async function callAgentTool(
         409,
         'This turn is no longer accepting work.',
       );
-      const taskId = digest({ turn: grant.id, callId }).slice(0, 40);
+      const taskId = digest({
+        projectId: project.id,
+        threadId: grant.threadId,
+        actorId: actor.id,
+        action: 'create_task',
+        input,
+      }).slice(0, 40);
+      const saved = await db.tasks.findUnique({
+        where: { id: taskId },
+        select: { id: true, title: true, version: true },
+      });
+      if (saved) return saved;
+      const matches = await db.tasks.findMany({
+        where: {
+          project_id: project.id,
+          title: input.title,
+          outcome: input.outcome,
+          criteria: { equals: input.criteria },
+          priority: input.priority,
+        },
+        select: { id: true, title: true, version: true },
+      });
+      if (matches.length) {
+        const created = await db.events.findFirst({
+          where: {
+            project_id: project.id,
+            actor_id: actor.id,
+            kind: 'Task created',
+            task_id: { in: matches.map((task) => task.id) },
+            detail: { path: ['threadId'], equals: grant.threadId },
+          },
+          orderBy: { id: 'asc' },
+          select: { task_id: true },
+        });
+        const existing = matches.find((task) => task.id === created?.task_id);
+        if (existing) return existing;
+      }
       const task = await db.tasks.upsert({
         where: { id: taskId },
         create: {

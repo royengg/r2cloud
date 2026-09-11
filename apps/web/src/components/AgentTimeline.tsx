@@ -1,28 +1,8 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState } from 'react';
+import { RichText } from './RichText';
 import type { AgentTimeline as Timeline, AgentRequest } from '@r2cloud/contracts/agent';
 import { Button } from './ui';
 import { CodexLogo } from './CodexLogo';
-const Markdown = lazy(() => import('react-markdown'));
-function RichText({ children }: { children: string }) {
-  return (
-    <Suspense fallback={<p>{children}</p>}>
-      <Markdown
-        skipHtml
-        disallowedElements={['img']}
-        components={{
-          a: ({ children, href }) => (
-            <a href={href} target="_blank" rel="noreferrer">
-              {children}
-            </a>
-          ),
-        }}
-      >
-        {children}
-      </Markdown>
-    </Suspense>
-  );
-}
-
 export function AgentTimeline({
   projectId,
   timeline,

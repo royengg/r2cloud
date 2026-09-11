@@ -1,3 +1,4 @@
+import { RichText } from './RichText';
 import { ReviewPanel } from './ReviewPanel';
 import { ThreadPanel } from './ThreadPanel';
 import { useState } from 'react';
@@ -46,9 +47,9 @@ export function TaskDetail({
         <IconButton name="close" label="Close task details" onClick={close} />
       </header>
       <div className="detail-title">
-        <Status state={task.state} />
         <h2>{task.title}</h2>
         <div className="detail-meta">
+          <Status state={task.state} />
           <span className={`priority-label priority-${task.priority.toLowerCase()}`}>
             <Icon name="flag" size={14} />
             {task.priority} priority
@@ -64,15 +65,6 @@ export function TaskDetail({
               {task.owner_name ?? 'Unassigned'}
             </span>
           </span>
-          {task.run && (
-            <span>
-              <Icon name="sparkles" size={15} />
-              Codex{' '}
-              {task.run.manifest.mode === 'fixture' && (
-                <span className="fixture-inline">fixture</span>
-              )}
-            </span>
-          )}
         </div>
       </div>
       <nav className="detail-tabs" aria-label="Task information">
@@ -93,7 +85,9 @@ export function TaskDetail({
           <>
             <section className="detail-section">
               <h3>Description</h3>
-              <p>{task.outcome}</p>
+              <div className="task-rich-text">
+                <RichText>{task.outcome}</RichText>
+              </div>
             </section>
             <section className="detail-section">
               <h3>Acceptance criteria</h3>
@@ -106,17 +100,6 @@ export function TaskDetail({
                 ))}
               </ul>
             </section>
-            {task.state === 'todo' && (
-              <section className="task-agent-summary" aria-label="Agent execution">
-                <Icon name="play" size={20} />
-                <div>
-                  <h3>Agent execution</h3>
-                  <p>
-                    Start an agent to implement this task. Review its changes before publishing.
-                  </p>
-                </div>
-              </section>
-            )}
             {task.state === 'building' && (
               <div className="state-notice">
                 <Icon name="clock" />
@@ -137,70 +120,67 @@ export function TaskDetail({
             )}
             {candidate && (
               <>
-                <Button icon="branch" onClick={() => setReviewOpen(true)}>
-                  Review saved changes
-                </Button>
-                <section className="candidate-preview">
-                  <div className="preview-caption">
-                    <div>
-                      <h3>
-                        {candidate.evidence.preview.available ? 'Preview' : 'Preview unavailable'}
-                      </h3>
-                      <span>
-                        Saved revision{' '}
+                <section className="detail-section">
+                  <div className="task-section-heading">
+                    <h3>Changes</h3>
+                    <div className="task-review-actions">
+                      <Button icon="branch" onClick={() => setReviewOpen(true)}>
+                        View diff
+                      </Button>
+                      {candidate.evidence.preview.available && (
+                        <IconButton
+                          name="external"
+                          label="Open preview"
+                          onClick={() => void onPreview()}
+                        />
+                      )}
+                    </div>
+                  </div>
+                  <div className="task-rich-text">
+                    <RichText>{candidate.manifest.summary}</RichText>
+                  </div>
+                  {candidate.evidence.checks.length > 0 && (
+                    <details className="evidence-disclosure">
+                      <summary>
+                        <Icon name="complete" size={18} />
+                        Checks{' '}
                         {candidate.manifest.fixture && (
                           <span className="fixture-inline">fixture</span>
                         )}
-                      </span>
-                    </div>
-                    <Button
-                      icon="external"
-                      disabled={!candidate.evidence.preview.available}
-                      onClick={() => void onPreview()}
-                    >
-                      Open preview
-                    </Button>
-                  </div>
-                </section>
-                <section className="detail-section">
-                  <h3>Changes</h3>
-                  <p>{candidate.manifest.summary}</p>
-                  <details className="evidence-disclosure">
-                    <summary>
-                      <Icon name="complete" size={18} />
-                      Checks{' '}
-                      {candidate.manifest.fixture && (
-                        <span className="fixture-inline">fixture</span>
-                      )}
-                      <Icon name="down" size={16} />
-                    </summary>
-                    <div>
-                      {candidate.evidence.checks.map((check, i) => (
-                        <div className="evidence-check" key={i}>
-                          <Icon name={check.status === 'passed' ? 'check' : 'info'} size={16} />
-                          <span>{check.name}</span>
-                          <small>{check.status}</small>
-                        </div>
-                      ))}
-                      {candidate.manifest.fixture && (
-                        <p className="subtle">
-                          Fixture results are simulated, not application tests.
-                        </p>
-                      )}
-                    </div>
-                  </details>
-                  <details className="evidence-disclosure">
-                    <summary>
-                      <Icon name="info" size={18} />
-                      Known limitations
-                      <Icon name="down" size={16} />
-                    </summary>
-                    <div>
-                      {candidate.manifest.limitations.map((l, i) => (
-                        <p key={i}>{l}</p>
-                      ))}
-                    </div>
-                  </details>
+                        <Icon name="down" size={16} />
+                      </summary>
+                      <div>
+                        {candidate.evidence.checks.map((check, i) => (
+                          <div className="evidence-check" key={i}>
+                            <Icon name={check.status === 'passed' ? 'check' : 'info'} size={16} />
+                            <span>{check.name}</span>
+                            <small>{check.status}</small>
+                          </div>
+                        ))}
+                        {candidate.manifest.fixture && (
+                          <p className="subtle">
+                            Fixture results are simulated, not application tests.
+                          </p>
+                        )}
+                      </div>
+                    </details>
+                  )}
+                  {candidate.manifest.limitations.length > 0 && (
+                    <details className="evidence-disclosure">
+                      <summary>
+                        <Icon name="info" size={18} />
+                        Known limitations
+                        <Icon name="down" size={16} />
+                      </summary>
+                      <div>
+                        {candidate.manifest.limitations.map((l, i) => (
+                          <div key={i} className="task-rich-text">
+                            <RichText>{l}</RichText>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
                 </section>
               </>
             )}
@@ -224,44 +204,46 @@ export function TaskDetail({
                 </div>
               </div>
             )}
-            <details className="technical-details">
-              <summary>
-                <Icon name="branch" size={17} />
-                Execution details
-                <Icon name="down" size={16} />
-              </summary>
-              <div>
-                <p>
-                  Execution: {task.run?.state ?? 'Not started'} · generation {task.generation}
-                </p>
-                {candidate && (
-                  <>
-                    <p>
-                      Branch: <code>{candidate.manifest.branch}</code>
-                    </p>
-                    <p>
-                      Head: <code>{candidate.manifest.headSha}</code>
-                    </p>
-                    <p>
-                      Base: <code>{candidate.manifest.baseSha}</code>
-                    </p>
-                    <p>
-                      Artifact: <code>{candidate.manifest.artifactDigest}</code>
-                    </p>
-                    {candidate.manifest.fixture && (
-                      <p>Fixture runs contain no real diff or execution log.</p>
-                    )}
-                  </>
-                )}
-                {task.run && (
+            {(task.run || candidate) && (
+              <details className="technical-details">
+                <summary>
+                  <Icon name="branch" size={17} />
+                  Execution details
+                  <Icon name="down" size={16} />
+                </summary>
+                <div>
                   <p>
-                    Skills:{' '}
-                    {task.run.manifest.skills.map((s) => `${s.id}@${s.version}`).join(', ') ||
-                      'None'}
+                    Execution: {task.run?.state ?? 'Not started'} · generation {task.generation}
                   </p>
-                )}
-              </div>
-            </details>
+                  {candidate && (
+                    <>
+                      <p>
+                        Branch: <code>{candidate.manifest.branch}</code>
+                      </p>
+                      <p>
+                        Head: <code>{candidate.manifest.headSha}</code>
+                      </p>
+                      <p>
+                        Base: <code>{candidate.manifest.baseSha}</code>
+                      </p>
+                      <p>
+                        Artifact: <code>{candidate.manifest.artifactDigest}</code>
+                      </p>
+                      {candidate.manifest.fixture && (
+                        <p>Fixture runs contain no real diff or execution log.</p>
+                      )}
+                    </>
+                  )}
+                  {task.run && (
+                    <p>
+                      Skills:{' '}
+                      {task.run.manifest.skills.map((s) => `${s.id}@${s.version}`).join(', ') ||
+                        'None'}
+                    </p>
+                  )}
+                </div>
+              </details>
+            )}
           </>
         )}
         {view === 'conversation' && (
@@ -359,7 +341,7 @@ export function TaskDetail({
               busy={busy}
               onClick={() => setConfirmation('publish')}
             >
-              Publish changes for code review
+              Publish changes
             </Button>
           </>
         ) : task.state === 'code_review' ? (

@@ -1100,7 +1100,7 @@ button .icon {
   line-height: 1.4;
   font-weight: 650;
   letter-spacing: -0.025em;
-  margin-block: 13px 17px;
+  margin-block: 0 16px;
   text-wrap: balance;
   overflow-wrap: anywhere;
 }
@@ -1129,16 +1129,16 @@ button .icon {
   display: flex;
   gap: 6px;
   margin-inline: 24px;
-  padding: 4px;
-  background: var(--color-surface-muted);
-  border-radius: 13px;
+  padding: 0;
+  border-block-end: 1px solid var(--color-border);
 }
 .detail-tabs button {
   flex: 1;
   padding: 9px 7px;
   font-size: var(--text-caption);
   font-weight: 550;
-  border-radius: 10px;
+  border-radius: 0;
+  border-block-end: 2px solid transparent;
   background: transparent;
   color: var(--color-text-secondary);
   display: flex;
@@ -1148,14 +1148,13 @@ button .icon {
   min-height: 36px;
 }
 .detail-tabs button[aria-pressed='true'] {
-  background: var(--color-surface);
+  border-block-end-color: var(--color-text);
   color: var(--color-text);
-  box-shadow: 0 1px 4px rgb(0 0 0/0.04);
 }
 .detail-tabs button > span {
   font-size: var(--text-caption);
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
   padding: 0 4px;
   border-radius: 4px;
 }
@@ -1167,7 +1166,7 @@ button .icon {
   scrollbar-width: thin;
 }
 .detail-section {
-  margin-block-end: 28px;
+  margin-block-end: 32px;
 }
 .detail-scroll h3 {
   font-size: var(--text-body);
@@ -1201,24 +1200,6 @@ button .icon {
   background: var(--color-text-secondary);
   flex-shrink: 0;
 }
-.task-agent-summary {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 16px;
-  margin-block: 16px 24px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  background: var(--color-surface);
-}
-.task-agent-summary > .icon {
-  flex-shrink: 0;
-  margin-block-start: 2px;
-  color: var(--color-text-secondary);
-}
-.task-agent-summary h3 {
-  margin-block-end: 4px;
-}
 .state-notice {
   display: flex;
   gap: 12px;
@@ -1247,33 +1228,63 @@ button .icon {
   background: var(--color-completed);
   color: var(--color-completed-ink);
 }
-.candidate-preview {
-  overflow: hidden;
-  border-radius: 20px;
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
-  margin-block-end: 28px;
-}
-.preview-caption {
+.task-section-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
-  padding: 17px;
+  margin-block-end: 16px;
 }
-.preview-caption h3 {
-  font-size: var(--text-label);
-  margin: 0 0 5px;
+.task-section-heading h3 {
+  margin: 0;
 }
-.preview-caption div > span {
+.task-review-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.task-review-actions .button {
+  min-height: 36px;
+  padding: 6px 10px;
   font-size: var(--text-caption);
+  box-shadow: none;
+}
+.task-rich-text {
+  font-size: var(--text-label);
+  line-height: 1.75;
+  overflow-wrap: anywhere;
   color: var(--color-text-secondary);
 }
-.preview-caption .button {
-  font-size: var(--text-caption);
-  padding: 8px 11px;
-  min-height: 37px;
-  white-space: nowrap;
+.task-rich-text > * + * {
+  margin-block-start: 12px;
+}
+.task-rich-text :is(h1, h2, h3, h4, h5, h6) {
+  font-size: var(--text-label);
+  font-weight: 600;
+  line-height: 1.6;
+  color: var(--color-text);
+}
+.task-rich-text p {
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+}
+.task-rich-text ul,
+.task-rich-text ol {
+  padding-inline-start: 20px;
+}
+.task-rich-text li + li {
+  margin-block-start: 8px;
+}
+.task-rich-text code {
+  font-size: 0.9em;
+  background: var(--color-surface-muted);
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.task-rich-text pre {
+  white-space: pre-wrap;
 }
 .evidence-disclosure,
 .technical-details {
@@ -1289,9 +1300,10 @@ button .icon {
   list-style: none;
   min-height: 43px;
   border-radius: 11px;
-  background: var(--color-surface);
-  padding: 11px 13px;
-  box-shadow: var(--shadow-card);
+  background: transparent;
+  padding: 12px 0;
+  border-block-end: 1px solid var(--color-border);
+  border-radius: 0;
   font-size: var(--text-caption);
   font-weight: 550;
 }
@@ -2080,15 +2092,6 @@ button .icon {
     font-size: var(--text-caption);
     max-width: 50%;
   }
-  .preview-caption {
-    flex-wrap: wrap;
-    padding: 15px;
-  }
-  .preview-caption .button {
-    width: 100%;
-    min-height: 42px;
-    margin-block-start: 3px;
-  }
   .detail-scroll p,
   .acceptance-list li {
     font-size: var(--text-label);
@@ -2244,7 +2247,6 @@ body:has(dialog[open]) {
   .button,
   .project-intro > .button,
   .detail-footer > .button,
-  .preview-caption .button,
   .mobile-columns button,
   .filter-trigger {
     min-height: 44px;

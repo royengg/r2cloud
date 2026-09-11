@@ -348,17 +348,7 @@ export function App() {
                   userId={w.identity.user.id}
                   manager={['owner', 'admin'].includes(project?.workspace_role ?? '')}
                   busy={w.busy}
-                  onMove={(task, status) =>
-                    void w.act(
-                      () =>
-                        api(`/projects/${w.projectId}/tasks/${task.id}/commands`, {
-                          action: 'move',
-                          version: task.version,
-                          status,
-                        }),
-                      `Task moved to ${status === 'todo' ? 'Todo' : 'Ongoing'}`,
-                    )
-                  }
+                  onMove={(task, status) => void w.moveTask(task, status)}
                   canCreate={!!project?.contribute}
                   filtered={!!search || attention || priority !== 'All priorities'}
                 />
@@ -398,10 +388,12 @@ export function App() {
           error={w.error}
           close={() => setSelectedId(null)}
           onCommand={(input) =>
-            w.act(
-              () => api(`/projects/${w.projectId}/tasks/${task.id}/commands`, input),
-              'Task updated',
-            )
+            input.action === 'move'
+              ? w.moveTask(task, input.status)
+              : w.act(
+                  () => api(`/projects/${w.projectId}/tasks/${task.id}/commands`, input),
+                  'Task updated',
+                )
           }
           onPreview={preview}
           onOpenThread={(id, workspaceId) => {

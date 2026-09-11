@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { queryClient, readQuery, clearProjectQueries } from './queries';
 import { projectRealtime } from './realtime';
 import { api } from './api';
-import type { Identity, Snapshot } from './types';
+import type { Identity, Snapshot, Task } from './types';
 export function useWorkspace() {
   const [identity, setIdentity] = useState<Identity | null>(null),
     [projectId, setProjectId] = useState(''),
@@ -22,7 +22,22 @@ export function useWorkspace() {
     ...readQuery<Snapshot>(`/projects/${projectId}/snapshot`),
     enabled: Boolean(identity && projectId && blockedProject !== projectId),
   });
-  const snapshot = identity && blockedProject !== projectId ? (board.data ?? null) : null;
+  const [pendingMove, setPendingMove] = useState<{
+    projectId: string;
+    taskId: string;
+    status: 'todo' | 'ongoing';
+  } | null>(null);
+  const moving = useRef(false);
+  const data = identity && blockedProject !== projectId ? (board.data ?? null) : null;
+  const snapshot =
+    data && pendingMove?.projectId === projectId
+      ? {
+          ...data,
+          tasks: data.tasks.map((task) =>
+            task.id === pendingMove.taskId ? { ...task, board_status: pendingMove.status } : task,
+          ),
+        }
+      : data;
   const serial = useRef(0);
   const refresh = useRef<{ generation: number; pending: boolean; promise: Promise<void> } | null>(
     null,
@@ -131,6 +146,43 @@ export function useWorkspace() {
       setBusy(false);
     }
   }
+  async function moveTask(task: Task, status: 'todo' | 'ongoing') {
+    if (moving.current || busy) return false;
+    moving.current = true;
+    setPendingMove({ projectId, taskId: task.id, status });
+    try {
+      return await act(
+        async () => {
+          try {
+            await api(`/projects/${projectId}/tasks/${task.id}/commands`, {
+              action: 'move',
+              version: task.version,
+              status,
+            });
+            queryClient.setQueryData<Snapshot>(
+              readQuery<Snapshot>(`/projects/${projectId}/snapshot`).queryKey,
+              (current) =>
+                current && {
+                  ...current,
+                  tasks: current.tasks.map((item) =>
+                    item.id === task.id && item.version === task.version
+                      ? { ...item, board_status: status, version: item.version + 1 }
+                      : item,
+                  ),
+                },
+            );
+          } catch (error) {
+            setPendingMove(null);
+            throw error;
+          }
+        },
+        `Task moved to ${status === 'todo' ? 'Todo' : 'Ongoing'}`,
+      );
+    } finally {
+      moving.current = false;
+      setPendingMove(null);
+    }
+  }
   async function signOut() {
     setBusy(true);
     setError('');
@@ -160,6 +212,7 @@ export function useWorkspace() {
     busy,
     announcement,
     act,
+    moveTask,
     signOut,
   };
 }

@@ -109,10 +109,26 @@ export function Board({
                     onSelect={() => onSelect(task.id)}
                     onAskAgent={canCreate ? () => onAskAgent(task.id) : undefined}
                     selected={selectedTaskId === task.id}
+                    dragging={dragged === task.id}
                     draggable={!busy && canCreate && canMoveTask(task, userId, manager)}
                     onDragStart={(event) => {
                       event.dataTransfer.setData('text/plain', task.id);
                       event.dataTransfer.effectAllowed = 'move';
+                      const card = event.currentTarget.closest('.task-card-container')!;
+                      const bounds = card.getBoundingClientRect();
+                      const preview = card.cloneNode(true) as HTMLElement;
+                      preview.classList.add('task-drag-preview');
+                      preview.setAttribute('aria-hidden', 'true');
+                      preview.style.width = `${bounds.width}px`;
+                      preview.style.left = `${bounds.left}px`;
+                      preview.style.top = `${bounds.top}px`;
+                      document.body.append(preview);
+                      event.dataTransfer.setDragImage(
+                        preview,
+                        event.clientX - bounds.left,
+                        event.clientY - bounds.top,
+                      );
+                      requestAnimationFrame(() => preview.remove());
                       setDragged(task.id);
                     }}
                     onDragEnd={() => setDragged(null)}
@@ -169,6 +185,7 @@ function TaskCard({
   onAskAgent,
   selected,
   draggable,
+  dragging,
   onDragStart,
   onDragEnd,
 }: {
@@ -178,6 +195,7 @@ function TaskCard({
   onAskAgent?: () => void;
   selected: boolean;
   draggable: boolean;
+  dragging: boolean;
   onDragStart: React.DragEventHandler<HTMLButtonElement>;
   onDragEnd: () => void;
 }) {
@@ -190,7 +208,10 @@ function TaskCard({
       .replace(/-([a-z])/g, (_, letter: string) => `-${letter.toUpperCase()}`) ?? 'Codex';
   const done = task.candidate?.evidence.checks.filter((c) => c.status === 'passed').length ?? 0;
   return (
-    <div className={`task-card-container ${selected ? 'is-chat-selected' : ''}`}>
+    <div
+      className={`task-card-container ${selected ? 'is-chat-selected' : ''}`}
+      data-dragging={dragging || undefined}
+    >
       <button
         className="task-card"
         onClick={onSelect}

@@ -1,5 +1,5 @@
 import { ReviewPanel } from './components/ReviewPanel';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AuthScreen, WorkspaceSetup } from './components/AuthScreen';
 import { Select } from './components/Select';
 import { Sidebar } from './components/Sidebar';
@@ -18,6 +18,12 @@ import { useWorkspace } from './lib/useWorkspace';
 import { api } from './lib/api';
 export function App() {
   const w = useWorkspace();
+  const composerInput = useRef<HTMLTextAreaElement>(null);
+  const [chatTask, setChatTask] = useState<{ projectId: string; id: string } | null>(null);
+  const selectedChatTask =
+    chatTask?.projectId === w.projectId
+      ? w.snapshot?.tasks.find((task) => task.id === chatTask.id)
+      : undefined;
   const [repositoryReview, setRepositoryReview] = useState(false);
   const [mobile, setMobile] = useState(() => innerWidth < 900),
     [sidebarOpen, setSidebarOpen] = useState(() => innerWidth >= 900),
@@ -332,6 +338,12 @@ export function App() {
                   tasks={filtered}
                   allTasks={tasks}
                   onSelect={setSelectedId}
+                  selectedTaskId={selectedChatTask?.id}
+                  onAskAgent={(id) => {
+                    setChatTask({ projectId: w.projectId, id });
+                    composerInput.current?.focus();
+                    composerInput.current?.scrollIntoView({ block: 'nearest' });
+                  }}
                   onCreate={() => setCreating(true)}
                   canCreate={!!project?.contribute}
                   filtered={!!search || attention || priority !== 'All priorities'}
@@ -347,7 +359,13 @@ export function App() {
                 <Composer
                   key={w.projectId}
                   project={project}
-                  onOpen={(id) => setThreadView({ projectId: w.projectId, id })}
+                  task={selectedChatTask}
+                  inputRef={composerInput}
+                  onClearTask={() => setChatTask(null)}
+                  onOpen={(id) => {
+                    setChatTask(null);
+                    setThreadView({ projectId: w.projectId, id });
+                  }}
                 />
               )}
             </>

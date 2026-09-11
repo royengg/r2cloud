@@ -7,6 +7,8 @@ export function Board({
   tasks,
   allTasks,
   onSelect,
+  onAskAgent,
+  selectedTaskId,
   onCreate,
   canCreate,
   filtered,
@@ -14,6 +16,8 @@ export function Board({
   tasks: Task[];
   allTasks: Task[];
   onSelect: (id: string) => void;
+  onAskAgent: (id: string) => void;
+  selectedTaskId?: string;
   onCreate: () => void;
   canCreate: boolean;
   filtered: boolean;
@@ -68,6 +72,8 @@ export function Board({
                     task={task}
                     index={allTasks.findIndex((t) => t.id === task.id)}
                     onSelect={() => onSelect(task.id)}
+                    onAskAgent={canCreate ? () => onAskAgent(task.id) : undefined}
+                    selected={selectedTaskId === task.id}
                   />
                 ))}
                 {group.length === 0 && (
@@ -114,7 +120,19 @@ export function Board({
     </>
   );
 }
-function TaskCard({ task, index, onSelect }: { task: Task; index: number; onSelect: () => void }) {
+function TaskCard({
+  task,
+  index,
+  onSelect,
+  onAskAgent,
+  selected,
+}: {
+  task: Task;
+  index: number;
+  onSelect: () => void;
+  onAskAgent?: () => void;
+  selected: boolean;
+}) {
   const activeRun =
     task.agent ||
     (task.run && !task.run.stopped_at && ['queued', 'running'].includes(task.run.state));
@@ -124,80 +142,91 @@ function TaskCard({ task, index, onSelect }: { task: Task; index: number; onSele
       .replace(/-([a-z])/g, (_, letter: string) => `-${letter.toUpperCase()}`) ?? 'Codex';
   const done = task.candidate?.evidence.checks.filter((c) => c.status === 'passed').length ?? 0;
   return (
-    <button className="task-card" onClick={onSelect}>
-      <div className="task-card-top">
-        <span className={`priority-label priority-${task.priority.toLowerCase()}`}>
-          <span className="priority-bars" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </span>
-          {task.priority}
-        </span>
-        <span className="task-number">{String(index + 1).padStart(2, '0')}</span>
-      </div>
-      <h3>{task.title}</h3>
-      {activeRun ? (
-        <div className="card-agent-running">
-          <span className="card-agent-label">
-            <CodexLogo />
-            <span>
-              {model} ·{' '}
-              {task.agent?.state === 'waiting'
-                ? 'Needs your reply'
-                : (task.agent?.state ?? task.run?.state) === 'queued'
-                  ? 'Queued'
-                  : 'Running'}
+    <div className={`task-card-container ${selected ? 'is-chat-selected' : ''}`}>
+      <button className="task-card" onClick={onSelect}>
+        <div className="task-card-top">
+          <span className={`priority-label priority-${task.priority.toLowerCase()}`}>
+            <span className="priority-bars" aria-hidden="true">
+              <i />
+              <i />
+              <i />
             </span>
+            {task.priority}
           </span>
-          {(task.agent?.threadTitle ?? task.run?.thread_title) && (
-            <span
-              className="card-agent-thread"
-              title={task.agent?.threadTitle ?? task.run?.thread_title ?? undefined}
-            >
-              <Icon name="message" size={13} />
-              {task.agent?.threadTitle ?? task.run?.thread_title}
-            </span>
-          )}
+          <span className="task-number">{String(index + 1).padStart(2, '0')}</span>
         </div>
-      ) : (
-        task.state !== 'todo' && <Status state={task.state} />
-      )}
-      <div className="task-card-bottom">
-        <span className="task-assignee">
-          {task.owner_name ? (
-            <>
-              <Avatar name={task.owner_name} size="small" />
-              <span>{task.owner_name.split(' ')[0]}</span>
-            </>
-          ) : (
-            <>
-              <span className="unassigned-avatar">
-                <Icon name="person" size={14} />
+        <h3>{task.title}</h3>
+        {activeRun ? (
+          <div className="card-agent-running">
+            <span className="card-agent-label">
+              <CodexLogo />
+              <span>
+                {model} ·{' '}
+                {task.agent?.state === 'waiting'
+                  ? 'Needs your reply'
+                  : (task.agent?.state ?? task.run?.state) === 'queued'
+                    ? 'Queued'
+                    : 'Running'}
               </span>
-              <span>Unassigned</span>
-            </>
-          )}
-        </span>
-        <span
-          className="card-evidence"
-          title={`${done} of ${task.criteria.length} criteria checked${task.candidate?.manifest.fixture ? ' (fixture)' : ''}`}
-        >
-          <Icon name="complete" size={15} />
-          {done}/{task.criteria.length}
-        </span>
-        {task.run && !activeRun && (
-          <span className="agent-dot" title="Agent implementation">
-            <CodexLogo />
-            <span className="sr-only">Agent</span>
-          </span>
+            </span>
+            {(task.agent?.threadTitle ?? task.run?.thread_title) && (
+              <span
+                className="card-agent-thread"
+                title={task.agent?.threadTitle ?? task.run?.thread_title ?? undefined}
+              >
+                <Icon name="message" size={13} />
+                {task.agent?.threadTitle ?? task.run?.thread_title}
+              </span>
+            )}
+          </div>
+        ) : (
+          task.state !== 'todo' && <Status state={task.state} />
         )}
-      </div>
-      {activeRun && (task.agent?.state ?? task.run?.state) === 'running' && (
-        <div className="run-indicator">
-          <span />
+        <div className="task-card-bottom">
+          <span className="task-assignee">
+            {task.owner_name ? (
+              <>
+                <Avatar name={task.owner_name} size="small" />
+                <span>{task.owner_name.split(' ')[0]}</span>
+              </>
+            ) : (
+              <>
+                <span className="unassigned-avatar">
+                  <Icon name="person" size={14} />
+                </span>
+                <span>Unassigned</span>
+              </>
+            )}
+          </span>
+          <span
+            className="card-evidence"
+            title={`${done} of ${task.criteria.length} criteria checked${task.candidate?.manifest.fixture ? ' (fixture)' : ''}`}
+          >
+            <Icon name="complete" size={15} />
+            {done}/{task.criteria.length}
+          </span>
+          {task.run && !activeRun && (
+            <span className="agent-dot" title="Agent implementation">
+              <CodexLogo />
+              <span className="sr-only">Agent</span>
+            </span>
+          )}
         </div>
+        {activeRun && (task.agent?.state ?? task.run?.state) === 'running' && (
+          <div className="run-indicator">
+            <span />
+          </div>
+        )}
+      </button>
+      {onAskAgent && (
+        <IconButton
+          name="message"
+          label={`Ask agent about ${task.title}`}
+          className="task-ask-agent"
+          aria-pressed={selected}
+          onClick={onAskAgent}
+        />
       )}
-    </button>
+    </div>
   );
 }

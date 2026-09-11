@@ -246,13 +246,7 @@ export function TaskDetail({
           </>
         )}
         {view === 'conversation' && (
-          <TaskConversations
-            projectId={project.id}
-            taskId={task.id}
-            title={task.title}
-            canCreate={!!project.contribute}
-            onOpen={onOpenThread}
-          />
+          <TaskConversations projectId={project.id} taskId={task.id} onOpen={onOpenThread} />
         )}
         {view === 'activity' && (
           <section className="activity-section">
@@ -297,7 +291,6 @@ export function TaskDetail({
             )}
           {task.state === 'todo' ? (
             <>
-              <span>10-minute run · No paid overage</span>
               <Button
                 variant="primary"
                 icon="play"

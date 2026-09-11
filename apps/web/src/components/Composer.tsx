@@ -1,6 +1,7 @@
+import { IconButton } from './ui';
 import { SkillTextarea } from './SkillTextarea';
 import type { Skill } from '@r2cloud/contracts/skills';
-import { useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent, type Ref } from 'react';
 import { api } from '../lib/api';
 import { refreshRead } from '../lib/realtime';
 import { useQuery } from '@tanstack/react-query';
@@ -8,12 +9,18 @@ import type { CodexModel } from '@r2cloud/contracts/threads';
 import { readQuery } from '../lib/queries';
 import { ModelPicker, ThinkingPicker } from './ModelPicker';
 import { Icon } from './Icon';
-import type { Project } from '../lib/types';
+import type { Project, Task } from '../lib/types';
 export function Composer({
   project,
   onOpen,
+  task,
+  inputRef,
+  onClearTask,
 }: {
   project: Project;
+  task?: Task;
+  inputRef: Ref<HTMLTextAreaElement>;
+  onClearTask: () => void;
   onOpen: (threadId: string) => void;
 }) {
   const [text, setText] = useState('');
@@ -46,7 +53,7 @@ export function Composer({
         model,
         reasoningEffort: selectedEffort,
         instructions: '',
-        taskId: null,
+        taskId: task?.id ?? null,
         body: text.trim(),
       });
       onOpen(thread.id);
@@ -72,7 +79,20 @@ export function Composer({
             {project.name}
           </span>
         </div>
+        {task && (
+          <div className="composer-task-chip" role="status">
+            <Icon name="flag" size={15} />
+            <span title={task.title}>{task.title}</span>
+            <IconButton
+              name="close"
+              label="Remove selected task"
+              disabled={busy}
+              onClick={onClearTask}
+            />
+          </div>
+        )}
         <SkillTextarea
+          ref={inputRef}
           id="project-message"
           rows={2}
           placeholder="What would you like to work on?"

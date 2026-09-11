@@ -360,7 +360,6 @@ export function App() {
           task={task}
           project={project}
           userId={w.identity.user.id}
-          comments={w.snapshot!.comments.filter((c) => c.task_id === task.id && c.threadId)}
           events={w.snapshot!.events.filter((e) => e.task_id === task.id)}
           busy={w.busy}
           error={w.error}
@@ -372,6 +371,10 @@ export function App() {
             )
           }
           onPreview={preview}
+          onOpenThread={(id, workspaceId) => {
+            setSelectedId(null);
+            setThreadView({ projectId: w.projectId, id, workspaceId });
+          }}
         />
       )}
       {repositoryReview && project && (

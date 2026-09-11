@@ -1,33 +1,33 @@
 import { RichText } from './RichText';
 import { ReviewPanel } from './ReviewPanel';
-import { ThreadPanel } from './ThreadPanel';
+import { TaskConversations } from './TaskConversations';
 import { useState } from 'react';
 import type { Command } from '@r2cloud/contracts/domain';
-import type { Task, Project, Comment, Activity } from '../lib/types';
+import type { Task, Project, Activity } from '../lib/types';
 import { Icon } from './Icon';
 import { Avatar, Button, IconButton, Modal, Status } from './ui';
 export function TaskDetail({
   task,
   project,
   userId,
-  comments,
   events,
   busy,
   error,
   close,
   onCommand,
   onPreview,
+  onOpenThread,
 }: {
   task: Task;
   project: Project;
   userId: string;
-  comments: Comment[];
   events: Activity[];
   busy: boolean;
   error: string;
   close: () => void;
   onCommand: (input: Command) => Promise<boolean>;
   onPreview: () => Promise<void>;
+  onOpenThread: (id: string, workspaceId?: string) => void;
 }) {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [view, setView] = useState('overview'),
@@ -71,7 +71,6 @@ export function TaskDetail({
         {['overview', 'conversation', 'activity'].map((tab) => (
           <button key={tab} aria-pressed={view === tab} onClick={() => setView(tab)}>
             {tab[0].toUpperCase() + tab.slice(1)}
-            {tab === 'conversation' && comments.length > 0 && <span>{comments.length}</span>}
           </button>
         ))}
       </nav>
@@ -247,7 +246,13 @@ export function TaskDetail({
           </>
         )}
         {view === 'conversation' && (
-          <ThreadPanel project={project} taskId={task.id} userId={userId} />
+          <TaskConversations
+            projectId={project.id}
+            taskId={task.id}
+            title={task.title}
+            canCreate={!!project.contribute}
+            onOpen={onOpenThread}
+          />
         )}
         {view === 'activity' && (
           <section className="activity-section">
@@ -276,94 +281,96 @@ export function TaskDetail({
           </section>
         )}
       </div>
-      <footer className="detail-footer">
-        {task.state === 'blocked' &&
-          !candidate &&
-          task.run?.state === 'stopped' &&
-          project.contribute &&
-          (task.owner_id === userId || project.review) && (
+      {view === 'overview' && (
+        <footer className="detail-footer">
+          {task.state === 'blocked' &&
+            !candidate &&
+            task.run?.state === 'stopped' &&
+            project.contribute &&
+            (task.owner_id === userId || project.review) && (
+              <Button
+                busy={busy}
+                onClick={() => void onCommand({ action: 'release', version: task.version })}
+              >
+                Return to Todo
+              </Button>
+            )}
+          {task.state === 'todo' ? (
+            <>
+              <span>10-minute run · No paid overage</span>
+              <Button
+                variant="primary"
+                icon="play"
+                busy={busy}
+                disabled={!project.contribute}
+                onClick={() =>
+                  void onCommand({
+                    action: 'start',
+                    version: task.version,
+                    minutes: 10,
+                    budgetCents: 0,
+                  })
+                }
+              >
+                Start agent
+              </Button>
+            </>
+          ) : task.state === 'blocked' &&
+            !candidate &&
+            task.run?.state === 'stopped' &&
+            task.owner_id === userId ? (
             <Button
               busy={busy}
-              onClick={() => void onCommand({ action: 'release', version: task.version })}
-            >
-              Return to Todo
-            </Button>
-          )}
-        {task.state === 'todo' ? (
-          <>
-            <span>10-minute run · No paid overage</span>
-            <Button
-              variant="primary"
-              icon="play"
-              busy={busy}
-              disabled={!project.contribute}
               onClick={() =>
                 void onCommand({
-                  action: 'start',
+                  action: 'changes',
                   version: task.version,
-                  minutes: 10,
-                  budgetCents: 0,
+                  feedback: 'Retry this task with the current execution settings.',
                 })
               }
             >
-              Start agent
+              Retry task
             </Button>
-          </>
-        ) : task.state === 'blocked' &&
-          !candidate &&
-          task.run?.state === 'stopped' &&
-          task.owner_id === userId ? (
-          <Button
-            busy={busy}
-            onClick={() =>
-              void onCommand({
-                action: 'changes',
-                version: task.version,
-                feedback: 'Retry this task with the current execution settings.',
-              })
-            }
-          >
-            Retry task
-          </Button>
-        ) : ['review', 'blocked'].includes(task.state) && candidate ? (
-          <>
-            {project.review || task.owner_id === userId ? (
-              <Button onClick={() => setCorrection(true)} busy={busy}>
-                Request changes
+          ) : ['review', 'blocked'].includes(task.state) && candidate ? (
+            <>
+              {project.review || task.owner_id === userId ? (
+                <Button onClick={() => setCorrection(true)} busy={busy}>
+                  Request changes
+                </Button>
+              ) : (
+                <span>A project reviewer will review this.</span>
+              )}
+              <Button
+                variant="primary"
+                icon="external"
+                disabled={!project.review || task.state !== 'review'}
+                busy={busy}
+                onClick={() => setConfirmation('publish')}
+              >
+                Publish changes
               </Button>
-            ) : (
-              <span>A project reviewer will review this.</span>
-            )}
-            <Button
-              variant="primary"
-              icon="external"
-              disabled={!project.review || task.state !== 'review'}
-              busy={busy}
-              onClick={() => setConfirmation('publish')}
-            >
-              Publish changes
-            </Button>
-          </>
-        ) : task.state === 'code_review' ? (
-          <>
-            <span>A PR is still an ongoing task.</span>
-            <Button
-              variant="primary"
-              icon="merge"
-              disabled={!project.merge}
-              busy={busy}
-              onClick={() => setConfirmation('merge')}
-            >
-              Authorise merge
-            </Button>
-          </>
-        ) : (
-          <span>
-            <Icon name="shield" size={15} />
-            You control publication and merge.
-          </span>
-        )}
-      </footer>
+            </>
+          ) : task.state === 'code_review' ? (
+            <>
+              <span>A PR is still an ongoing task.</span>
+              <Button
+                variant="primary"
+                icon="merge"
+                disabled={!project.merge}
+                busy={busy}
+                onClick={() => setConfirmation('merge')}
+              >
+                Authorise merge
+              </Button>
+            </>
+          ) : (
+            <span>
+              <Icon name="shield" size={15} />
+              You control publication and merge.
+            </span>
+          )}
+        </footer>
+      )}
       {correction && (
         <Modal
           label="Request changes"

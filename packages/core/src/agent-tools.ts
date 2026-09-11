@@ -267,6 +267,8 @@ export async function callAgentTool(
         title: true,
         state: true,
         priority: true,
+        assignee_id: true,
+        board_status: true,
         version: true,
         claims: {
           where: { released_at: null },
@@ -352,6 +354,7 @@ export async function callAgentTool(
           id: taskId,
           org_id: project.org_id,
           project_id: project.id,
+          assignee_id: actor.id,
           title: input.title,
           outcome: input.outcome,
           criteria: json(input.criteria),

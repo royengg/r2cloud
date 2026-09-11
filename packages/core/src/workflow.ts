@@ -311,6 +311,8 @@ async function finishPublication(
         where: { id: t.id },
         data: {
           state: 'completed',
+          board_status: 'completed',
+          work_started_at: null,
           merged_sha: merged.mergeSha,
           completed_at: new Date(),
           version: { increment: 1 },

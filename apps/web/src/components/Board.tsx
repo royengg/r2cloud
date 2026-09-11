@@ -1,6 +1,6 @@
 import { CodexLogo } from './CodexLogo';
 import { useState } from 'react';
-import { type Task, columnFor } from '../lib/types';
+import { type Task, columnFor, canMoveTask } from '../lib/types';
 import { Icon } from './Icon';
 import { Avatar, IconButton, Status } from './ui';
 export function Board({
@@ -12,6 +12,10 @@ export function Board({
   onCreate,
   canCreate,
   filtered,
+  userId,
+  manager,
+  busy,
+  onMove,
 }: {
   tasks: Task[];
   allTasks: Task[];
@@ -21,7 +25,12 @@ export function Board({
   onCreate: () => void;
   canCreate: boolean;
   filtered: boolean;
+  userId: string;
+  manager: boolean;
+  busy: boolean;
+  onMove: (task: Task, status: 'todo' | 'ongoing') => void;
 }) {
+  const [dragged, setDragged] = useState<string | null>(null);
   const [mobileColumn, setMobileColumn] = useState('todo');
   const columns = [
     { id: 'todo', name: 'Todo', icon: 'flag' as const },
@@ -49,6 +58,32 @@ export function Board({
             <section
               key={c.id}
               aria-label={c.name}
+              data-drop-target={
+                dragged &&
+                c.id !== 'completed' &&
+                tasks.find((t) => t.id === dragged)?.board_status !== c.id
+                  ? true
+                  : undefined
+              }
+              onDragOver={(event) => {
+                if (dragged && !busy && c.id !== 'completed') {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = 'move';
+                }
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                const task = tasks.find((t) => t.id === dragged);
+                setDragged(null);
+                if (
+                  !busy &&
+                  task &&
+                  c.id !== 'completed' &&
+                  task.board_status !== c.id &&
+                  canMoveTask(task, userId, manager)
+                )
+                  onMove(task, c.id as 'todo' | 'ongoing');
+              }}
               className={`board-column column-${c.id} ${mobileColumn === c.id ? 'is-mobile-selected' : ''}`}
             >
               <header className="column-heading">
@@ -74,6 +109,13 @@ export function Board({
                     onSelect={() => onSelect(task.id)}
                     onAskAgent={canCreate ? () => onAskAgent(task.id) : undefined}
                     selected={selectedTaskId === task.id}
+                    draggable={!busy && canCreate && canMoveTask(task, userId, manager)}
+                    onDragStart={(event) => {
+                      event.dataTransfer.setData('text/plain', task.id);
+                      event.dataTransfer.effectAllowed = 'move';
+                      setDragged(task.id);
+                    }}
+                    onDragEnd={() => setDragged(null)}
                   />
                 ))}
                 {group.length === 0 && (
@@ -126,12 +168,18 @@ function TaskCard({
   onSelect,
   onAskAgent,
   selected,
+  draggable,
+  onDragStart,
+  onDragEnd,
 }: {
   task: Task;
   index: number;
   onSelect: () => void;
   onAskAgent?: () => void;
   selected: boolean;
+  draggable: boolean;
+  onDragStart: React.DragEventHandler<HTMLButtonElement>;
+  onDragEnd: () => void;
 }) {
   const activeRun =
     task.agent ||
@@ -143,7 +191,13 @@ function TaskCard({
   const done = task.candidate?.evidence.checks.filter((c) => c.status === 'passed').length ?? 0;
   return (
     <div className={`task-card-container ${selected ? 'is-chat-selected' : ''}`}>
-      <button className="task-card" onClick={onSelect}>
+      <button
+        className="task-card"
+        onClick={onSelect}
+        draggable={draggable}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+      >
         <div className="task-card-top">
           <span className={`priority-label priority-${task.priority.toLowerCase()}`}>
             <span className="priority-bars" aria-hidden="true">
@@ -180,14 +234,16 @@ function TaskCard({
             )}
           </div>
         ) : (
-          task.state !== 'todo' && <Status state={task.state} />
+          (task.state !== 'todo' || task.board_status === 'ongoing') && (
+            <Status state={task.state === 'todo' ? 'building' : task.state} />
+          )
         )}
         <div className="task-card-bottom">
           <span className="task-assignee">
-            {task.owner_name ? (
+            {task.assignee_name ? (
               <>
-                <Avatar name={task.owner_name} size="small" />
-                <span>{task.owner_name.split(' ')[0]}</span>
+                <Avatar name={task.assignee_name} size="small" />
+                <span>{task.assignee_name.split(' ')[0]}</span>
               </>
             ) : (
               <>

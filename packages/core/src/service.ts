@@ -1,3 +1,4 @@
+import { changeTaskOwnership, requireTaskAssignee, managesTasks } from './task-ownership';
 import { checkExecutionCapacity, checkTaskStart } from './implementation-admission';
 import { receipt } from './receipt';
 import { pinThread } from './thread-context';
@@ -109,7 +110,14 @@ async function queueRun(
   });
   await db.tasks.update({
     where: { id: t.id },
-    data: { state: 'building', generation: gen, candidate_id: null, version: { increment: 1 } },
+    data: {
+      state: 'building',
+      board_status: 'ongoing',
+      work_started_at: t.work_started_at ?? new Date(),
+      generation: gen,
+      candidate_id: null,
+      version: { increment: 1 },
+    },
   });
   if (!agentTurnId)
     await db.jobs.create({
@@ -139,6 +147,7 @@ async function startTask(
   agentTurnId?: string,
 ) {
   requireThat(p.repo_id, 409, 'Connect a repository before starting this task.');
+  requireTaskAssignee(t, actor.id);
   await checkTaskStart(db, t);
   const claimId = id();
   await db.claims.create({
@@ -165,6 +174,10 @@ export async function command(
 ) {
   input = commandInput.parse(input);
   if (input.action === 'start' || input.action === 'changes') {
+    await access(prisma, actor, projectId, 'contribute');
+    const task = await prisma.tasks.findFirst({ where: { id: taskId, project_id: projectId } });
+    requireThat(task, 404, 'Task not found.');
+    requireTaskAssignee(task, actor.id);
     const managed = await prisma.provider_connections.count({
       where: { project_id: projectId, user_id: actor.id, enabled: true, mode: 'managed' },
     });
@@ -203,6 +216,8 @@ export async function commandInTransaction(
     409,
     'This task has changed. Refresh and review the latest version.',
   );
+  if (input.action === 'assign' || input.action === 'move')
+    return changeTaskOwnership(db, actor, p, t, input);
   if (input.action === 'start') {
     if (input.message) {
       await db.comments.create({
@@ -224,9 +239,9 @@ export async function commandInTransaction(
   requireThat(claim, 409, 'This task has no active claim.');
   if (input.action === 'release') {
     requireThat(
-      p.actor_kind === 'human' && (claim.owner_id === actor.id || p.review),
+      p.actor_kind === 'human' && (t.assignee_id === actor.id || managesTasks(p)),
       403,
-      'Only the owner or a project reviewer can release this task.',
+      'Only the assignee or a workspace owner or admin can release this task.',
     );
     requireThat(
       t.state === 'blocked' && !t.candidate_id,
@@ -281,21 +296,23 @@ export async function commandInTransaction(
     await db.claims.update({ where: { id: claim.id }, data: { released_at: new Date() } });
     await db.tasks.update({
       where: { id: taskId },
-      data: { state: 'todo', version: { increment: 1 } },
+      data: {
+        state: 'todo',
+        board_status: 'todo',
+        work_started_at: null,
+        version: { increment: 1 },
+      },
     });
     await event(db, projectId, taskId, actor.id, 'Stopped task returned to Todo');
     return { id: taskId };
   }
   if (input.action === 'changes') {
+    requireTaskAssignee(t, actor.id);
+    requireTaskAssignee(t, claim.owner_id);
     requireThat(
       ['review', 'blocked'].includes(t.state),
       409,
       'Corrections can start when this candidate is ready for review.',
-    );
-    requireThat(
-      p.review || claim.owner_id === actor.id,
-      403,
-      'Only the owner or a designated reviewer can request a correction.',
     );
     requireThat(
       !(await db.runs.count({ where: { claim_id: claim.id, stopped_at: null } })),
@@ -459,6 +476,7 @@ export async function snapshot(actor: Actor, projectId: string) {
         where: { project_id: projectId },
         orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
         include: {
+          assignee: { select: { id: true, name: true } },
           claims: {
             orderBy: { created_at: 'desc' },
             take: 1,
@@ -514,7 +532,7 @@ export async function snapshot(actor: Actor, projectId: string) {
             count: 1,
           });
       }
-      const tasks = rows.map(({ claims, candidates, ...task }) => {
+      const tasks = rows.map(({ claims, candidates, assignee, ...task }) => {
         const claim = claims[0];
         const candidate = candidates && {
           id: candidates.id,
@@ -524,8 +542,9 @@ export async function snapshot(actor: Actor, projectId: string) {
         };
         return {
           ...task,
-          owner_name: claim?.users.name ?? null,
-          owner_id: claim?.owner_id ?? null,
+          assignee_name: assignee?.name ?? null,
+          owner_name: task.board_status === 'ongoing' ? (assignee?.name ?? null) : null,
+          owner_id: task.board_status === 'ongoing' ? task.assignee_id : null,
           owner_kind: claim?.users.kind ?? 'human',
           run: currentRuns.get(task.id) ?? null,
           agent: taskAgents.get(task.id) ?? null,

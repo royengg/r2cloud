@@ -1,3 +1,4 @@
+import { requireTaskAssignee } from './task-ownership';
 import { ensureExecutionSetup } from './execution-setup';
 import { prisma, json, type DB } from '@r2cloud/database';
 import { requireThat, type Actor } from '@r2cloud/contracts/domain';
@@ -34,6 +35,7 @@ async function checkAgentImplementation(
     409,
     'This task has changed. Refresh and review the latest version.',
   );
+  requireTaskAssignee(task, grant.actorId);
   requireThat(project.repo_id, 409, 'Connect a repository before starting this task.');
   const thread = await db.conversationThread.findUniqueOrThrow({ where: { id: grant.threadId } });
   requireThat(!thread.taskId || thread.taskId === task.id, 409, 'Thread task changed.');
@@ -115,8 +117,13 @@ export async function claimAgentTask(
           },
       grant.id,
     );
+    requireThat(
+      'runId' in result && typeof result.runId === 'string',
+      500,
+      'Implementation did not create a run.',
+    );
     const run = await db.runs.findUniqueOrThrow({
-      where: { id: (result as { runId: string }).runId },
+      where: { id: result.runId },
     });
     await db.runs.update({
       where: { id: run.id },

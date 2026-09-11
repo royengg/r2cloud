@@ -345,6 +345,20 @@ export function App() {
                     composerInput.current?.scrollIntoView({ block: 'nearest' });
                   }}
                   onCreate={() => setCreating(true)}
+                  userId={w.identity.user.id}
+                  manager={['owner', 'admin'].includes(project?.workspace_role ?? '')}
+                  busy={w.busy}
+                  onMove={(task, status) =>
+                    void w.act(
+                      () =>
+                        api(`/projects/${w.projectId}/tasks/${task.id}/commands`, {
+                          action: 'move',
+                          version: task.version,
+                          status,
+                        }),
+                      `Task moved to ${status === 'todo' ? 'Todo' : 'Ongoing'}`,
+                    )
+                  }
                   canCreate={!!project?.contribute}
                   filtered={!!search || attention || priority !== 'All priorities'}
                 />
@@ -378,6 +392,7 @@ export function App() {
           task={task}
           project={project}
           userId={w.identity.user.id}
+          participants={w.snapshot!.participants}
           events={w.snapshot!.events.filter((e) => e.task_id === task.id)}
           busy={w.busy}
           error={w.error}

@@ -8,6 +8,20 @@ export const taskInput = z
   })
   .strict();
 export const commandInput = z.discriminatedUnion('action', [
+  z
+    .object({
+      action: z.literal('assign'),
+      version: z.number().int().positive(),
+      assigneeId: z.string().min(1).max(150).nullable(),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('move'),
+      version: z.number().int().positive(),
+      status: z.enum(['todo', 'ongoing']),
+    })
+    .strict(),
   z.object({ action: z.literal('release'), version: z.number().int().positive() }).strict(),
   z
     .object({

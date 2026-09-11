@@ -13,6 +13,10 @@ export type Project = {
   merge?: boolean;
 };
 export type Task = {
+  assignee_id: string | null;
+  assignee_name: string | null;
+  board_status: 'todo' | 'ongoing' | 'completed';
+  work_started_at: string | null;
   id: string;
   title: string;
   outcome: string;
@@ -89,8 +93,7 @@ export const statuses: Record<string, string> = {
   blocked: 'Blocked',
   cancelled: 'Cancelled',
 };
-export const columnFor = (task: Task) =>
-  task.state === 'todo' ? 'todo' : task.state === 'completed' ? 'completed' : 'ongoing';
+export const columnFor = (task: Task) => task.board_status;
 
 export type ConversationWorkspace = {
   id: string;
@@ -110,3 +113,13 @@ export type Thread = {
   createdBy: string;
   turns?: { state: string }[];
 };
+
+export function canMoveTask(task: Task, userId: string, manager: boolean) {
+  return (
+    !!task.assignee_id &&
+    (task.assignee_id === userId || manager) &&
+    !task.agent &&
+    !(task.run && !task.run.stopped_at) &&
+    !['publishing', 'code_review', 'merging', 'completed'].includes(task.state)
+  );
+}

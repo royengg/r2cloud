@@ -1,3 +1,5 @@
+import { Select } from './Select';
+import { canMoveTask } from '../lib/types';
 import { RichText } from './RichText';
 import { ReviewPanel } from './ReviewPanel';
 import { TaskConversations } from './TaskConversations';
@@ -17,6 +19,7 @@ export function TaskDetail({
   onCommand,
   onPreview,
   onOpenThread,
+  participants,
 }: {
   task: Task;
   project: Project;
@@ -28,6 +31,7 @@ export function TaskDetail({
   onCommand: (input: Command) => Promise<boolean>;
   onPreview: () => Promise<void>;
   onOpenThread: (id: string, workspaceId?: string) => void;
+  participants: { id: string; name: string; contribute?: boolean }[];
 }) {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [view, setView] = useState('overview'),
@@ -35,6 +39,9 @@ export function TaskDetail({
     [feedback, setFeedback] = useState(''),
     [confirmation, setConfirmation] = useState<'publish' | 'merge' | null>(null);
   const candidate = task.candidate;
+  const manager = ['owner', 'admin'].includes(project.workspace_role ?? '');
+  const ownershipBusy = busy || !!task.agent || !!(task.run && !task.run.stopped_at);
+  const locked = ['publishing', 'code_review', 'merging', 'completed'].includes(task.state);
   return (
     <Modal label={task.title} close={close} className="task-detail">
       <header className="detail-context">
@@ -49,23 +56,76 @@ export function TaskDetail({
       <div className="detail-title">
         <h2>{task.title}</h2>
         <div className="detail-meta">
-          <Status state={task.state} />
+          <Status
+            state={
+              task.state === 'todo' && task.board_status === 'ongoing' ? 'building' : task.state
+            }
+          />
           <span className={`priority-label priority-${task.priority.toLowerCase()}`}>
             <Icon name="flag" size={14} />
             {task.priority} priority
           </span>
           <span>
-            {task.owner_name ? (
-              <Avatar name={task.owner_name} size="small" />
+            {task.assignee_name ? (
+              <Avatar name={task.assignee_name} size="small" />
             ) : (
               <Icon name="person" size={16} />
             )}
             <span>
               <span className="sr-only">Assignee: </span>
-              {task.owner_name ?? 'Unassigned'}
+              {task.assignee_name ?? 'Unassigned'}
             </span>
           </span>
         </div>
+      </div>
+      <div className="task-ownership-controls">
+        {manager ? (
+          <Select
+            label="Assignee"
+            value={task.assignee_id ?? ''}
+            disabled={!project.contribute || ownershipBusy || locked}
+            options={[
+              { value: '', label: 'Unassigned' },
+              ...participants
+                .filter((person) => person.contribute || person.id === task.assignee_id)
+                .map((person) => ({ value: person.id, label: person.name })),
+            ]}
+            onChange={(assigneeId) =>
+              void onCommand({
+                action: 'assign',
+                version: task.version,
+                assigneeId: assigneeId || null,
+              })
+            }
+          />
+        ) : !task.assignee_id && project.contribute && task.board_status === 'todo' && !locked ? (
+          <Button
+            disabled={ownershipBusy}
+            onClick={() =>
+              void onCommand({ action: 'assign', version: task.version, assigneeId: userId })
+            }
+          >
+            Assign to me
+          </Button>
+        ) : null}
+        {task.board_status !== 'completed' && (
+          <Select
+            label="Move to"
+            value={task.board_status}
+            disabled={ownershipBusy || !project.contribute || !canMoveTask(task, userId, manager)}
+            options={[
+              { value: 'todo', label: 'Todo' },
+              { value: 'ongoing', label: 'Ongoing' },
+            ]}
+            onChange={(status) =>
+              void onCommand({
+                action: 'move',
+                version: task.version,
+                status: status as 'todo' | 'ongoing',
+              })
+            }
+          />
+        )}
       </div>
       <nav className="detail-tabs" aria-label="Task information">
         {['overview', 'conversation', 'activity'].map((tab) => (
@@ -281,7 +341,7 @@ export function TaskDetail({
             !candidate &&
             task.run?.state === 'stopped' &&
             project.contribute &&
-            (task.owner_id === userId || project.review) && (
+            (task.assignee_id === userId || manager) && (
               <Button
                 busy={busy}
                 onClick={() => void onCommand({ action: 'release', version: task.version })}
@@ -295,7 +355,7 @@ export function TaskDetail({
                 variant="primary"
                 icon="play"
                 busy={busy}
-                disabled={!project.contribute}
+                disabled={!project.contribute || task.assignee_id !== userId}
                 onClick={() =>
                   void onCommand({
                     action: 'start',
@@ -311,7 +371,7 @@ export function TaskDetail({
           ) : task.state === 'blocked' &&
             !candidate &&
             task.run?.state === 'stopped' &&
-            task.owner_id === userId ? (
+            task.assignee_id === userId ? (
             <Button
               busy={busy}
               onClick={() =>
@@ -326,7 +386,7 @@ export function TaskDetail({
             </Button>
           ) : ['review', 'blocked'].includes(task.state) && candidate ? (
             <>
-              {project.review || task.owner_id === userId ? (
+              {task.assignee_id === userId ? (
                 <Button onClick={() => setCorrection(true)} busy={busy}>
                   Request changes
                 </Button>

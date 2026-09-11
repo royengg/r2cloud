@@ -169,9 +169,6 @@ export function ExecutionSetup({ projectId, manage }: { projectId: string; manag
               </details>
               {manage && <Button busy={busy}>Save setup override</Button>}
             </fieldset>
-            <p className="subtle">
-              {profile.vcpus} vCPUs · Subscription usage only · No paid overage
-            </p>
             {notice && <p role="status">{notice}</p>}
           </form>
         )}

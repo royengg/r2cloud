@@ -1193,44 +1193,31 @@ button .icon {
   font-size: var(--text-caption);
   line-height: 1.6;
 }
-.acceptance-list li > span {
-  color: var(--color-text-secondary);
+.acceptance-bullet {
+  width: 5px;
+  height: 5px;
+  margin-block-start: 7px;
+  border-radius: 50%;
+  background: var(--color-text-secondary);
   flex-shrink: 0;
-  padding-block-start: 2px;
 }
-.acceptance-list .acceptance-checked {
-  background: var(--color-completed);
-  color: var(--color-completed-ink);
-  border-radius: 6px;
-}
-.start-illustration {
+.task-agent-summary {
   display: flex;
-  align-items: center;
-  flex-direction: column;
-  text-align: center;
-  background: var(--color-accent-soft);
-  border-radius: 20px;
-  padding: 28px 20px;
-  margin-block: 15px 24px;
-}
-.start-orb {
-  display: grid;
-  place-items: center;
-  width: 63px;
-  height: 63px;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  margin-block: 16px 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
   background: var(--color-surface);
-  color: var(--color-accent);
-  border-radius: 22px;
-  margin-block-end: 17px;
-  transform: rotate(-6deg);
 }
-.start-illustration h3 {
+.task-agent-summary > .icon {
+  flex-shrink: 0;
+  margin-block-start: 2px;
+  color: var(--color-text-secondary);
+}
+.task-agent-summary h3 {
   margin-block-end: 4px;
-}
-.start-illustration small {
-  font-size: var(--text-caption);
-  color: var(--color-accent-hover);
-  margin-block-start: 17px;
 }
 .state-notice {
   display: flex;

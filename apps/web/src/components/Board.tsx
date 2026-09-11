@@ -84,19 +84,19 @@ export function Board({
                       {filtered
                         ? 'No matching tasks'
                         : c.id === 'todo'
-                          ? 'A little room for a new idea'
+                          ? 'No tasks yet'
                           : c.id === 'ongoing'
-                            ? 'Ready when you are'
-                            : 'Good things take shape here'}
+                            ? 'No tasks in progress'
+                            : 'No completed tasks'}
                     </strong>
                     <p>
                       {filtered
                         ? 'Try another search or filter.'
                         : c.id === 'todo'
-                          ? 'Add the next outcome.'
+                          ? 'Create a task to add it to the board.'
                           : c.id === 'ongoing'
-                            ? 'Start a task to get things moving.'
-                            : 'Tasks arrive after a verified merge.'}
+                            ? 'Start a task to move it here.'
+                            : 'Merged tasks appear here.'}
                     </p>
                   </div>
                 )}

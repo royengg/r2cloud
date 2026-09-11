@@ -79,13 +79,13 @@ export type Identity = {
   mode: string;
 };
 export const statuses: Record<string, string> = {
-  todo: 'Ready to start',
-  building: 'Building',
-  review: 'Needs your review',
-  publishing: 'Publishing for code review',
+  todo: 'Todo',
+  building: 'In progress',
+  review: 'In review',
+  publishing: 'Publishing',
   code_review: 'In code review',
-  merging: 'Verifying merge',
-  completed: 'Merged and verified',
+  merging: 'Merging',
+  completed: 'Completed',
   blocked: 'Blocked',
   cancelled: 'Cancelled',
 };

@@ -37,8 +37,8 @@ export function NewTask({
         </span>
         <IconButton name="close" label="Close new task" onClick={close} />
       </div>
-      <h2>A new possibility.</h2>
-      <p className="modal-description">Start with the outcome you have in mind.</p>
+      <h2>Create task</h2>
+      <p className="modal-description">Describe the work and define the acceptance criteria.</p>
       <form onSubmit={submit}>
         <label>
           Task title
@@ -50,11 +50,11 @@ export function NewTask({
             maxLength={160}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Make the first visit feel effortless"
+            placeholder="Add password reset"
           />
         </label>
         <label>
-          Intended outcome
+          Description
           <textarea
             name="outcome"
             required
@@ -63,7 +63,7 @@ export function NewTask({
             rows={2}
             value={outcome}
             onChange={(e) => setOutcome(e.target.value)}
-            placeholder="Who is this for? What should be better?"
+            placeholder="Let users reset their password by email."
           />
         </label>
         <label>
@@ -74,7 +74,9 @@ export function NewTask({
             rows={3}
             value={criteria}
             onChange={(e) => setCriteria(e.target.value)}
-            placeholder={'One clear next step\nWorks on a phone'}
+            placeholder={
+              'Reset link expires after 30 minutes\nShow a confirmation after the password is updated'
+            }
           />
         </label>
         <Select

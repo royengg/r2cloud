@@ -54,8 +54,15 @@ export function TaskDetail({
             {task.priority} priority
           </span>
           <span>
-            <Avatar name={task.owner_name ?? 'Unassigned'} size="small" />
-            {task.owner_name ?? 'Unassigned'}
+            {task.owner_name ? (
+              <Avatar name={task.owner_name} size="small" />
+            ) : (
+              <Icon name="person" size={16} />
+            )}
+            <span>
+              <span className="sr-only">Assignee: </span>
+              {task.owner_name ?? 'Unassigned'}
+            </span>
           </span>
           {task.run && (
             <span>
@@ -85,49 +92,37 @@ export function TaskDetail({
         {view === 'overview' && (
           <>
             <section className="detail-section">
-              <h3>The outcome</h3>
+              <h3>Description</h3>
               <p>{task.outcome}</p>
             </section>
             <section className="detail-section">
-              <h3>What success looks like</h3>
+              <h3>Acceptance criteria</h3>
               <ul className="acceptance-list">
                 {task.criteria.map((item, i) => (
                   <li key={i}>
-                    <span
-                      className={
-                        candidate?.evidence.checks[i]?.status === 'passed'
-                          ? 'acceptance-checked'
-                          : ''
-                      }
-                    >
-                      <Icon
-                        name={
-                          candidate?.evidence.checks[i]?.status === 'passed' ? 'check' : 'complete'
-                        }
-                        size={17}
-                      />
-                    </span>
+                    <span className="acceptance-bullet" aria-hidden="true" />
                     {item}
                   </li>
                 ))}
               </ul>
             </section>
             {task.state === 'todo' && (
-              <div className="start-illustration">
-                <div className="start-orb">
-                  <Icon name="sparkles" size={30} />
+              <section className="task-agent-summary" aria-label="Agent execution">
+                <Icon name="play" size={20} />
+                <div>
+                  <h3>Agent execution</h3>
+                  <p>
+                    Start an agent to implement this task. Review its changes before publishing.
+                  </p>
                 </div>
-                <h3>Ready for a first pass?</h3>
-                <p>One owner. A working preview. Your review.</p>
-                <small>One run · 10 minutes · No paid overage</small>
-              </div>
+              </section>
             )}
             {task.state === 'building' && (
               <div className="state-notice">
                 <Icon name="clock" />
                 <div>
-                  <strong>Working toward your outcome</strong>
-                  <p>You can leave this window. Ownership stays reserved.</p>
+                  <strong>Agent running</strong>
+                  <p>The agent is working on this task. You can close this panel.</p>
                 </div>
               </div>
             )}
@@ -136,10 +131,7 @@ export function TaskDetail({
                 <Icon name="attention" />
                 <div>
                   <strong>This task needs attention</strong>
-                  <p>
-                    Ownership is reserved while the outcome is checked. Open Activity for the
-                    reason.
-                  </p>
+                  <p>Open Activity to view the error and next steps.</p>
                 </div>
               </div>
             )}
@@ -152,12 +144,10 @@ export function TaskDetail({
                   <div className="preview-caption">
                     <div>
                       <h3>
-                        {candidate.evidence.preview.available
-                          ? 'See it for yourself'
-                          : 'Preview unavailable'}
+                        {candidate.evidence.preview.available ? 'Preview' : 'Preview unavailable'}
                       </h3>
                       <span>
-                        Private candidate preview{' '}
+                        Saved revision{' '}
                         {candidate.manifest.fixture && (
                           <span className="fixture-inline">fixture</span>
                         )}
@@ -168,17 +158,17 @@ export function TaskDetail({
                       disabled={!candidate.evidence.preview.available}
                       onClick={() => void onPreview()}
                     >
-                      Try the preview
+                      Open preview
                     </Button>
                   </div>
                 </section>
                 <section className="detail-section">
-                  <h3>What changed</h3>
+                  <h3>Changes</h3>
                   <p>{candidate.manifest.summary}</p>
                   <details className="evidence-disclosure">
                     <summary>
                       <Icon name="complete" size={18} />
-                      Acceptance evidence{' '}
+                      Checks{' '}
                       {candidate.manifest.fixture && (
                         <span className="fixture-inline">fixture</span>
                       )}
@@ -237,7 +227,7 @@ export function TaskDetail({
             <details className="technical-details">
               <summary>
                 <Icon name="branch" size={17} />
-                Advanced details
+                Execution details
                 <Icon name="down" size={16} />
               </summary>
               <div>
@@ -299,7 +289,7 @@ export function TaskDetail({
                 </div>
               ))
             ) : (
-              <p className="subtle">The next step is yours.</p>
+              <p className="subtle">No activity yet.</p>
             )}
           </section>
         )}
@@ -319,7 +309,7 @@ export function TaskDetail({
           )}
         {task.state === 'todo' ? (
           <>
-            <span>Review before anything is published.</span>
+            <span>10-minute run · No paid overage</span>
             <Button
               variant="primary"
               icon="play"
@@ -334,7 +324,7 @@ export function TaskDetail({
                 })
               }
             >
-              Start work
+              Start agent
             </Button>
           </>
         ) : task.state === 'blocked' &&
@@ -408,7 +398,7 @@ export function TaskDetail({
               onClick={() => setCorrection(false)}
             />
           </div>
-          <h2>A little closer to your outcome.</h2>
+          <h2>Request changes</h2>
           <form
             onSubmit={async (e) => {
               e.preventDefault();
@@ -419,7 +409,7 @@ export function TaskDetail({
             }}
           >
             <label>
-              What should be different?
+              Feedback
               <textarea
                 autoFocus
                 rows={4}
@@ -430,7 +420,7 @@ export function TaskDetail({
                 placeholder="Describe the correction you want to see…"
               />
             </label>
-            <p className="subtle">Another bounded run starts with the existing owner.</p>
+            <p className="subtle">The assigned agent will update this task with your feedback.</p>
             {error && (
               <p className="inline-error" role="alert">
                 {error}

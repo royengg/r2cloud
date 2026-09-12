@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { AgentItem } from '@r2cloud/contracts/agent';
 import { IconButton, Modal } from './ui';
+import { Icon } from './Icon';
 
 export function PreviewScreenshot({ projectId, item }: { projectId: string; item: AgentItem }) {
   const [expanded, setExpanded] = useState(false);
@@ -55,7 +56,23 @@ export function PreviewScreenshot({ projectId, item }: { projectId: string; item
         >
           <header>
             <div>{caption}</div>
-            <IconButton name="close" label="Close screenshot" onClick={() => setExpanded(false)} />
+            <nav aria-label="Screenshot actions" className="thread-actions">
+              <a
+                className="icon-button"
+                href={src}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Open original screenshot"
+                title="Open original screenshot"
+              >
+                <Icon name="external" size={18} />
+              </a>
+              <IconButton
+                name="close"
+                label="Close screenshot"
+                onClick={() => setExpanded(false)}
+              />
+            </nav>
           </header>
           {failed ? (
             <p className="subtle" role="status">

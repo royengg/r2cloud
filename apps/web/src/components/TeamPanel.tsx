@@ -18,8 +18,8 @@ function PermissionFields({
       <legend>Project permissions</legend>
       {(
         [
-          ['contribute', 'Start work'],
-          ['review', 'Create pull requests'],
+          ['contribute', 'Work on and publish assigned tasks'],
+          ['review', 'Create PRs for any task'],
           ['merge', 'Merge pull requests'],
         ] as const
       ).map(([key, label]) => (

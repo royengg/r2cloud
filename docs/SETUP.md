@@ -156,7 +156,7 @@ bun --env-file=.env --env-file=.env.publisher apps/api/src/processes/github-publ
 
 Set `R2_GITHUB_PUBLICATION_ENABLED=true` in the API environment only after configuring the worker. Never pass the App key to the API, execution worker, repository checkout or sandbox. Production services should use separate operating-system identities and a secret manager; the local development supervisor is not that isolation boundary.
 
-Workspace owners/admins control project permissions. Contribution alone cannot create PRs or merge them. Publication requires the project review grant; merging requires the separate merge grant. Both approvals must come from a person whose linked GitHub account currently has write, maintain or admin access to the connected repository. Workspace administration does not substitute for either project grants or GitHub access.
+Workspace owners/admins control project permissions. Contributors can publish changes for tasks currently assigned to them. A project review grant permits publication on another assignee’s behalf. Merging requires the separate merge grant; assignment never grants merge permission. Both approvals must come from a person whose linked GitHub account currently has write, maintain or admin access to the connected repository. Workspace administration does not substitute for either project grants or GitHub access.
 
 Approvals expire after 30 minutes and bind one immutable candidate. A retry asks for approval again but reuses the original operation, reconciling GitHub before another write. Existing branches with a different head are never overwritten. Resolve checks, review requirements, conflicts or installation access before retrying a blocked operation. Publication may trigger repository workflows.
 

@@ -1,3 +1,4 @@
+import { requireTaskPublication } from './task-ownership';
 import { recordAgentMessage } from './agent-messages';
 import { prisma, json, type DB, type jobs } from '@r2cloud/database';
 import { lockRow, nextJob } from '@r2cloud/database/locking';
@@ -217,7 +218,13 @@ async function publicationGrant(job: jobs, reconcile = false): Promise<Publicati
     // Reconciliation may record an already-completed external write after expiry/revocation.
     // Every new external write still requires a currently valid approval.
     if (!reconcile) {
-      await access(db, a.users, job.project_id, job.kind === 'merge' ? 'merge' : 'review');
+      const permission = await access(
+        db,
+        a.users,
+        job.project_id,
+        job.kind === 'merge' ? 'merge' : undefined,
+      );
+      if (job.kind === 'publish') requireTaskPublication(permission, t, a.approver_id);
       requireThat(
         !a.revoked_at && a.expires_at > new Date() && a.policy_version === 'v1',
         403,

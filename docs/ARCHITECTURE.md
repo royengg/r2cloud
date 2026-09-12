@@ -113,4 +113,4 @@ Saved-change review authorizes each project/thread request, verifies the candida
 | Workspace owner/admin | Determined by project grants      | Determined by project grants | Determined by project grants |
 | Agent                 | Only through authorized execution | Never                        | Never                        |
 
-Owners/admins manage grants; they have no implicit publication bypass. Each external write rechecks the product approval and linked human GitHub account. The installation must not have a branch-rule bypass, and repository rules remain authoritative. Continuous webhook PR synchronization, merge queues and rebase/squash methods are separate extensions.
+Owners/admins manage grants; they have no implicit publication bypass. Each external write rechecks the product approval, current assignment or review grant, and linked human GitHub account. The installation must not have a branch-rule bypass, and repository rules remain authoritative. Continuous webhook PR synchronization, merge queues and rebase/squash methods are separate extensions.

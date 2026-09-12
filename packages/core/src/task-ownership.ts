@@ -14,6 +14,15 @@ export function requireTaskAssignee(task: tasks, actorId: string) {
   );
 }
 
+export function requireTaskPublication(project: AccessibleProject, task: tasks, actorId: string) {
+  requireThat(project.actor_kind === 'human', 403, 'A person must authorise publication.');
+  requireThat(
+    project.review || (project.contribute && task.assignee_id === actorId),
+    403,
+    'Publication requires review permission or contribution permission on a task assigned to you.',
+  );
+}
+
 async function requireStopped(db: DB, taskId: string) {
   requireThat(
     !(await db.runs.count({ where: { task_id: taskId, stopped_at: null } })),

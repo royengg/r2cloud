@@ -1,4 +1,9 @@
-import { changeTaskOwnership, requireTaskAssignee, managesTasks } from './task-ownership';
+import {
+  changeTaskOwnership,
+  requireTaskAssignee,
+  requireTaskPublication,
+  managesTasks,
+} from './task-ownership';
 import { checkExecutionCapacity, checkTaskStart } from './implementation-admission';
 import { receipt } from './receipt';
 import { pinThread } from './thread-context';
@@ -202,7 +207,7 @@ export async function commandInTransaction(
     actor,
     projectId,
     input.action === 'publish'
-      ? 'review'
+      ? undefined
       : input.action === 'merge'
         ? 'merge'
         : input.action === 'changes'
@@ -212,6 +217,7 @@ export async function commandInTransaction(
   await lockRow(db, 'tasks', taskId);
   const t = await db.tasks.findFirst({ where: { id: taskId, project_id: projectId } });
   requireThat(t, 404, 'Task not found.');
+  if (input.action === 'publish') requireTaskPublication(p, t, actor.id);
   requireThat(
     t.version === input.version,
     409,

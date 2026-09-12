@@ -39,6 +39,7 @@ export function TaskDetail({
     [feedback, setFeedback] = useState(''),
     [confirmation, setConfirmation] = useState<'publish' | 'merge' | null>(null);
   const candidate = task.candidate;
+  const canPublish = project.review || (project.contribute && task.assignee_id === userId);
   const publicationRetry =
     task.state === 'blocked' && task.publicationOperation?.state === 'blocked'
       ? task.publicationOperation.kind
@@ -358,7 +359,7 @@ export function TaskDetail({
               <span>{task.publicationOperation?.error ?? 'Publication needs attention.'}</span>
               <Button
                 busy={busy}
-                disabled={publicationRetry === 'merge' ? !project.merge : !project.review}
+                disabled={publicationRetry === 'merge' ? !project.merge : !canPublish}
                 onClick={() => setConfirmation(publicationRetry === 'merge' ? 'merge' : 'publish')}
               >
                 {publicationRetry === 'merge' ? 'Retry merge' : 'Retry publication'}
@@ -411,7 +412,7 @@ export function TaskDetail({
               <Button
                 variant="primary"
                 icon="external"
-                disabled={!project.review || task.state !== 'review'}
+                disabled={!canPublish || task.state !== 'review'}
                 busy={busy}
                 onClick={() => setConfirmation('publish')}
               >

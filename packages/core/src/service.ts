@@ -12,6 +12,7 @@ import {
   type TaskInput,
   type BatchInput,
   type Evidence,
+  type CandidateManifest,
   taskInput,
   commandInput,
   batchInput,
@@ -360,8 +361,20 @@ export async function commandInTransaction(
       agentTurnId,
     );
   }
+  const retry =
+    t.state === 'blocked'
+      ? await db.jobs.findFirst({
+          where: {
+            task_id: taskId,
+            kind: input.action,
+            state: 'blocked',
+            approvals: { candidate_id: t.candidate_id ?? '' },
+          },
+          orderBy: { created_at: 'desc' },
+        })
+      : null;
   requireThat(
-    t.state === (input.action === 'publish' ? 'review' : 'code_review'),
+    !!retry || t.state === (input.action === 'publish' ? 'review' : 'code_review'),
     409,
     'This action is not available at this stage.',
   );
@@ -370,6 +383,12 @@ export async function commandInTransaction(
     c && c.id === t.candidate_id && c.generation === t.generation && c.digest === input.digest,
     409,
     'The candidate has changed. Review and approve the current snapshot.',
+  );
+  requireThat(
+    (c.manifest as unknown as CandidateManifest).fixture ||
+      process.env.R2_GITHUB_PUBLICATION_ENABLED === 'true',
+    409,
+    'GitHub publication is not configured. Ask a workspace administrator to enable the publisher.',
   );
   const evidence = c.evidence as unknown as Evidence;
   requireThat(
@@ -384,7 +403,7 @@ export async function commandInTransaction(
       'A verified pull request is required.',
     );
   const approvalId = id(),
-    operationId = id();
+    operationId = retry?.id ?? id();
   await db.approvals.create({
     data: {
       id: approvalId,
@@ -399,16 +418,34 @@ export async function commandInTransaction(
       expires_at: new Date(Date.now() + 30 * 60_000),
     },
   });
-  await db.jobs.create({
-    data: {
-      id: operationId,
-      org_id: p.org_id,
-      project_id: projectId,
-      task_id: taskId,
-      approval_id: approvalId,
-      kind: input.action,
-    },
-  });
+  if (retry) {
+    await db.approvals.updateMany({
+      where: { id: retry.approval_id! },
+      data: { revoked_at: new Date() },
+    });
+    const updated = await db.jobs.updateMany({
+      where: { id: retry.id, state: 'blocked' },
+      data: {
+        approval_id: approvalId,
+        state: 'ready',
+        error: null,
+        attempts: 0,
+        available_at: new Date(),
+        lease_until: null,
+      },
+    });
+    requireThat(updated.count === 1, 409, 'Publication is already being retried.');
+  } else
+    await db.jobs.create({
+      data: {
+        id: operationId,
+        org_id: p.org_id,
+        project_id: projectId,
+        task_id: taskId,
+        approval_id: approvalId,
+        kind: input.action,
+      },
+    });
   await db.tasks.update({
     where: { id: taskId },
     data: {
@@ -477,6 +514,17 @@ export async function snapshot(actor: Actor, projectId: string) {
         orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
         include: {
           assignee: { select: { id: true, name: true } },
+          jobs: {
+            where: { kind: { in: ['publish', 'merge'] } },
+            orderBy: { created_at: 'desc' },
+            take: 1,
+            select: {
+              kind: true,
+              state: true,
+              error: true,
+              approvals: { select: { candidate_id: true } },
+            },
+          },
           claims: {
             orderBy: { created_at: 'desc' },
             take: 1,
@@ -532,7 +580,7 @@ export async function snapshot(actor: Actor, projectId: string) {
             count: 1,
           });
       }
-      const tasks = rows.map(({ claims, candidates, assignee, ...task }) => {
+      const tasks = rows.map(({ claims, candidates, assignee, jobs, ...task }) => {
         const claim = claims[0];
         const candidate = candidates && {
           id: candidates.id,
@@ -550,6 +598,10 @@ export async function snapshot(actor: Actor, projectId: string) {
           agent: taskAgents.get(task.id) ?? null,
           candidate,
           publication: candidates?.publications[0] ?? null,
+          publicationOperation:
+            jobs[0]?.approvals?.candidate_id === task.candidate_id
+              ? { kind: jobs[0].kind, state: jobs[0].state, error: jobs[0].error }
+              : null,
         };
       });
       const grants = await db.project_access.findMany({

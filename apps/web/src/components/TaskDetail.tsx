@@ -39,6 +39,10 @@ export function TaskDetail({
     [feedback, setFeedback] = useState(''),
     [confirmation, setConfirmation] = useState<'publish' | 'merge' | null>(null);
   const candidate = task.candidate;
+  const publicationRetry =
+    task.state === 'blocked' && task.publicationOperation?.state === 'blocked'
+      ? task.publicationOperation.kind
+      : null;
   const manager = ['owner', 'admin'].includes(project.workspace_role ?? '');
   const ownershipBusy = busy || !!task.agent || !!(task.run && !task.run.stopped_at);
   const locked = ['publishing', 'code_review', 'merging', 'completed'].includes(task.state);
@@ -349,7 +353,18 @@ export function TaskDetail({
                 Return to Todo
               </Button>
             )}
-          {task.state === 'todo' ? (
+          {publicationRetry && candidate ? (
+            <>
+              <span>{task.publicationOperation?.error ?? 'Publication needs attention.'}</span>
+              <Button
+                busy={busy}
+                disabled={publicationRetry === 'merge' ? !project.merge : !project.review}
+                onClick={() => setConfirmation(publicationRetry === 'merge' ? 'merge' : 'publish')}
+              >
+                {publicationRetry === 'merge' ? 'Retry merge' : 'Retry publication'}
+              </Button>
+            </>
+          ) : task.state === 'todo' ? (
             <>
               <Button
                 variant="primary"

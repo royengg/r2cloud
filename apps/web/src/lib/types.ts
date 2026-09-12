@@ -39,6 +39,7 @@ export type Task = {
     };
   } | null;
   candidate: { id: string; digest: string; manifest: CandidateManifest; evidence: Evidence } | null;
+  publicationOperation?: { kind: string; state: string; error: string | null } | null;
   publication: { pr_number: number; url: string } | null;
   completed_at: string | null;
 };

@@ -230,7 +230,34 @@ async function publicationGrant(job: jobs, reconcile = false): Promise<Publicati
     }
     const candidate = c.manifest as unknown as CandidateManifest;
     const pub = await db.publications.findFirst({ where: { candidate_id: c.id } });
+    const project = await db.projects.findUniqueOrThrow({
+      where: { id: job.project_id },
+      include: { repositories: true },
+    });
+    const repository = project.repositories;
+    const account = await db.authAccount.findFirst({
+      where: { providerId: 'github', user: { productUser: { id: a.approver_id } } },
+      select: { accountId: true },
+    });
+    if (!candidate.fixture)
+      requireThat(
+        repository?.github_id &&
+          repository.installation_id &&
+          account &&
+          repository.full_name === candidate.repository &&
+          repository.target_ref === candidate.targetRef,
+        409,
+        'Reconnect the repository and approver’s GitHub account before publication.',
+      );
     return {
+      github:
+        repository?.github_id && repository.installation_id && account
+          ? {
+              repositoryId: Number(repository.github_id),
+              installationId: Number(repository.installation_id),
+              approverId: account.accountId,
+            }
+          : undefined,
       operationId: job.id,
       candidate,
       digest: c.digest,
@@ -451,6 +478,14 @@ export async function executeOne(backend: ExecutionBackend, projectId?: string) 
 export async function publishOne(backend: PublisherBackend) {
   const job = await reserve(['publish', 'merge']);
   if (!job) return false;
+  const heartbeat = setInterval(() => {
+    void prisma.jobs
+      .updateMany({
+        where: { id: job.id, lease_token: job.lease_token, state: 'processing' },
+        data: { lease_until: new Date(Date.now() + 90000) },
+      })
+      .catch(() => {});
+  }, 20000);
   try {
     let grant = await publicationGrant(job, true);
     requireThat(
@@ -465,11 +500,19 @@ export async function publishOne(backend: PublisherBackend) {
     if (observation.state === 'finished') result = observation.result;
     else {
       grant = await publicationGrant(job);
-      result = job.kind === 'publish' ? await backend.publish(grant) : await backend.merge(grant);
+      const authorize = async () => {
+        await publicationGrant(job);
+      };
+      result =
+        job.kind === 'publish'
+          ? await backend.publish(grant, authorize)
+          : await backend.merge(grant, authorize);
     }
     await finishPublication(job, grant, result);
   } catch (e) {
     await failure(job, e);
+  } finally {
+    clearInterval(heartbeat);
   }
   return true;
 }

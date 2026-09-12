@@ -59,13 +59,14 @@ export type PublicationGrant = {
   digest: string;
   action: 'publish' | 'merge';
   publication?: PublicationResult;
+  github?: { repositoryId: number; installationId: number; approverId: string };
 };
 // Only the isolated publisher process receives this adapter. Runner/API constructors do not accept it.
 export interface PublisherBackend {
   readonly mode: 'fixture' | 'github';
   observe(grant: PublicationGrant): Promise<Observation<PublicationResult | MergeResult>>;
-  publish(grant: PublicationGrant): Promise<PublicationResult>;
-  merge(grant: PublicationGrant): Promise<MergeResult>;
+  publish(grant: PublicationGrant, authorize?: () => Promise<void>): Promise<PublicationResult>;
+  merge(grant: PublicationGrant, authorize?: () => Promise<void>): Promise<MergeResult>;
 }
 export class Uncertain extends Error {}
 export class SetupRequired extends Error {}

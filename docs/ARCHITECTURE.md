@@ -82,7 +82,7 @@ Private Git bundles and candidate manifests bind evidence to immutable changes. 
 
 The checked publication policy binds a designated human reviewer’s approval to the exact task, repository, base/head, artifact digest and requested action. Changed candidates require new approval. Merge requires separate authorisation and verified repository facts. Agents cannot approve either action.
 
-Parallel candidates can share a pinned base and may conflict during integration. A live publisher must reconcile against the current target branch and required checks before merging; implementation admission must not serialize repository ownership to avoid that responsibility. The live publisher, required-check reconciliation and verified GitHub merge integration are unfinished. Existing policies and fixture tests are foundations, not proof of a working end-to-end publication flow.
+Parallel candidates can share a pinned base and may conflict during integration. A live publisher must reconcile against the current target branch and required checks before merging; implementation admission must not serialize repository ownership to avoid that responsibility. The isolated GitHub publisher creates a branch and PR from the verified bundle, checks the approver’s current GitHub write access, and merges only the approved head after GitHub readiness and checks pass. Installation tokens are restricted to the connected repository. Lost responses are reconciled by operation marker and exact PR identity; blocked retries retain the operation ID and require a fresh approval. Existing policies and fixture tests are foundations, not proof of a working end-to-end publication flow.
 
 Live previews use a separate origin per runtime and session-bound, project-scoped access grants. A private gateway forwards HTTP and WebSockets through Vercel's authenticated connection without exposing the repository port. Coding handoff restarts the preview from a separate copy while the exported checkout remains sealed. Preview process records live outside the native bridge control directory, so restarting Codex does not orphan the retained dev server. Agent browser inspection uses a separate user and network namespace with a relay restricted to the preview port. Screenshots are immutable local artifacts served through project access checks. Hosted end-to-end verification and production artifact storage remain unfinished.
 
@@ -101,3 +101,16 @@ Additional providers and connected local runners are future extensions. Hosted c
 Keep code minimal, readable and formatted with Prettier. Add comments only when needed. Commit under the repository owner's identity and push only with authorisation. Tests, helper scripts, credentials and scratch artifacts stay local. Preserve third-party license notices.
 
 Saved-change review authorizes each project/thread request, verifies the candidate manifest and bundle digest, and imports the public base plus bundle into a temporary bare Git repository with hooks and external diff helpers disabled. It never checks out or executes repository files. At most two imports run concurrently. The first import builds a private immutable diff index; file responses and frontend queries reuse it by candidate/revision. Indexing is bounded to 500 files, 100 commits and limited patch sizes. Cached review files share the pilot artifact directory; production retention remains unfinished.
+
+### Publication access
+
+| Access                | Implement assigned tasks          | Approve PR creation          | Approve merge                |
+| --------------------- | --------------------------------- | ---------------------------- | ---------------------------- |
+| Viewer                | No                                | No                           | No                           |
+| Contributor           | Yes                               | No                           | No                           |
+| Publication reviewer  | Only with contribution permission | Yes                          | No                           |
+| Merge approver        | Only with contribution permission | Only with review permission  | Yes                          |
+| Workspace owner/admin | Determined by project grants      | Determined by project grants | Determined by project grants |
+| Agent                 | Only through authorized execution | Never                        | Never                        |
+
+Owners/admins manage grants; they have no implicit publication bypass. Each external write rechecks the product approval and linked human GitHub account. The installation must not have a branch-rule bypass, and repository rules remain authoritative. Continuous webhook PR synchronization, merge queues and rebase/squash methods are separate extensions.

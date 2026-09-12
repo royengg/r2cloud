@@ -136,3 +136,30 @@ For temporary local testing, set `R2_PREVIEW_ROUTES_FILE` instead of `R2_PREVIEW
 ```
 
 Each tunnel points to the loopback gateway. Use a fresh hostname for each runtime, publish route updates atomically, and remove expired routes and tunnel processes. Exact hostname matching and normal preview authorization both apply. The local development helper manages at most two tunnels for the configured pilot project; scripts and its environment remain local-only. Quick Tunnels are temporary testing infrastructure with changing addresses and no uptime guarantee.
+
+## GitHub publication worker
+
+Publication uses the repository GitHub App, separately from product sign-in. Enable **Contents: read/write**, **Pull requests: read/write**, and **Checks: read** on the App and accept the updated installation permissions. Do not add this App to branch-protection or ruleset bypass lists. The publisher uses merge commits; enable that merge method in the repository. Merge queues are not supported.
+
+Keep the App ID and private key path in an ignored, publisher-only environment file:
+
+```dotenv
+R2_GITHUB_APP_ID=your-app-id
+R2_GITHUB_APP_PRIVATE_KEY_FILE=/absolute/path/inside/your/project/.local/github-app.pem
+```
+
+Restrict the environment file and key to the operator (mode 0600). The publisher needs the database configuration and the same private artifact storage as the managed worker. Start it with the private toolchain:
+
+```sh
+bun --env-file=.env --env-file=.env.publisher apps/api/src/processes/github-publication.ts
+```
+
+Set `R2_GITHUB_PUBLICATION_ENABLED=true` in the API environment only after configuring the worker. Never pass the App key to the API, execution worker, repository checkout or sandbox. Production services should use separate operating-system identities and a secret manager; the local development supervisor is not that isolation boundary.
+
+Workspace owners/admins control project permissions. Contribution alone cannot create PRs or merge them. Publication requires the project review grant; merging requires the separate merge grant. Both approvals must come from a person whose linked GitHub account currently has write, maintain or admin access to the connected repository. Workspace administration does not substitute for either project grants or GitHub access.
+
+Approvals expire after 30 minutes and bind one immutable candidate. A retry asks for approval again but reuses the original operation, reconciling GitHub before another write. Existing branches with a different head are never overwritten. Resolve checks, review requirements, conflicts or installation access before retrying a blocked operation. Publication may trigger repository workflows.
+
+The publisher checks PR identity, approved head, mergeability and all returned commit statuses/check runs before merging. It does not request a protection bypass. A successful merge is read back before the task becomes Completed. Checks and API responses are also verified when recovering a lost merge response. The current conservative limit is 100 check runs; larger results block merging. PR status is refreshed during publication/merge processing, not continuously by webhook.
+
+Validate first in an explicitly approved test repository: publish a candidate, inspect the PR, approve its merge, verify Completed, and exercise denied permissions and lost-response recovery. Mocked GitHub tests do not establish that an installation is configured correctly.

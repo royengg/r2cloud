@@ -19,8 +19,8 @@ function PermissionFields({
       {(
         [
           ['contribute', 'Start work'],
-          ['review', 'Approve publication'],
-          ['merge', 'Authorise merge'],
+          ['review', 'Create pull requests'],
+          ['merge', 'Merge pull requests'],
         ] as const
       ).map(([key, label]) => (
         <label key={key}>
@@ -54,7 +54,7 @@ function MemberRow({
         <div>
           <strong>{member.name}</strong>
           <span>
-            {member.review ? 'Reviewer' : member.contribute ? 'Contributor' : 'Viewer'}
+            {member.review ? 'Publication reviewer' : member.contribute ? 'Contributor' : 'Viewer'}
             {member.merge ? ' · Can authorise merge' : ''}
           </span>
         </div>

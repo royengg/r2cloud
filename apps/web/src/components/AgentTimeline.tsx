@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { RichText } from './RichText';
+import { PreviewScreenshot } from './PreviewScreenshot';
 import type { AgentTimeline as Timeline, AgentRequest } from '@r2cloud/contracts/agent';
 import { Button } from './ui';
 import { CodexLogo } from './CodexLogo';
@@ -31,18 +32,7 @@ export function AgentTimeline({
         .filter((item) => item.kind !== 'userMessage' || item.text)
         .map((item) => {
           if (item.kind === 'previewInspection')
-            return (
-              <details className="agent-activity" key={item.id}>
-                <summary>Preview screenshot · {String(item.detail.path ?? '/')}</summary>
-                <img
-                  src={`/api/projects/${encodeURIComponent(projectId)}/preview-screenshots/${encodeURIComponent(item.id)}`}
-                  alt={`Preview of ${String(item.detail.path ?? '/')}`}
-                  loading="lazy"
-                  style={{ maxWidth: '100%', height: 'auto', borderRadius: 12 }}
-                />
-                <pre>{item.text}</pre>
-              </details>
-            );
+            return <PreviewScreenshot key={item.id} projectId={projectId} item={item} />;
           if (['userMessage', 'agentMessage', 'error'].includes(item.kind))
             return (
               <article

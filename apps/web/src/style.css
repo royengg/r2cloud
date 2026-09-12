@@ -3722,3 +3722,63 @@ body[data-keyboard] .account-menu {
   flex: 1;
   min-width: 140px;
 }
+
+.preview-screenshot {
+  margin: 12px 0;
+  width: min(100%, 360px);
+}
+.preview-screenshot-thumbnail {
+  display: block;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  cursor: zoom-in;
+}
+.preview-screenshot-thumbnail img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  object-position: top;
+}
+.preview-screenshot figcaption,
+.preview-screenshot-dialog header > div {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  overflow-wrap: anywhere;
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+}
+.preview-screenshot figcaption {
+  margin-top: 8px;
+}
+.preview-screenshot time {
+  margin-left: auto;
+  white-space: nowrap;
+}
+.preview-screenshot .agent-activity {
+  margin-top: 8px;
+}
+.preview-screenshot-dialog {
+  width: min(1100px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 16px;
+}
+.preview-screenshot-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.preview-screenshot-dialog > img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+}

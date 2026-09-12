@@ -58,6 +58,7 @@ export async function savePreviewInspection(
         detail: json({
           digest,
           path: inspection.path,
+          capturedAt: new Date().toISOString(),
           errors: inspection.errors,
           status: inspection.status,
         }),

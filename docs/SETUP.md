@@ -139,6 +139,8 @@ Each tunnel points to the loopback gateway. Use a fresh hostname for each runtim
 
 ## GitHub publication worker
 
+Before publication, the approver explicitly confirms any acceptance criteria requiring human verification. Confirmation is recorded against the exact candidate and digest without changing its validation evidence. Failed validation still blocks publication. Merge approval inherits acceptance only from publication of that same candidate.
+
 Publication uses the repository GitHub App, separately from product sign-in. Enable **Contents: read/write**, **Pull requests: read/write**, and **Checks: read**, and **Commit statuses: read** on the App and accept the updated installation permissions. Do not add this App to branch-protection or ruleset bypass lists. The publisher uses merge commits; enable that merge method in the repository. Merge queues are not supported.
 
 Keep the App ID and private key path in an ignored, publisher-only environment file:

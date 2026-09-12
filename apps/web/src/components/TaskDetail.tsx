@@ -39,6 +39,18 @@ export function TaskDetail({
     [feedback, setFeedback] = useState(''),
     [confirmation, setConfirmation] = useState<'publish' | 'merge' | null>(null);
   const candidate = task.candidate;
+  const [acceptedRevision, setAcceptedRevision] = useState<string | null>(null);
+  const unverifiedChecks =
+    candidate?.evidence.checks.filter((check) => check.status === 'unknown') ?? [];
+  const validationFailed =
+    !candidate?.evidence.checks.length ||
+    candidate.evidence.checks.some((check) => !['passed', 'unknown'].includes(check.status));
+  const revision = candidate ? candidate.id + ':' + candidate.digest : null;
+  const acceptanceConfirmed = acceptedRevision !== null && acceptedRevision === revision;
+  function closeConfirmation() {
+    setConfirmation(null);
+    setAcceptedRevision(null);
+  }
   const canPublish = project.review || (project.contribute && task.assignee_id === userId);
   const publicationRetry =
     task.state === 'blocked' && task.publicationOperation?.state === 'blocked'
@@ -493,14 +505,14 @@ export function TaskDetail({
       {confirmation && candidate && (
         <Modal
           label={confirmation === 'publish' ? 'Confirm publication' : 'Confirm merge'}
-          close={() => setConfirmation(null)}
+          close={closeConfirmation}
           className="confirmation-modal"
         >
           <div className="modal-topline">
             <span className="modal-symbol">
               <Icon name="shield" size={23} />
             </span>
-            <IconButton name="close" label="Close approval" onClick={() => setConfirmation(null)} />
+            <IconButton name="close" label="Close approval" onClick={closeConfirmation} />
           </div>
           <h2>{confirmation === 'publish' ? 'Ready for code review?' : 'Authorise this merge?'}</h2>
           <p>
@@ -520,6 +532,30 @@ export function TaskDetail({
             <dt>Permission expires</dt>
             <dd>30 minutes</dd>
           </dl>
+          {confirmation === 'publish' && unverifiedChecks.length > 0 && (
+            <section className="publication-acceptance" aria-label="Acceptance confirmation">
+              <h3>Verify this change</h3>
+              <ul>
+                {unverifiedChecks.map((check, index) => (
+                  <li key={index}>{check.name}</li>
+                ))}
+              </ul>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={acceptanceConfirmed}
+                  disabled={busy || validationFailed}
+                  onChange={(event) => setAcceptedRevision(event.target.checked ? revision : null)}
+                />
+                I verified these criteria in this saved change.
+              </label>
+            </section>
+          )}
+          {validationFailed && (
+            <p className="inline-error" role="alert">
+              Resolve failed validation and prepare a new saved change before publication.
+            </p>
+          )}
           {candidate.manifest.fixture && (
             <p className="fixture-caption">
               <Icon name="info" size={15} />
@@ -532,11 +568,15 @@ export function TaskDetail({
             </p>
           )}
           <div className="modal-actions">
-            <Button onClick={() => setConfirmation(null)}>Go back</Button>
+            <Button onClick={closeConfirmation}>Go back</Button>
             <Button
               variant="primary"
               icon={confirmation === 'publish' ? 'external' : 'merge'}
               busy={busy}
+              disabled={
+                validationFailed ||
+                (confirmation === 'publish' && unverifiedChecks.length > 0 && !acceptanceConfirmed)
+              }
               onClick={async () => {
                 if (
                   await onCommand({
@@ -544,9 +584,10 @@ export function TaskDetail({
                     version: task.version,
                     candidateId: candidate.id,
                     digest: candidate.digest,
+                    ...(confirmation === 'publish' ? { acceptanceConfirmed } : {}),
                   })
                 )
-                  setConfirmation(null);
+                  closeConfirmation();
               }}
             >
               {confirmation === 'publish' ? 'Approve publication' : 'Approve merge'}

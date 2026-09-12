@@ -3782,3 +3782,30 @@ body[data-keyboard] .account-menu {
   height: auto;
   border-radius: 8px;
 }
+
+.publication-acceptance {
+  margin: 20px 0;
+}
+.publication-acceptance h3 {
+  font-size: var(--text-body);
+  margin-bottom: 8px;
+}
+.publication-acceptance ul {
+  margin: 0 0 16px;
+  padding-left: 20px;
+  color: var(--color-text-secondary);
+  line-height: 1.65;
+}
+.modal .publication-acceptance label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  line-height: 1.5;
+}
+.modal .publication-acceptance input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 3px 0 0;
+  accent-color: var(--color-accent);
+}

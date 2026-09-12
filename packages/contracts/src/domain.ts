@@ -46,6 +46,7 @@ export const commandInput = z.discriminatedUnion('action', [
   z
     .object({
       action: z.literal('publish'),
+      acceptanceConfirmed: z.boolean().optional(),
       version: z.number().int().positive(),
       candidateId: z.string().min(1),
       digest: z.string().length(64),

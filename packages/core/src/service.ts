@@ -1,3 +1,4 @@
+import { requirePublicationAcceptance } from './publication-acceptance';
 import {
   changeTaskOwnership,
   requireTaskAssignee,
@@ -16,7 +17,6 @@ import {
   type Command,
   type TaskInput,
   type BatchInput,
-  type Evidence,
   type CandidateManifest,
   taskInput,
   commandInput,
@@ -396,11 +396,10 @@ export async function commandInTransaction(
     409,
     'GitHub publication is not configured. Ask a workspace administrator to enable the publisher.',
   );
-  const evidence = c.evidence as unknown as Evidence;
-  requireThat(
-    evidence.checks.length > 0 && evidence.checks.every((x) => x.status === 'passed'),
-    409,
-    'Acceptance checks must pass before publication.',
+  await requirePublicationAcceptance(
+    db,
+    c,
+    input.action === 'publish' && input.acceptanceConfirmed === true,
   );
   if (input.action === 'merge')
     requireThat(
@@ -421,6 +420,8 @@ export async function commandInTransaction(
       digest: c.digest,
       approver_id: actor.id,
       policy_version: 'v1',
+      acceptance_confirmed_at:
+        input.action === 'publish' && input.acceptanceConfirmed === true ? new Date() : null,
       expires_at: new Date(Date.now() + 30 * 60_000),
     },
   });
@@ -465,7 +466,12 @@ export async function commandInTransaction(
     taskId,
     actor.id,
     input.action === 'publish' ? 'Publication authorised' : 'Merge authorised',
-    { candidateId: c.id, digest: c.digest, operationId },
+    {
+      candidateId: c.id,
+      digest: c.digest,
+      operationId,
+      acceptanceConfirmed: input.action === 'publish' && input.acceptanceConfirmed === true,
+    },
   );
   return { id: taskId, approvalId, operationId };
 }

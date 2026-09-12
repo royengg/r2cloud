@@ -10,6 +10,7 @@ datasource db {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model approvals {
+  acceptance_confirmed_at DateTime? @db.Timestamptz(6)
   id             String     @id
   org_id         String
   project_id     String

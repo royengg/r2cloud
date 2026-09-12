@@ -83,7 +83,12 @@ export class GitHubPublisher implements PublisherBackend {
       'POST',
       {
         repository_ids: [identity.repositoryId],
-        permissions: { contents: 'write', pull_requests: 'write', checks: 'read' },
+        permissions: {
+          contents: 'write',
+          pull_requests: 'write',
+          checks: 'read',
+          statuses: 'read',
+        },
       },
     );
     requireThat(

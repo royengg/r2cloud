@@ -1,11 +1,11 @@
 # Current status
 
-Last reviewed: 12 September 2026. r2cloud is an early development preview. The configured cloud coding pilot works; the complete preview-to-publication-to-merge journey does not yet work end to end.
+Last reviewed: 13 September 2026. r2cloud is an early development preview. The configured cloud coding pilot works; the complete preview-to-publication-to-merge journey is verified through PR publication; live merging remains unverified.
 
 ## Available
 
 - GitHub sign-in, workspace/project creation, invitations and separate contribution, publication-review and merge permissions.
-- Shared Kanban boards, task outcomes and acceptance criteria, search/filters, review state and task-linked agent activity.
+- Shared Kanban boards, task descriptions and acceptance criteria, search/filters, review state and task-linked agent activity.
 - GitHub App repository discovery and attachment, automatic setup for common JavaScript web apps, explicit repository setup overrides, and personal Codex device login. Agents can detect or propose setup in the thread; custom commands require inline approval.
 - Personal conversation workspaces within projects, with scoped thread tabs, model/thinking selection, streamed replies, inline decisions and Stop. Thread removal preserves task/execution history.
 - One native Codex session per thread, project-aware tools, and no implementation claim for ordinary conversation.
@@ -15,19 +15,21 @@ Last reviewed: 12 September 2026. r2cloud is an early development preview. The c
 - Authenticated worker-to-Codex streaming, batched timeline persistence and optional credential-free prepared snapshots.
 - Vercel sandbox reuse with two-minute idle expiry and a ten-minute total limit. Account changes and ambiguous failures require confirmed retirement before replacement.
 - Public repository checkout, pinned dependency setup, configured checks and immutable Git bundle export. Periodic recovery snapshots preserve edits independently of final export; interrupted work returns as a blocked candidate. Coding handoff quiesces processes and seals the retained checkout read-only.
-- Saved-change review from threads, task details and the project header: unified file diffs, commit navigation, revision-specific feedback drafts and recorded PR links. Review uses durable artifacts without starting a sandbox; live working-tree diffs and live PR creation and merge adapters are implemented; installation-backed verification and continuous status sync remain unfinished.
+- Saved-change review from threads, task details and the project header: unified file diffs, commit navigation, revision-specific feedback drafts and recorded PR links. Review uses durable artifacts without starting a sandbox. Live working-tree diffs and continuous PR status sync remain unfinished.
+- GitHub PR publication and merge controls, with separate human approvals. Assigned contributors can publish their own task; publication reviewers can publish for others. Unknown acceptance criteria require confirmation for the exact saved revision; failed validation blocks publication. App access and real PR publication are verified; live merging remains unverified.
+- Live previews, agent browser inspection and inline screenshots, verified in the configured public-repository pilot.
 - Neon Postgres through Prisma, with explicit pooled application and direct migration connections.
 - Direct WebSocket updates, reconnect recovery and fallback HTTP refreshes. Styled selection controls and inset keyboard-focus strokes.
 
 ## Still unfinished
 
 1. Broaden live harness validation across repository stacks and substantive acceptance criteria. Recovery preserves the latest completed checkpoint; edits after it can still be lost on abrupt sandbox failure.
-2. Deploy and validate the implemented preview gateway, isolated browser inspection and immutable screenshots end to end. Artifact downloads and production object storage remain unimplemented.
-3. Verify the isolated GitHub publisher against an approved live installation/repository. PR creation, check gating, human permissions, lost-response reconciliation and merge verification are implemented. Private repository execution and continuous PR status sync remain unfinished.
+2. Deploy the preview gateway and artifact storage for hosted use. The pilot preview and screenshot journey is verified; production shared storage, retention and general artifact export/download controls remain unfinished.
+3. Verify live merging in an explicitly approved repository. PR creation, check gating, human permissions, lost-response reconciliation and merge verification are implemented. Private repository execution and continuous PR status sync remain unfinished.
 4. Renewable Codex/Vercel credentials, skills for the legacy batch executor, batch UI and production process/database isolation.
 5. Repository revocation/refresh, retention and pagination beyond agent timelines. Board snapshots remain broad; realtime event polling is shared per project within each API process.
 
-Publication and merge have a GitHub adapter and local integration coverage. Live installation verification remains outstanding; they must not yet be presented as a verified hosted integration. No code has been published or deployed through the product.
+Publication and merge have a GitHub adapter and local integration coverage. Live App authentication and repository access are verified. A real PR was created through the product with the approved commit and target branch unchanged. It remains unmerged; hosted integration remains unfinished.
 
 ## Pilot boundaries
 
@@ -37,11 +39,12 @@ Native conversation checkpoints are private backend data, capped at 4 MiB. Timel
 
 ## Verification
 
-- **Local tests:** 168 Postgres/HTTP/Socket.IO, real local Git and mocked-provider tests passed. They cover ownership, access, approvals, generation checks, streaming, runtime reuse, concurrent waiting threads, shutdown, preview grants and proxy transport, screenshot access, skill parsing/pinning, interrupted snapshots, shallow Git restoration, failed downloads, worker replacement and preservation of earlier candidates after failed corrections. Review tests cover thin bundles, binary/deleted files, unusual paths, commit boundaries and thread access. Setup tests cover manifest detection, pinned package managers, workspace selection, revision caching, concurrent manual overrides and inline configuration approval.
+- **Local tests:** 171 Postgres/HTTP/Socket.IO, real local Git and mocked-provider tests passed. They cover ownership, access, approvals, generation checks, streaming, runtime reuse, concurrent waiting threads, shutdown, preview grants and proxy transport, screenshot access, skill parsing/pinning, interrupted snapshots, shallow Git restoration, failed downloads, worker replacement and preservation of earlier candidates after failed corrections. Review tests cover thin bundles, binary/deleted files, unusual paths, commit boundaries and thread access. Setup tests cover manifest detection, pinned package managers, workspace selection, revision caching, concurrent manual overrides and inline configuration approval.
 - **Browser:** the authentication/product journey passed 13 axe audits. The shared picker passed three additional audits plus keyboard, mobile, modal, reduced-motion and forced-colors checks. Streaming tests cover strict-origin WebSockets, idle request suppression, reconnects, transient HTTP errors and scroll stability. Screen-reader testing was not available.
 - **Build:** TypeScript, Vite and design-system validation passed.
 - **Real integrations:** repository attachment; subscription-backed Vercel turns; a public-repository checkout/edit/build/export run; native history restoration across sandboxes; two conversation turns sharing a warm sandbox; and confirmed idle cleanup. A real three-turn journey verified edit → preview → interrupted final export → cold recovery/correction → warm correction. Both corrections passed the repository build, reached Review and rendered the requested headings, with one native conversation across two sandboxes. The test also verified denied writes and rename attempts against the sealed checkout; nothing was published.
-- **Publication:** local Git bundle publication, scoped GitHub token requests, human repository permissions, changed-head rejection, check gating, lost-response reconciliation and operation-preserving retries pass. Live App authentication, repository-scoped tokens, approver access, PR reads and check/status reads are verified on the configured repository. A real publication and merge remain unverified.
+- **Publication:** local Git bundle publication, scoped GitHub token requests, human repository permissions, changed-head rejection, check gating, lost-response reconciliation and operation-preserving retries pass. Acceptance tests cover explicit confirmation, unchanged evidence, exact-revision binding and rejection of failed validation. Live App authentication, repository-scoped tokens, approver access, PR reads and check/status reads are verified on the configured repository. A real approved publication created one PR with the exact candidate commit and no target-branch changes. Live merging remains unverified.
+- **Harness audit:** cold and warm conversation, task creation, recovery, correction and publication were exercised against the connected public repository. New coverage checks runtime retirement before admitting a turn with insufficient remaining time, cancellation during browser inspection and Stop during a pending tool. The final preview recheck finished after one successful inspection and automatically shared its screenshot. A live Stop reached confirmed completion in about 42 seconds, including checkpoint and sandbox cleanup; cancellation is not instantaneous. New candidates expose final worker validation separately from acceptance criteria; older candidates retain their existing evidence. Measured submission latency improved in a warm sample, but total response time remained variable; no general latency improvement is established.
 - **Screenshots:** inline thumbnails and expanded viewer passed desktop/mobile Chromium review, keyboard focus checks and two axe audits.
 - **Git review:** desktop/mobile screenshots, two axe audits, feedback drafts, cache reuse and commit/PR navigation passed. A valid recovery bundle imported in 3.5 seconds and reopened from cache in under 1 ms. Two older persisted bundles were unreadable by Git; review reports that error without altering them.
 - **Database:** the Neon cutover preserved the existing data and migration history, verified per-table checksums, and exercised pooled Prisma board reads and interactive transactions.

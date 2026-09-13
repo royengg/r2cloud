@@ -47,7 +47,7 @@ Production still needs an explicitly trusted proxy policy, independent process c
 
 ## Repository connection
 
-Register a separate GitHub App. Configure its callback as `<BETTER_AUTH_URL>/api/repository-callback`. Discovery needs repository metadata and contents read access. Future GitHub writes belong to the isolated publisher integration.
+Register a separate GitHub App. Configure its callback as `<BETTER_AUTH_URL>/api/repository-callback`. Discovery needs repository metadata and contents read access. GitHub writes use the separate publication worker described below.
 
 Add `R2_GITHUB_APP_CLIENT_ID` and `R2_GITHUB_APP_SLUG` to `.env`. Put `R2_GITHUB_APP_CLIENT_SECRET` only in a separate ignored `.env.broker`, restricted to its process. Start the discovery broker:
 
@@ -101,9 +101,9 @@ A prepared snapshot contains the `r2-agent` user, `/vercel/sandbox/agent` owned 
 
 Set `R2_TRACE_TURNS=1` only when measuring stage latency. Logs contain turn identifiers and durations, without message bodies or credentials. Compare cold and warm turns separately, and distinguish first persisted output from full completion and browser rendering.
 
-Open a project or task thread and send a message. Conversation starts a lightweight runtime; repository checkout and dependency installation wait for a checked implementation grant. Approve the named task inline to begin code work. Follow-up messages reuse the warm runtime where permitted. Stop and uncertain outcomes retain ownership until execution is confirmed quiescent or stopped.
+Open a project or task thread and send a message. Conversation starts a lightweight runtime; repository checkout and dependency installation wait for a checked implementation grant. Approve the named task inline to begin code work. Follow-up messages reuse the warm runtime where permitted. A new turn requires at least half the configured lifetime remaining in its work budget, capped at five minutes; otherwise the old sandbox is retired before replacement. This avoids starting work near expiry but can add cold starts. Stop and uncertain outcomes retain ownership until execution is confirmed quiescent or stopped.
 
-The managed worker is the production execution entry point; simulated workflow and publisher helpers are local-only. Private-repository credential custody, live publication and verified merge reconciliation remain unfinished. [Architecture](ARCHITECTURE.md) explains the boundaries; [status](STATUS.md) records what has actually been validated.
+The managed worker is the production execution entry point; simulated workflow and publisher helpers are local-only. Private-repository execution remains unfinished. The publication worker and merge reconciliation are implemented, with real PR creation verified and live merge verification still outstanding. [Architecture](ARCHITECTURE.md) explains the boundaries; [status](STATUS.md) records what has actually been validated.
 
 ## Live previews
 
@@ -121,7 +121,7 @@ Starting implementation launches the configured dev command. Asking the agent to
 
 For the agent's `inspect_preview` tool, prepare the [browser bundle](../packages/adapters/browser/README.md) in the clean sandbox snapshot and select it with `R2_VERCEL_SNAPSHOT_ID`. The base image fallback does not include the browser. API and worker processes must share the private `.local/artifacts/previews` directory for screenshots. These pilot artifacts have access checks and integrity verification; production object storage and retention are still unfinished.
 
-The gateway, browser and session protocol have isolated integration coverage. A real Chromium test through a Quick Tunnel verified HTTPS, Vite HMR without page reload, anonymous-access denial and disconnection after revocation. The complete selected-repository product journey still requires end-to-end verification.
+The gateway, browser and session protocol have isolated integration coverage. A real Chromium test through a Quick Tunnel verified HTTPS, Vite HMR without page reload, anonymous-access denial and disconnection after revocation. The configured public repository also passed a live edit, preview, recovery and correction journey with native agent browser inspection. Hosted deployment and broader repository coverage remain unverified.
 
 For temporary local testing, set `R2_PREVIEW_ROUTES_FILE` instead of `R2_PREVIEW_DOMAIN` in the API and gateway. This private JSON file maps each preview to its own Quick Tunnel address:
 
@@ -141,7 +141,7 @@ Each tunnel points to the loopback gateway. Use a fresh hostname for each runtim
 
 Before publication, the approver explicitly confirms any acceptance criteria requiring human verification. Confirmation is recorded against the exact candidate and digest without changing its validation evidence. Failed validation still blocks publication. Merge approval inherits acceptance only from publication of that same candidate.
 
-Publication uses the repository GitHub App, separately from product sign-in. Enable **Contents: read/write**, **Pull requests: read/write**, and **Checks: read**, and **Commit statuses: read** on the App and accept the updated installation permissions. Do not add this App to branch-protection or ruleset bypass lists. The publisher uses merge commits; enable that merge method in the repository. Merge queues are not supported.
+Publication uses the repository GitHub App, separately from product sign-in. Enable **Contents: read/write**, **Pull requests: read/write**, **Checks: read**, and **Commit statuses: read** on the App and accept the updated installation permissions. Do not add this App to branch-protection or ruleset bypass lists. The publisher uses merge commits; enable that merge method in the repository. Merge queues are not supported.
 
 Keep the App ID and private key path in an ignored, publisher-only environment file:
 

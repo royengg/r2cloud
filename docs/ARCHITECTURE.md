@@ -60,7 +60,7 @@ Admission counts live resources through `agentResourceUsage`: warm/active runtim
 
 `AgentRuntime` owns a Vercel allocation independently of turns. One live runtime per thread and a worker-owner lease govern reuse. Consecutive messages from the same actor and provider connection reuse the sandbox and native Codex process. The transport translates its cumulative event cursor into each turn’s sequence.
 
-Idle runtimes expire after two minutes, within a fixed ten-minute total lifespan. They count toward concurrency limits. Account changes, archived threads and stale worker leases trigger retirement. No replacement starts until cloud stop is confirmed. Durable stop proof recovers a crash between sandbox retirement and turn completion. After expiry, a new sandbox restores the saved conversation. New turns are refused near expiry, and active turns begin shutdown with 90 seconds reserved before the ten-minute hard limit.
+Idle runtimes expire after two minutes, within a fixed ten-minute total lifespan. They count toward concurrency limits. Account changes, archived threads and stale worker leases trigger retirement. No replacement starts until cloud stop is confirmed. Durable stop proof recovers a crash between sandbox retirement and turn completion. After expiry, a new sandbox restores the saved conversation. New turns require at least half their configured lifespan remaining in the work budget, capped at five minutes; otherwise the runtime is retired before replacement. Active turns begin shutdown with 90 seconds reserved before the ten-minute hard limit.
 
 Implementation work saves recovery Git bundles approximately every 30 seconds and before tool decisions. A separate Git index preserves the working tree and real index; unchanged trees reuse the last artifact. Files are flushed and atomically stored before the latest recovery manifest is persisted in a private `AgentItem`, fenced by runtime owner and task generation. Native conversation state is checkpointed alongside it. Shutdown saves again after stopping agent processes and before running checks.
 
@@ -78,9 +78,9 @@ Allocation and command intent are recorded before external operations. Unknown o
 
 ## Review, publication and completion
 
-Private Git bundles and candidate manifests bind evidence to immutable changes. Thread recovery and candidate bundles contain changes relative to the pinned base commit; restoration fetches that base before applying the recorded candidate SHA. This avoids transferring unchanged repository assets on every export. Successful checks do not verify every acceptance criterion, and provider completion does not complete a task.
+Private Git bundles and candidate manifests bind evidence to immutable changes. Thread recovery and candidate bundles contain changes relative to the pinned base commit; restoration fetches that base before applying the recorded candidate SHA. This avoids transferring unchanged repository assets on every export. New candidates record final validation commands and exit codes separately from acceptance criteria. Successful checks do not verify every acceptance criterion, and provider completion does not complete a task.
 
-The checked publication policy binds a designated human reviewer’s approval to the exact task, repository, base/head, artifact digest and requested action. Changed candidates require new approval. Merge requires separate authorisation and verified repository facts. Agents cannot approve either action.
+The checked publication policy binds an authorised person’s approval to the exact task, repository, base/head, artifact digest and requested action. Changed candidates require new approval. Assigned contributors can authorise publication of their own task; a publication reviewer can authorise it for another assignee. Unknown acceptance criteria require explicit confirmation bound to the candidate and digest; failed validation cannot be overridden. Confirmation is stored on the approval without modifying candidate evidence. Merge requires separate authorisation and verified repository facts. Agents cannot approve either action.
 
 Parallel candidates can share a pinned base and may conflict during integration. A live publisher must reconcile against the current target branch and required checks before merging; implementation admission must not serialize repository ownership to avoid that responsibility. The isolated GitHub publisher creates a branch and PR from the verified bundle, checks the approver’s current GitHub write access, and merges only the approved head after GitHub readiness and checks pass. Installation tokens are restricted to the connected repository. Lost responses are reconciled by operation marker and exact PR identity; blocked retries retain the operation ID and require a fresh approval. Existing policies and fixture tests are foundations, not proof of a working end-to-end publication flow.
 
@@ -104,13 +104,13 @@ Saved-change review authorizes each project/thread request, verifies the candida
 
 ### Publication access
 
-| Access                | Implement assigned tasks          | Approve PR creation          | Approve merge                |
-| --------------------- | --------------------------------- | ---------------------------- | ---------------------------- |
-| Viewer                | No                                | No                           | No                           |
-| Contributor           | Yes                               | No                           | No                           |
-| Publication reviewer  | Only with contribution permission | Yes                          | No                           |
-| Merge approver        | Only with contribution permission | Only with review permission  | Yes                          |
-| Workspace owner/admin | Determined by project grants      | Determined by project grants | Determined by project grants |
-| Agent                 | Only through authorized execution | Never                        | Never                        |
+| Access                | Implement assigned tasks          | Approve PR creation                                                      | Approve merge                |
+| --------------------- | --------------------------------- | ------------------------------------------------------------------------ | ---------------------------- |
+| Viewer                | No                                | No                                                                       | No                           |
+| Contributor           | Yes                               | Own assigned tasks only                                                  | No                           |
+| Publication reviewer  | Only with contribution permission | Yes                                                                      | No                           |
+| Merge approver        | Only with contribution permission | With review permission, or contribution permission on own assigned tasks | Yes                          |
+| Workspace owner/admin | Determined by project grants      | Determined by project grants                                             | Determined by project grants |
+| Agent                 | Only through authorized execution | Never                                                                    | Never                        |
 
 Owners/admins manage grants; they have no implicit publication bypass. Each external write rechecks the product approval, current assignment or review grant, and linked human GitHub account. The installation must not have a branch-rule bypass, and repository rules remain authoritative. Continuous webhook PR synchronization, merge queues and rebase/squash methods are separate extensions.

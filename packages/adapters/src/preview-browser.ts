@@ -13,7 +13,12 @@ const resultSchema = z.object({
 });
 const page = readFileSync(new URL('./preview-browser-page.ts', import.meta.url), 'utf8');
 const relay = readFileSync(new URL('./preview-browser-relay.ts', import.meta.url), 'utf8');
-export async function inspectPreview(sandbox: Sandbox, port: number, input: unknown) {
+export async function inspectPreview(
+  sandbox: Sandbox,
+  port: number,
+  input: unknown,
+  signal?: AbortSignal,
+) {
   if (!Number.isInteger(port) || port < 1024 || port > 65535) throw Error('Invalid preview port.');
   const config = { ...previewInspection.parse(input), port, page };
   const result = await sandbox.currentSession().runCommand({
@@ -21,7 +26,7 @@ export async function inspectPreview(sandbox: Sandbox, port: number, input: unkn
     args: ['PATH=' + sandboxPath, 'bun', '-e', relay, '--', JSON.stringify(config)],
     sudo: true,
     timeoutMs: 40000,
-    signal: AbortSignal.timeout(45000),
+    signal: AbortSignal.any([AbortSignal.timeout(45000), ...(signal ? [signal] : [])]),
   });
   if (result.exitCode !== 0)
     throw Error('Preview inspection failed. Check browser setup and dev server readiness.');

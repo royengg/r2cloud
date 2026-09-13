@@ -24,7 +24,7 @@ const definitions = {
   },
   inspect_preview: {
     description:
-      'Inspect a path in the running project preview. Returns an accessibility snapshot, JavaScript errors and a screenshot from an isolated browser. External websites and product login sessions are unavailable.',
+      'Inspect a path in the running project preview. Returns an accessibility snapshot, JavaScript errors and a screenshot from an isolated browser. The screenshot is automatically shown to the user in the conversation; do not inspect again just to send or display it. External websites and product login sessions are unavailable.',
     schema: previewInspection,
   },
   start_preview: {

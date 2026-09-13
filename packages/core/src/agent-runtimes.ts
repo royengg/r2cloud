@@ -15,7 +15,7 @@ export async function reserveAgentRuntime(db: DB, grant: AgentGrant, owner: stri
       existing.connectionId !== grant.connectionId ||
       (existing.idleUntil?.getTime() ?? 0) <= Date.now() ||
       agentWorkDeadline({ ...grant, runtimeExpiresAt: existing.expiresAt.getTime() }) <
-        Date.now() + 30000
+        Date.now() + Math.min(grant.minutes * 30000, 300000)
     ) {
       await db.agentRuntime.update({ where: { id: existing.id }, data: { state: 'stopping' } });
       return null;

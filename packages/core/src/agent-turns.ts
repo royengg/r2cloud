@@ -2,7 +2,8 @@ import { prisma, json, type DB } from '@r2cloud/database';
 import { requireThat, type Actor } from '@r2cloud/contracts/domain';
 import { agentInput, type AgentGrant, type AgentTimeline } from '@r2cloud/contracts/agent';
 import { id } from '@r2cloud/contracts/hash';
-import { access, event } from './project-context';
+import { access, event, type AccessibleProject } from './project-context';
+import type { ConversationThread } from '@prisma/client';
 import { receipt } from './receipt';
 import { agentResourceUsage } from './agent-runtimes';
 import { availableModels } from './thread-context';
@@ -11,16 +12,14 @@ import { resolveSkills } from './skills';
 export async function queueAgentTurn(
   db: DB,
   actor: Actor,
-  projectId: string,
-  threadId: string,
+  project: AccessibleProject,
+  thread: ConversationThread,
   message: string,
   reasoningEffort?: string | null,
 ) {
-  const project = await access(db, actor, projectId, 'contribute');
-  const thread = await db.conversationThread.findFirst({
-    where: { id: threadId, projectId, archivedAt: null },
-  });
-  requireThat(thread, 404, 'Thread not found.');
+  const projectId = project.id;
+  const threadId = thread.id;
+  requireThat(project.contribute, 403, 'This action requires project contribute permission.');
   requireThat(
     !(await db.agentTurn.count({ where: { threadId, stoppedAt: null } })),
     409,

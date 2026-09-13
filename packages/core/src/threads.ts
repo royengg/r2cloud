@@ -153,7 +153,7 @@ export async function changeThread(
         threadId: thread.id,
       });
       if (input.body)
-        await queueAgentTurn(db, actor, projectId, thread.id, input.body, input.reasoningEffort);
+        await queueAgentTurn(db, actor, project, thread, input.body, input.reasoningEffort);
       return { id: thread.id };
     }
     const thread = await db.conversationThread.findFirst({
@@ -201,7 +201,7 @@ export async function changeThread(
       });
     } else {
       if (input.action === 'run') {
-        await queueAgentTurn(db, actor, projectId, thread.id, input.body, input.reasoningEffort);
+        await queueAgentTurn(db, actor, project, thread, input.body, input.reasoningEffort);
       } else
         await db.comments.create({
           data: {

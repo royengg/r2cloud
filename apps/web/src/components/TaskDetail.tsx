@@ -226,6 +226,19 @@ export function TaskDetail({
                         <Icon name="down" size={16} />
                       </summary>
                       <div>
+                        {!!candidate.evidence.validation?.length && (
+                          <>
+                            <p className="subtle">Final validation for this saved revision</p>
+                            {candidate.evidence.validation.map((check, i) => (
+                              <div className="evidence-check" key={i}>
+                                <Icon name={check.exitCode === 0 ? 'check' : 'info'} size={16} />
+                                <span>{check.command}</span>
+                                <small>{check.exitCode === 0 ? 'passed' : 'failed'}</small>
+                              </div>
+                            ))}
+                            <p className="subtle">Acceptance criteria</p>
+                          </>
+                        )}
                         {candidate.evidence.checks.map((check, i) => (
                           <div className="evidence-check" key={i}>
                             <Icon name={check.status === 'passed' ? 'check' : 'info'} size={16} />

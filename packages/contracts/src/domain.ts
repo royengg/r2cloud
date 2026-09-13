@@ -112,6 +112,7 @@ export type CandidateManifest = {
   fixture: boolean;
 };
 export type Evidence = {
+  validation?: { command: string; exitCode: number }[];
   checks: { name: string; status: 'passed' | 'failed' | 'unknown' }[];
   snapshotDigest: string;
   preview: { available: boolean; fixture: boolean };

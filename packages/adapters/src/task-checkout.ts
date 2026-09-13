@@ -280,7 +280,7 @@ for root,dirs,files in os.walk('${this.path}',topdown=False,followlinks=False):
         return;
       for (const test of interrupted ? [] : this.setup.tests)
         checks.push({
-          name: test.cmd,
+          name: [test.cmd, ...test.args].join(' '),
           exitCode: (await this.run(test.cmd, test.args, this.cwd)).exitCode,
         });
 
@@ -373,6 +373,7 @@ for root,dirs,files in os.walk('${this.path}',topdown=False,followlinks=False):
         fixture: false,
       },
       evidence: {
+        validation: checks.map((check) => ({ command: check.name, exitCode: check.exitCode })),
         checks: g.criteria.map((name) => ({
           name,
           status:

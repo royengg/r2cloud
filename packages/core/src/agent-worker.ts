@@ -155,8 +155,9 @@ export function agentControl(
       return turn.stopRequested;
     },
     events: recordAgentEvents,
-    async request(grant, message, sandbox) {
+    async request(grant, message, sandbox, signal) {
       await authorize(grant);
+      signal?.throwIfAborted();
       const p = message.params ?? {};
       if (message.method === 'item/tool/call') {
         const result = await callAgentTool(grant, String(message.id), p.tool, p.arguments);
@@ -166,7 +167,7 @@ export function agentControl(
             where: { runtimeId: grant.runtimeId },
           });
           requireThat(preview?.state === 'ready', 409, 'The project preview is not ready.');
-          const inspection = await inspectPreview(sandbox, preview.port, result);
+          const inspection = await inspectPreview(sandbox, preview.port, result, signal);
           await authorize(grant);
           await savePreviewInspection(grant, String(message.id), inspection);
           const { screenshot, ...detail } = inspection;

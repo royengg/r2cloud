@@ -1,6 +1,7 @@
 import type { Server as HttpServer } from 'node:http';
 import { Server as SocketServer, type Socket } from 'socket.io';
 import { prisma } from '@r2cloud/database';
+import { Fault } from '@r2cloud/contracts/domain';
 import { access } from '@r2cloud/core/project-context';
 import { requestActor } from '../auth/session';
 import { allowedOrigins, type AppOptions } from '../config/options';
@@ -33,6 +34,7 @@ export function attachRealtime(server: HttpServer, options: AppOptions) {
       timer: ReturnType<typeof setInterval>;
       cursor: bigint;
       checking: boolean;
+      authorizeAt: number;
     }
   >();
   io.on('connection', (socket) => {
@@ -44,32 +46,42 @@ export function attachRealtime(server: HttpServer, options: AppOptions) {
         timer: undefined!,
         cursor: socket.data.cursor,
         checking: false,
+        authorizeAt: Date.now() + 10000,
       };
       projects.set(projectId, group);
       const update = async () => {
         if (group!.checking) return;
         group!.checking = true;
         try {
-          const checks = new Map<string, Promise<void>>();
-          await Promise.all(
-            [...group!.sockets].map(async (subscriber) => {
-              const key = subscriber.request.headers.cookie ?? '';
-              let check = checks.get(key);
-              if (!check) {
-                check = (async () => {
-                  const actor = await requestActor(options, subscriber.request.headers);
-                  await access(prisma, actor, projectId);
-                })();
-                checks.set(key, check);
-              }
-              try {
-                await check;
-              } catch {
-                subscriber.emit('access-ended');
-                subscriber.disconnect(true);
-              }
-            }),
-          );
+          if (Date.now() >= group!.authorizeAt) {
+            let unavailable = false;
+            const checks = new Map<string, Promise<void>>();
+            await Promise.all(
+              [...group!.sockets].map(async (subscriber) => {
+                const key = subscriber.request.headers.cookie ?? '';
+                let check = checks.get(key);
+                if (!check) {
+                  check = (async () => {
+                    const actor = await requestActor(options, subscriber.request.headers);
+                    await access(prisma, actor, projectId);
+                  })();
+                  checks.set(key, check);
+                }
+                try {
+                  await check;
+                } catch (error) {
+                  if (!(error instanceof Fault && [401, 403].includes(error.status))) {
+                    unavailable = true;
+                    return;
+                  }
+                  subscriber.emit('access-ended');
+                  subscriber.disconnect(true);
+                }
+              }),
+            );
+            if (unavailable) return;
+            group!.authorizeAt = Date.now() + 10000;
+          }
           if (!group!.sockets.size) return;
           const events = await prisma.events.findMany({
             where: { project_id: projectId, id: { gt: group!.cursor } },

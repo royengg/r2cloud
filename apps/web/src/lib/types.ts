@@ -62,7 +62,6 @@ export type Snapshot = {
   project: Project;
   tasks: Task[];
   participants: Person[];
-  comments: Comment[];
   events: Activity[];
   cursor: string;
 };

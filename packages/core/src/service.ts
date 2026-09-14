@@ -628,21 +628,12 @@ export async function snapshot(actor: Actor, projectId: string) {
         review: g.review,
         merge: g.merge,
       }));
-      const commentRows = await db.comments.findMany({
-        where: { project_id: projectId },
-        include: { users: { select: { name: true } } },
-        orderBy: { created_at: 'asc' },
-      });
-      const comments = commentRows.map(({ users, ...comment }) => ({
-        ...comment,
-        name: users.name,
-      }));
       const events = await db.events.findMany({
         where: { project_id: projectId },
         orderBy: { id: 'desc' },
         take: 100,
       });
-      return { project, tasks, participants, comments, events, cursor: events[0]?.id ?? '0' };
+      return { project, tasks, participants, events, cursor: events[0]?.id ?? '0' };
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
   );

@@ -24,11 +24,24 @@ export async function api<T = unknown>(
       body === undefined ? {} : { 'Content-Type': 'application/json', 'Idempotency-Key': key },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const data = await response.json();
+  let data;
+  try {
+    data = await response.json();
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    throw new ApiError(
+      'The server returned an unexpected response. Please try again.',
+      response.status,
+    );
+  }
   pending.delete(fingerprint);
   if (!response.ok)
     throw new ApiError(
-      data.error ?? data.message ?? 'Unable to load the workspace. Try again.',
+      typeof data?.error === 'string'
+        ? data.error
+        : typeof data?.message === 'string'
+          ? data.message
+          : 'Unable to load the workspace. Try again.',
       response.status,
     );
   return data;

@@ -119,10 +119,10 @@ export function App() {
         <span>Opening your workspace…</span>
       </div>
     );
-  if (!w.authConfig)
+  if (!w.authConfig || (!w.identity && w.error))
     return (
       <main className="initial-loading">
-        <p role="alert">Sign-in settings could not be loaded.</p>
+        <p role="alert">{w.error || 'Sign-in settings could not be loaded.'}</p>
         <Button onClick={() => location.reload()}>Try again</Button>
       </main>
     );

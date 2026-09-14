@@ -366,10 +366,7 @@ for root,dirs,files in os.walk('${this.path}',topdown=False,followlinks=False):
         headSha,
         artifactDigest,
         summary: summary.slice(0, 4000),
-        limitations: [
-          ...checks.map((c) => `${c.name}: exit ${c.exitCode}`),
-          'Product acceptance requires human verification.',
-        ],
+        limitations: ['Product acceptance requires human verification.'],
         fixture: false,
       },
       evidence: {

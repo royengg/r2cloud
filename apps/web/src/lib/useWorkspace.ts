@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { queryClient, readQuery, clearProjectQueries } from './queries';
 import { projectRealtime } from './realtime';
-import { api } from './api';
+import { api, ApiError } from './api';
 import type { Identity, Snapshot, Task } from './types';
 export function useWorkspace() {
   const [identity, setIdentity] = useState<Identity | null>(null),
@@ -87,7 +87,10 @@ export function useWorkspace() {
           readQuery<{ mode: string; provider: string | null; enabled: boolean }>('/auth-config'),
         )
         .then(setAuthConfig),
-      loadIdentity().catch(() => {}),
+      loadIdentity().catch((error) => {
+        if (!(error instanceof ApiError && error.status === 401))
+          setError((error as Error).message);
+      }),
     ])
       .catch((e) => setError((e as Error).message))
       .finally(() => setReady(true));
@@ -110,7 +113,7 @@ export function useWorkspace() {
   useEffect(() => {
     const endSession = () => {
       serial.current++;
-      queryClient.clear();
+      if (identity) queryClient.clear();
       setIdentity(null);
       setProjectId('');
     };
@@ -129,7 +132,7 @@ export function useWorkspace() {
       window.removeEventListener('session-ended', endSession);
       window.removeEventListener('project-access-ended', endProject);
     };
-  }, [projectId]);
+  }, [identity, projectId]);
   async function act(work: () => Promise<unknown>, message = 'Saved') {
     setBusy(true);
     setError('');

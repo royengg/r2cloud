@@ -73,7 +73,10 @@ export function projectRealtime(
   socket.on('connect_error', () => status('Offline'));
   socket.on('access-ended', revoked);
   const timer = setInterval(() => {
-    if (!socket.connected) refresh();
+    if (!socket.connected) {
+      if (!socket.active) socket.connect();
+      refresh();
+    }
   }, 5000);
   return () => {
     clearInterval(timer);

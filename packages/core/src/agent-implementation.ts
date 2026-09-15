@@ -5,7 +5,11 @@ import { requireThat, type Actor } from '@r2cloud/contracts/domain';
 import type { AgentGrant } from '@r2cloud/contracts/agent';
 import type { RunGrant, RunResult } from '@r2cloud/contracts/adapters';
 import { commandInTransaction } from './service';
-import { checkExecutionCapacity, checkTaskStart } from './implementation-admission';
+import {
+  checkExecutionCapacity,
+  checkTaskStart,
+  checkCorrectionPublication,
+} from './implementation-admission';
 import { access, event, lockProject } from './project-context';
 import { waitForAgentResponse } from './agent-tools';
 import { digest, id } from '@r2cloud/contracts/hash';
@@ -42,12 +46,13 @@ async function checkAgentImplementation(
   if (task.state === 'todo') {
     await checkTaskStart(db, task);
   } else {
+    await checkCorrectionPublication(db, task.id);
     const claim = await db.claims.findFirst({
       where: { task_id: task.id, owner_id: grant.actorId, released_at: null },
     });
     requireThat(claim, 403, 'Only the implementation owner can continue this task.');
     requireThat(
-      ['review', 'blocked'].includes(task.state),
+      ['review', 'blocked', 'code_review'].includes(task.state),
       409,
       'Corrections can start when this candidate is ready for review.',
     );

@@ -5,7 +5,11 @@ import {
   requireTaskPublication,
   managesTasks,
 } from './task-ownership';
-import { checkExecutionCapacity, checkTaskStart } from './implementation-admission';
+import {
+  checkExecutionCapacity,
+  checkTaskStart,
+  checkCorrectionPublication,
+} from './implementation-admission';
 import { receipt } from './receipt';
 import { pinThread } from './thread-context';
 import { access, event, type AccessibleProject } from './project-context';
@@ -167,7 +171,7 @@ async function startTask(
     },
   });
   const thread = input.threadId
-    ? await pinThread(db, actor, p.id, t.id, input.threadId, input.threadVersion)
+    ? await pinThread(db, actor, p.id, t.id, input.threadId, input.threadVersion, !agentTurnId)
     : undefined;
   return queueRun(db, actor, p, t, claimId, input.minutes, input.budgetCents, thread, agentTurnId);
 }
@@ -314,10 +318,11 @@ export async function commandInTransaction(
     return { id: taskId };
   }
   if (input.action === 'changes') {
+    await checkCorrectionPublication(db, taskId);
     requireTaskAssignee(t, actor.id);
     requireTaskAssignee(t, claim.owner_id);
     requireThat(
-      ['review', 'blocked'].includes(t.state),
+      ['review', 'blocked', 'code_review'].includes(t.state),
       409,
       'Corrections can start when this candidate is ready for review.',
     );
@@ -353,7 +358,15 @@ export async function commandInTransaction(
     });
     const config = previous.manifest as unknown as RunGrant['config'];
     const thread = input.threadId
-      ? await pinThread(db, owner, projectId, taskId, input.threadId, input.threadVersion)
+      ? await pinThread(
+          db,
+          owner,
+          projectId,
+          taskId,
+          input.threadId,
+          input.threadVersion,
+          !agentTurnId,
+        )
       : undefined;
     return queueRun(
       db,

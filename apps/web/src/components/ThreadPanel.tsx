@@ -211,29 +211,31 @@ export function ThreadPanel({
     setBusy(true);
     setError('');
     try {
-      let current = detail;
-      if (!current) {
-        const created = await api<{ id: string }>(path, {
-          action: 'create',
-          workspaceId: activeWorkspaceId,
-          title: text.trim().replace(/\s+/g, ' ').slice(0, 80),
-          model,
-          instructions: '',
-          taskId: taskId ?? null,
-        });
-        setSelected(created.id);
-        current = await queryClient.fetchQuery(readQuery<Detail>(`${path}/${created.id}`));
-      }
-      await api(`${path}/${current.thread.id}`, {
-        action: 'run',
-        version: current.thread.version,
-        body: text,
-        reasoningEffort: selectedEffort,
-      });
+      const result = await api<{ id: string }>(
+        detail ? `${path}/${detail.thread.id}` : path,
+        detail
+          ? {
+              action: 'run',
+              version: detail.thread.version,
+              body: text,
+              reasoningEffort: selectedEffort,
+            }
+          : {
+              action: 'create',
+              workspaceId: activeWorkspaceId,
+              title: text.trim().replace(/\s+/g, ' ').slice(0, 80),
+              model,
+              instructions: '',
+              taskId: taskId ?? null,
+              body: text,
+              reasoningEffort: selectedEffort,
+            },
+      );
+      if (!detail) setSelected(result.id);
       setText('');
       await Promise.all([
-        refreshRead(`${path}/${current.thread.id}/timeline`),
-        refreshRead(`${path}/${current.thread.id}`),
+        refreshRead(`${path}/${result.id}/timeline`),
+        refreshRead(`${path}/${result.id}`),
         refreshRead(path),
       ]);
     } catch (e) {

@@ -129,6 +129,7 @@ export class GitHubPublisher implements PublisherBackend {
     requireThat(
       pr &&
         Number.isSafeInteger(pr.number) &&
+        (!grant.publication || pr.number === grant.publication.prNumber) &&
         pr.head?.sha === c.headSha &&
         pr.head.ref === c.branch &&
         pr.head.repo?.id === grant.github?.repositoryId &&
@@ -168,6 +169,17 @@ export class GitHubPublisher implements PublisherBackend {
       requireThat(pr.state === 'open', 409, 'The PR was closed without merging.');
       return { state: 'absent' as const };
     }
+    if (grant.publication) {
+      const pr = await call(repo + '/pulls/' + grant.publication.prNumber);
+      requireThat(pr?.state === 'open' && !pr.merged, 409, 'The published PR is no longer open.');
+      if (pr.head?.sha === grant.candidate.headSha)
+        return { state: 'finished' as const, result: this.result(grant, pr) };
+      this.result(
+        { ...grant, candidate: { ...grant.candidate, headSha: grant.publication.headSha } },
+        pr,
+      );
+      return { state: 'absent' as const };
+    }
     const query = new URLSearchParams({
       state: 'all',
       head: grant.candidate.repository.split('/')[0] + ':' + grant.candidate.branch,
@@ -204,10 +216,37 @@ export class GitHubPublisher implements PublisherBackend {
 
   async publish(grant: PublicationGrant, authorize = async () => {}) {
     const client = await this.client(grant);
-    await this.push(grant.candidate, client.token, async () => {
-      await authorize();
-      await client.authorize();
-    });
+    if (grant.publication) {
+      const pr = await client.call(client.repo + '/pulls/' + grant.publication.prNumber);
+      requireThat(pr?.state === 'open' && !pr.merged, 409, 'The published PR is no longer open.');
+      this.result(
+        {
+          ...grant,
+          candidate: {
+            ...grant.candidate,
+            headSha:
+              pr.head?.sha === grant.candidate.headSha
+                ? grant.candidate.headSha
+                : grant.publication.headSha,
+          },
+        },
+        pr,
+      );
+    }
+    await this.push(
+      grant.candidate,
+      client.token,
+      async () => {
+        await authorize();
+        await client.authorize();
+      },
+      grant.publication?.headSha,
+    );
+    if (grant.publication) {
+      const pr = await client.call(client.repo + '/pulls/' + grant.publication.prNumber);
+      requireThat(pr?.state === 'open' && !pr.merged, 409, 'The published PR is no longer open.');
+      return this.result(grant, pr);
+    }
     await authorize();
     await client.authorize();
     const pr = await client.call(client.repo + '/pulls', 'POST', {

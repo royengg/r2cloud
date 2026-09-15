@@ -446,7 +446,11 @@ export function TaskDetail({
             </>
           ) : task.state === 'code_review' ? (
             <>
-              <span>A PR is still an ongoing task.</span>
+              {task.assignee_id === userId && project.contribute && (
+                <Button onClick={() => setCorrection(true)} busy={busy}>
+                  Request changes
+                </Button>
+              )}
               <Button
                 variant="primary"
                 icon="merge"
@@ -530,7 +534,7 @@ export function TaskDetail({
           <h2>{confirmation === 'publish' ? 'Ready for code review?' : 'Authorise this merge?'}</h2>
           <p>
             {confirmation === 'publish'
-              ? 'Approve pushing this exact branch and opening one pull request. Repository workflows may run.'
+              ? 'Approve publishing this exact revision for code review. Repository workflows may run.'
               : 'This is a separate merge permission. Required checks must pass before the merge is verified.'}
           </p>
           <dl className="approval-facts">

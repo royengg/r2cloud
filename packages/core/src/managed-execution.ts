@@ -1,3 +1,4 @@
+import { retryAuthorization } from './authorization-retry';
 import { recordAgentMessage } from './agent-messages';
 import { codexModels } from '@r2cloud/contracts/threads';
 import { prisma, json } from '@r2cloud/database';
@@ -40,20 +41,26 @@ export function executionControl(projectId: string, vault: CredentialVault): Exe
       });
     },
     async authorize(grant) {
-      requireThat(grant.projectId === projectId, 403, 'This worker is scoped to another project.');
-      const run = await prisma.runs.findFirst({
-        where: {
-          id: grant.runId,
-          generation: grant.generation,
-          stopped_at: null,
-          claims: { released_at: null, tasks: { generation: grant.generation } },
-        },
-        include: { claims: true },
+      return retryAuthorization(async () => {
+        requireThat(
+          grant.projectId === projectId,
+          403,
+          'This worker is scoped to another project.',
+        );
+        const run = await prisma.runs.findFirst({
+          where: {
+            id: grant.runId,
+            generation: grant.generation,
+            stopped_at: null,
+            claims: { released_at: null, tasks: { generation: grant.generation } },
+          },
+          include: { claims: true },
+        });
+        requireThat(run, 409, 'Execution identity is no longer active.');
+        await access(prisma, { id: run.claims.owner_id }, projectId, 'contribute');
+        const manifest = run.manifest as { connectionId: string };
+        return codexCredentials(projectId, run.claims.owner_id, manifest.connectionId, vault);
       });
-      requireThat(run, 409, 'Execution identity is no longer active.');
-      await access(prisma, { id: run.claims.owner_id }, projectId, 'contribute');
-      const manifest = run.manifest as { connectionId: string };
-      return codexCredentials(projectId, run.claims.owner_id, manifest.connectionId, vault);
     },
     async recover(operationId) {
       const allocation = await prisma.sandboxAllocation.findFirst({

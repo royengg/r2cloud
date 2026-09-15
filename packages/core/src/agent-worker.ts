@@ -1,3 +1,4 @@
+import { retryAuthorization } from './authorization-retry';
 import { randomUUID } from 'node:crypto';
 import { RepositoryPreview } from '@r2cloud/adapters/repository-preview';
 import { inspectPreview } from '@r2cloud/adapters/preview-browser';
@@ -83,10 +84,11 @@ export function agentControl(
     await refreshAgentRuntimeLease(grant, owner);
     await prisma.agentTurn.update({ where: { id: grant.id }, data: { heartbeatAt: new Date() } });
   };
-  const authorize = async (grant: AgentGrant) => {
-    await verifyLease(grant);
-    return codexCredentials(projectId, grant.actorId, grant.connectionId, vault);
-  };
+  const authorize = (grant: AgentGrant) =>
+    retryAuthorization(async () => {
+      await verifyLease(grant);
+      return codexCredentials(projectId, grant.actorId, grant.connectionId, vault);
+    });
   return {
     authorize,
     async checkpoint(grant) {
@@ -98,8 +100,10 @@ export function agentControl(
       return true;
     },
     async authorizeRuntime(grant) {
-      await authorizeAgentRuntime(grant, owner);
-      return codexCredentials(projectId, grant.actorId, grant.connectionId, vault);
+      return retryAuthorization(async () => {
+        await authorizeAgentRuntime(grant, owner);
+        return codexCredentials(projectId, grant.actorId, grant.connectionId, vault);
+      });
     },
     async hasImplementation(grant) {
       return !!(await prisma.runs.count({

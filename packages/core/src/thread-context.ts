@@ -21,6 +21,7 @@ export async function pinThread(
   taskId: string,
   threadId: string,
   version?: number,
+  includeHistory = true,
 ) {
   const thread = await db.conversationThread.findFirst({
     where: { id: threadId, projectId, taskId, archivedAt: null },
@@ -38,12 +39,14 @@ export async function pinThread(
       409,
       'Choose a model available to the task owner’s Codex account.',
     );
-  const messages = await db.comments.findMany({
-    where: { threadId },
-    orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-    take: 41,
-    include: { users: { select: { kind: true } } },
-  });
+  const messages = includeHistory
+    ? await db.comments.findMany({
+        where: { threadId },
+        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+        take: 41,
+        include: { users: { select: { kind: true } } },
+      })
+    : [];
   requireThat(
     messages.length <= 40 && messages.reduce((n, m) => n + m.body.length, 0) <= 64000,
     409,

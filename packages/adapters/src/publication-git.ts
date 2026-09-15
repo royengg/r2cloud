@@ -11,6 +11,7 @@ export async function pushPublicationBundle(
   candidate: CandidateManifest,
   token: string,
   authorize = async () => {},
+  previousHead?: string,
 ) {
   requireThat(
     !candidate.fixture &&
@@ -21,6 +22,11 @@ export async function pushPublicationBundle(
       candidate.branch !== candidate.targetRef,
     409,
     'Invalid publication artifact or branch.',
+  );
+  requireThat(
+    !previousHead || /^[a-f0-9]{40}$/.test(previousHead),
+    409,
+    'Invalid previous publication commit.',
   );
   const root = resolve('.local/artifacts');
   await mkdir(root, { recursive: true, mode: 0o700 });
@@ -77,7 +83,7 @@ export async function pushPublicationBundle(
       .trim()
       .split(/\s+/)[0];
     requireThat(
-      !existing || existing === candidate.headSha,
+      existing === candidate.headSha || existing === (previousHead ?? ''),
       409,
       'The publication branch contains different changes. It will not be overwritten.',
     );
@@ -93,13 +99,15 @@ export async function pushPublicationBundle(
     const head = (await git([...args, 'rev-parse', candidate.headSha + '^{commit}'])).trim();
     requireThat(head === candidate.headSha, 409, 'Saved change has a different commit.');
     await git([...args, 'merge-base', '--is-ancestor', candidate.baseSha, candidate.headSha]);
+    if (previousHead)
+      await git([...args, 'merge-base', '--is-ancestor', previousHead, candidate.headSha]);
     await authorize();
     try {
       await git([
         ...args,
         'push',
         '--porcelain',
-        `--force-with-lease=${ref}:`,
+        `--force-with-lease=${ref}:${previousHead ?? ''}`,
         url,
         candidate.headSha + ':' + ref,
       ]);

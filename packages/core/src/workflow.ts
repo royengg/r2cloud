@@ -242,7 +242,21 @@ async function publicationGrant(job: jobs, reconcile = false): Promise<Publicati
       });
     }
     const candidate = c.manifest as unknown as CandidateManifest;
-    const pub = await db.publications.findFirst({ where: { candidate_id: c.id } });
+    const pub = await db.publications.findFirst({
+      where: { task_id: t.id, ...(job.kind === 'merge' ? { candidate_id: c.id } : {}) },
+      orderBy: { candidates: { generation: 'desc' } },
+      include: { candidates: true },
+    });
+    if (pub) {
+      const previous = pub.candidates.manifest as unknown as CandidateManifest;
+      requireThat(
+        previous.repository === candidate.repository &&
+          previous.branch === candidate.branch &&
+          previous.targetRef === candidate.targetRef,
+        409,
+        'The published repository or branch has changed.',
+      );
+    }
     const project = await db.projects.findUniqueOrThrow({
       where: { id: job.project_id },
       include: { repositories: true },
@@ -305,6 +319,7 @@ async function finishPublication(
     );
     requireThat(
       result.headSha === g.candidate.headSha &&
+        (!g.publication || result.prNumber === g.publication.prNumber) &&
         result.repository === g.candidate.repository &&
         result.targetRef === g.candidate.targetRef &&
         result.branch === g.candidate.branch,

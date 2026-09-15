@@ -185,7 +185,7 @@ export async function previewCheckoutConfig(
           id: task.candidate_id,
           task_id: task.id,
           project_id: projectId,
-          generation: task.generation,
+          generation: { lte: task.generation },
         },
       });
       requireThat(candidate, 409, 'The task candidate is unavailable.');

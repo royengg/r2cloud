@@ -22,3 +22,13 @@ export async function checkTaskStart(db: DB, task: tasks) {
   });
   requireThat(!dependencies, 409, 'Complete the prerequisite tasks before starting this work.');
 }
+
+export async function checkCorrectionPublication(db: DB, taskId: string) {
+  requireThat(
+    !(await db.jobs.count({
+      where: { task_id: taskId, kind: { in: ['publish', 'merge'] }, state: { not: 'done' } },
+    })),
+    409,
+    'Resolve pending publication or merge before making corrections.',
+  );
+}

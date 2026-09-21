@@ -80,11 +80,21 @@ async function queueRun(
   });
   requireThat(p.repo_id, 409, 'Connect a repository before starting this task.');
   const repo = await db.repositories.findUniqueOrThrow({ where: { id: p.repo_id } });
+  const githubAccount = await db.authAccount.findFirst({
+    where: { providerId: 'github', user: { emailVerified: true, productUser: { id: actor.id } } },
+    select: { accountId: true },
+  });
+  requireThat(
+    connection.mode === 'fixture' || githubAccount,
+    409,
+    'Sign in with GitHub before starting work so commits can be attributed to your account.',
+  );
   const runId = id(),
     gen = t.generation + 1;
   const executionSetup =
     connection.mode === 'fixture' ? null : await pinExecutionSetup(db, p.id, minutes, budgetCents);
   const manifest = {
+    githubUserId: githubAccount?.accountId,
     thread,
     agentTurnId,
     executionSetup,

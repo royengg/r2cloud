@@ -14,9 +14,9 @@ function git(args: string[], index = false) {
       '-c',
       `safe.directory=${process.cwd()}`,
       '-c',
-      'user.name=R2Cloud Agent',
+      `user.name=${config.author.name}`,
       '-c',
-      'user.email=agent@r2cloud.invalid',
+      `user.email=${config.author.email}`,
       ...args,
     ],
     {

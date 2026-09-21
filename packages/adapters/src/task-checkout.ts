@@ -4,6 +4,7 @@ import type { RunGrant, RunResult } from '@r2cloud/contracts/adapters';
 import { executionProfile } from '@r2cloud/contracts/execution';
 import { digest } from '@r2cloud/contracts/hash';
 import { sandboxPath, installBun } from './sandbox-bun';
+import { githubCommitAuthor } from './git-author';
 import { codexNetworkPolicy } from './codex-network';
 import type { ExecutionCredentials } from './vercel-execution';
 import { createHash, randomUUID } from 'node:crypto';
@@ -22,6 +23,11 @@ export class TaskCheckout {
     return this.purpose === 'preview' ? 'r2-preview' : 'r2-agent';
   }
   readonly setup;
+  private author?: ReturnType<typeof githubCommitAuthor>;
+  private commitAuthor() {
+    if (!('runId' in this.grant)) throw new Error('Preview checkouts cannot create commits.');
+    return (this.author ??= githubCommitAuthor(this.grant.config.githubUserId));
+  }
   constructor(
     private sandbox: Sandbox,
     private grant:
@@ -58,6 +64,7 @@ export class TaskCheckout {
   }
   async prepare() {
     const g = this.grant;
+    const author = this.purpose === 'implementation' ? await this.commitAuthor() : undefined;
     if (this.purpose === 'preview') {
       const initialized = await this.sandbox.currentSession().runCommand({
         cmd: 'sh',
@@ -179,6 +186,13 @@ for root,dirs,files in os.walk('${this.path}',topdown=False,followlinks=False):
             throw new Error('Previous candidate could not be restored.');
       }
     }
+    if (author)
+      for (const [key, value] of [
+        ['user.name', author.name],
+        ['user.email', author.email],
+      ] as const)
+        if ((await this.run('git', ['config', '--local', key, value])).exitCode !== 0)
+          throw new Error('Git commit identity could not be configured.');
     const runtime = await this.sandbox.currentSession().runCommand({
       cmd: 'sh',
       args: ['-c', 'if [ -x /opt/r2cloud/bin/bun ]; then /opt/r2cloud/bin/bun --version; fi'],
@@ -238,6 +252,7 @@ for root,dirs,files in os.walk('${this.path}',topdown=False,followlinks=False):
   ): Promise<Omit<RunResult, 'stopProof'> | undefined> {
     if (this.purpose === 'preview' || !('runId' in this.grant))
       throw new Error('Preview checkouts cannot export candidates.');
+    const author = await this.commitAuthor();
     const checks: { name: string; exitCode: number }[] = [];
     let headSha: string;
     let tree: string | undefined;
@@ -249,6 +264,7 @@ for root,dirs,files in os.walk('${this.path}',topdown=False,followlinks=False):
           recoveryScript,
           '--',
           JSON.stringify({
+            author,
             runId: this.grant.runId,
             baseSha: this.grant.config.baseSha,
             previous: !!this.previous,
@@ -290,9 +306,9 @@ for root,dirs,files in os.walk('${this.path}',topdown=False,followlinks=False):
           '-c',
           'core.hooksPath=/dev/null',
           '-c',
-          'user.name=R2Cloud Agent',
+          `user.name=${author.name}`,
           '-c',
-          'user.email=agent@r2cloud.invalid',
+          `user.email=${author.email}`,
           'commit',
           '--allow-empty',
           '-m',

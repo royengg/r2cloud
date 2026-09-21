@@ -1,4 +1,5 @@
 import { codexNetworkPolicy } from './codex-network';
+import { githubCommitAuthor } from './git-author';
 import { sandboxPath, bunIntegrity, installBun } from './sandbox-bun';
 import { type Sandbox, type Session } from '@vercel/sandbox';
 import { createHash } from 'node:crypto';
@@ -57,6 +58,7 @@ export class VercelCodexExecution implements ExecutionBackend {
     return { state: observed.state === 'running' ? 'running' : 'unknown' };
   }
   async start(grant: RunGrant): Promise<RunResult> {
+    const author = await githubCommitAuthor(grant.config.githubUserId, this.http);
     const pinned = grant.config.executionSetup;
     const setup = executionProfile.parse(pinned?.config);
     if (
@@ -224,6 +226,12 @@ export class VercelCodexExecution implements ExecutionBackend {
           return { imported: true };
         },
       );
+      for (const [key, value] of [
+        ['user.name', author.name],
+        ['user.email', author.email],
+      ] as const)
+        if ((await run('git', ['config', '--local', key, value], checkout)).exitCode !== 0)
+          throw new Error('Git commit identity could not be configured.');
       if (grant.config.previousCandidate) {
         const previous = await this.control.previousArtifact(grant);
         await once('restore-candidate', previous, async () => {
@@ -377,9 +385,9 @@ export class VercelCodexExecution implements ExecutionBackend {
             '-c',
             'core.hooksPath=/dev/null',
             '-c',
-            'user.name=R2Cloud Agent',
+            `user.name=${author.name}`,
             '-c',
-            'user.email=agent@r2cloud.invalid',
+            `user.email=${author.email}`,
             'commit',
             '--allow-empty',
             '-m',

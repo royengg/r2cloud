@@ -11,6 +11,7 @@ export type RunGrant = {
   criteria: string[];
   feedback: string[];
   config: {
+    githubUserId?: string;
     thread?: {
       id: string;
       version: number;

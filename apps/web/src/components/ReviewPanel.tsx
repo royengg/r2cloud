@@ -32,6 +32,7 @@ export function ReviewPanel({
   const [commit, setCommit] = useState('');
   const [tab, setTab] = useState('changes');
   const [expanded, setExpanded] = useState(false);
+  const [wrapLines, setWrapLines] = useState(true);
   const [selection, setSelection] = useState<{ line: number; side: string; text: string } | null>(
     null,
   );
@@ -108,7 +109,7 @@ export function ReviewPanel({
       {snapshots.length > 0 && (
         <div className="review-summary">
           <Select
-            label="Saved change"
+            label="Revision"
             value={snapshot!.id}
             options={snapshots.map((value) => ({
               value: value.id,
@@ -116,14 +117,27 @@ export function ReviewPanel({
             }))}
             onChange={chooseSnapshot}
           />
-          <p>
-            <span>{snapshot!.branch}</span>
-            <Icon name="right" size={14} />
-            <span>{snapshot!.targetRef}</span>
-          </p>
-          <small>
-            Saved {new Date(snapshot!.createdAt).toLocaleString()} · {snapshot!.headSha.slice(0, 7)}
-          </small>
+          <div className="review-revision-meta">
+            <p className="review-branches">
+              <Icon name="branch" size={14} />
+              <span title={snapshot!.branch}>{snapshot!.branch}</span>
+              <Icon name="right" size={12} />
+              <span title={snapshot!.targetRef}>{snapshot!.targetRef}</span>
+            </p>
+            <div className="review-saved">
+              <code title={snapshot!.headSha}>{snapshot!.headSha.slice(0, 7)}</code>
+              <time
+                dateTime={snapshot!.createdAt}
+                title={new Date(snapshot!.createdAt).toLocaleString()}
+              >
+                {new Date(snapshot!.createdAt).toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
+              </time>
+            </div>
+          </div>
         </div>
       )}
       {failure && (
@@ -148,10 +162,7 @@ export function ReviewPanel({
         <div className="review-empty">
           <Icon name="branch" size={28} />
           <strong>No saved changes yet</strong>
-          <p>
-            Changes appear here after the agent saves a task revision. Opening this view does not
-            start an agent.
-          </p>
+          <p>Saved task revisions will appear here for review.</p>
         </div>
       ) : snapshot.fixture ? (
         <p className="review-notice">
@@ -173,89 +184,110 @@ export function ReviewPanel({
                   ← All changes · viewing {commit.slice(0, 7)}
                 </Button>
               )}
-              {index.isPending ? (
-                <p className="review-notice" role="status">
-                  Preparing saved diff…
-                </p>
-              ) : (
-                <div className="review-files" aria-label="Changed files">
-                  {index.data?.files.map((value) => (
-                    <button
-                      key={value.path}
-                      title={value.path}
-                      aria-pressed={selectedFile?.path === value.path}
-                      onClick={() => {
-                        setFile(value.path);
-                        setSelection(null);
-                      }}
-                    >
-                      <span>{value.path}</span>
-                      <span className="review-counts">
-                        <span className="review-added">
-                          {value.added === null ? 'Binary' : `+${value.added}`}
-                        </span>
-                        <span className="review-removed">
-                          {value.removed === null ? '' : `−${value.removed}`}
-                        </span>
-                      </span>
-                    </button>
-                  ))}
-                  {index.data?.files.length === 0 && (
-                    <p className="review-notice">No file changes in this revision.</p>
-                  )}
-                </div>
-              )}
-              {selectedFile && (
-                <div className="review-diff" key={`${snapshot.id}:${commit}:${selectedFile.path}`}>
-                  <div className="review-file-heading">
-                    <strong title={selectedFile.path}>{selectedFile.path}</strong>
-                    <small>Unified diff</small>
-                  </div>
-                  {diff.isPending ? (
-                    <p className="review-notice" role="status">
-                      Loading file…
-                    </p>
-                  ) : diff.data?.unavailable ? (
-                    <p className="review-notice">{diff.data.unavailable}</p>
-                  ) : (
-                    <div
-                      className="review-code"
-                      tabIndex={0}
-                      aria-label={`Diff for ${selectedFile.path}`}
-                    >
-                      {lines.map((line, i) => (
-                        <div className={`review-line review-line-${line.kind}`} key={i}>
-                          <button
-                            className="review-line-number"
-                            disabled={!onFeedback || line.kind === 'hunk'}
-                            title="Select line for feedback"
-                            aria-label={`Select ${line.next === undefined ? 'old' : 'new'} line ${line.next ?? line.old ?? ''}`}
-                            onClick={() =>
-                              setSelection({
-                                line: line.next ?? line.old!,
-                                side: line.next === undefined ? 'old' : 'new',
-                                text: line.text,
-                              })
-                            }
-                          >
-                            {line.old ?? ''}
-                            <span>{line.next ?? ''}</span>
-                          </button>
-                          <code>
-                            <span aria-hidden="true">
-                              {line.kind === 'added' ? '+' : line.kind === 'removed' ? '−' : ' '}
-                            </span>
-                            {line.text || ' '}
-                          </code>
-                        </div>
-                      ))}
-                      {!lines.length && !diff.error && (
-                        <p className="review-notice">Only file metadata changed.</p>
-                      )}
+              <div className="review-changes">
+                {index.isPending ? (
+                  <p className="review-notice" role="status">
+                    Preparing saved diff…
+                  </p>
+                ) : (
+                  <div className="review-files" aria-label="Changed files">
+                    <div className="review-files-heading">
+                      <strong>Files changed</strong>
+                      <span>{index.data?.files.length ?? 0}</span>
                     </div>
-                  )}
-                </div>
-              )}
+                    {index.data?.files.map((value) => (
+                      <button
+                        key={value.path}
+                        title={value.path}
+                        aria-pressed={selectedFile?.path === value.path}
+                        onClick={() => {
+                          setFile(value.path);
+                          setSelection(null);
+                        }}
+                      >
+                        <span className="review-file-name">
+                          <span>{value.path.split('/').pop()}</span>
+                          {value.path.includes('/') && (
+                            <small>{value.path.slice(0, value.path.lastIndexOf('/'))}</small>
+                          )}
+                        </span>
+                        <span className="review-counts">
+                          <span className="review-added">
+                            {value.added === null ? 'Binary' : `+${value.added}`}
+                          </span>
+                          <span className="review-removed">
+                            {value.removed === null ? '' : `−${value.removed}`}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                    {index.data?.files.length === 0 && (
+                      <p className="review-notice">No file changes in this revision.</p>
+                    )}
+                  </div>
+                )}
+                {selectedFile && (
+                  <div
+                    className="review-diff"
+                    key={`${snapshot.id}:${commit}:${selectedFile.path}`}
+                  >
+                    <div className="review-file-heading">
+                      <strong title={selectedFile.path}>{selectedFile.path}</strong>
+                      <button
+                        className="review-wrap"
+                        aria-pressed={wrapLines}
+                        onClick={() => setWrapLines(!wrapLines)}
+                      >
+                        Wrap lines
+                      </button>
+                    </div>
+                    {diff.isPending ? (
+                      <p className="review-notice" role="status">
+                        Loading file…
+                      </p>
+                    ) : diff.data?.unavailable ? (
+                      <p className="review-notice">{diff.data.unavailable}</p>
+                    ) : (
+                      <div
+                        className="review-code"
+                        data-wrap={wrapLines}
+                        tabIndex={0}
+                        aria-label={`Diff for ${selectedFile.path}`}
+                      >
+                        {lines.map((line, i) => (
+                          <div className={`review-line review-line-${line.kind}`} key={i}>
+                            <button
+                              className="review-line-number"
+                              disabled={!onFeedback || line.kind === 'hunk'}
+                              title="Select line for feedback"
+                              aria-label={`Select ${line.next === undefined ? 'old' : 'new'} line ${line.next ?? line.old ?? ''}`}
+                              onClick={() =>
+                                setSelection({
+                                  line: line.next ?? line.old!,
+                                  side: line.next === undefined ? 'old' : 'new',
+                                  text: line.text,
+                                })
+                              }
+                            >
+                              {line.old ?? ''}
+                              <span>{line.next ?? ''}</span>
+                            </button>
+                            <code>
+                              <span aria-hidden="true">
+                                {line.kind === 'added' ? '+' : line.kind === 'removed' ? '−' : ' '}
+                              </span>
+                              {line.text || ' '}
+                            </code>
+                          </div>
+                        ))}
+                        {!lines.length && !diff.error && (
+                          <p className="review-notice">Only file metadata changed.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               {selection && onFeedback && (
                 <div className="review-feedback">
                   <span>
@@ -279,8 +311,7 @@ export function ReviewPanel({
           {tab === 'commits' && (
             <div className="review-history">
               <p className="review-notice">
-                Commits in this saved change, relative to {snapshot.baseSha.slice(0, 7)}. Recovery
-                checkpoints are hidden.
+                Commits since <code>{snapshot.baseSha.slice(0, 7)}</code>
               </p>
               {index.isPending && <p role="status">Loading commits…</p>}
               {index.data?.commits.map((value) => (
@@ -319,7 +350,7 @@ export function ReviewPanel({
               <p>
                 {snapshot.publication
                   ? `${snapshot.publication.merged ? 'Merge recorded' : 'Published'} for this saved change.`
-                  : 'This saved change has not been published to GitHub. Live pull request creation is not available yet.'}
+                  : 'Publish this revision from its task to open a pull request on GitHub.'}
               </p>
               {snapshot.publication?.url && (
                 <a

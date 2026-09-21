@@ -188,6 +188,10 @@ export function App() {
           onNewProject={() => setNewProject(true)}
           onClose={() => setSidebarOpen(false)}
           onConnections={() => setConnections(true)}
+          onRepositoryReview={() => {
+            setRepositoryReview(true);
+            if (mobile) setSidebarOpen(false);
+          }}
           onSignOut={() => void w.signOut()}
           mobile={mobile}
         />
@@ -215,11 +219,6 @@ export function App() {
               {w.snapshot?.participants.slice(0, 4).map((person, i) => (
                 <Avatar key={person.id} name={person.name} tone={i} />
               ))}
-              <IconButton
-                name="branch"
-                label="Repository changes and pull requests"
-                onClick={() => setRepositoryReview(true)}
-              />
               <button
                 className="participant-plus"
                 aria-label="View project participants"

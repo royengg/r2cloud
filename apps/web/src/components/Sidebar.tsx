@@ -15,6 +15,7 @@ export function Sidebar({
   onProject,
   onClose,
   onConnections,
+  onRepositoryReview,
   onNewProject,
   onSignOut,
   mobile,
@@ -28,6 +29,7 @@ export function Sidebar({
   onProject: (id: string) => void;
   onClose: () => void;
   onConnections: () => void;
+  onRepositoryReview: () => void;
   onNewProject: () => void;
   onSignOut: () => void;
   mobile: boolean;
@@ -130,6 +132,14 @@ export function Sidebar({
                     id={`project-threads-${p.id}`}
                     hidden={!!collapsed[p.id]}
                   >
+                    <button
+                      className="sidebar-thread"
+                      title="Repository changes and pull requests"
+                      onClick={onRepositoryReview}
+                    >
+                      <Icon name="branch" size={15} />
+                      <span className="sidebar-thread-title">Changes</span>
+                    </button>
                     {threadQuery.isPending ? (
                       <p className="sidebar-thread-hint" role="status">
                         Loading workspaces…

@@ -3,6 +3,16 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { readFile, mkdir, mkdtemp, writeFile, readdir, readlink, rm } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { Uncertain } from '@r2cloud/contracts/adapters';
+export function codexCredentialIdentity(auth: Buffer) {
+  const tokens = JSON.parse(auth.toString()).tokens;
+  if (typeof tokens?.access_token !== 'string' || typeof tokens.account_id !== 'string')
+    throw new Error('Reconnect your Codex account.');
+  const payload = JSON.parse(
+    Buffer.from(tokens.access_token.split('.')[1] ?? '', 'base64url').toString(),
+  );
+  if (!Number.isFinite(payload.exp)) throw new Error('Codex credential expiration is unavailable.');
+  return { accountId: tokens.account_id as string, expiresAt: payload.exp * 1000 };
+}
 export interface CodexLoginSession {
   start(): Promise<{ loginId: string; userCode: string }>;
   completed(loginId: string): boolean;
@@ -97,7 +107,13 @@ export class CodexLoginProcess implements CodexLoginSession {
       throw error;
     }
   }
-  static async catalogue(binary: string, root: string, auth: Buffer) {
+  static async catalogue(
+    binary: string,
+    root: string,
+    auth: Buffer,
+    save: (credentials: { auth: Buffer; plan: string }) => Promise<void>,
+  ) {
+    const identity = codexCredentialIdentity(auth);
     const session = await CodexLoginProcess.create(binary, root);
     try {
       await writeFile(join(session.home, 'auth.json'), auth, { mode: 0o600, flag: 'wx' });
@@ -105,6 +121,17 @@ export class CodexLoginProcess implements CodexLoginSession {
         clientInfo: { name: 'r2cloud-models', version: '0.1.0' },
       });
       session.process.stdin.write(JSON.stringify({ method: 'initialized', params: {} }) + '\n');
+      const credentials = await session.credentials(identity.expiresAt < Date.now() + 15 * 60000);
+      try {
+        const refreshed = codexCredentialIdentity(credentials.auth);
+        if (refreshed.accountId !== identity.accountId)
+          throw new Error('Codex account identity changed. Reconnect your account.');
+        if (refreshed.expiresAt < Date.now() + 15 * 60000)
+          throw new Error('Codex could not renew this login. Reconnect your account.');
+        await save(credentials);
+      } finally {
+        credentials.auth.fill(0);
+      }
       const models: CodexModel[] = [];
       let cursor: string | null = null;
       for (let page = 0; page < 5; page++) {
@@ -199,10 +226,10 @@ export class CodexLoginProcess implements CodexLoginSession {
     if (this.completion.success !== true) throw new Error('Codex sign-in was not completed.');
     return true;
   }
-  async credentials() {
+  async credentials(refreshToken = false) {
     const result = await this.request<{ account: { type: string; planType: string } }>(
       'account/read',
-      { refreshToken: false },
+      { refreshToken },
     );
     if (result?.account?.type !== 'chatgpt' || typeof result.account.planType !== 'string')
       throw new Error('Connect a ChatGPT account. API keys are not enabled.');

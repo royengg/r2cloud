@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { setTimeout as pause } from 'node:timers/promises';
 import { prisma } from '@r2cloud/database';
-import { connectCodexOne, refreshCodexModels } from '@r2cloud/core/codex-broker';
+import { connectCodexOne, refreshCodexConnection } from '@r2cloud/core/codex-broker';
 import { CodexLoginProcess, cleanStoppedLoginHomes } from '@r2cloud/adapters/codex-login';
 import { CredentialVault } from '@r2cloud/adapters/credential-vault';
 const binary = process.env.R2_CODEX_BINARY ?? '';
@@ -28,7 +28,7 @@ const stop = new AbortController();
 process.on('SIGINT', () => stop.abort());
 process.on('SIGTERM', () => stop.abort());
 console.log('Personal Codex login broker ready');
-let nextModels = 0;
+let nextRefresh = 0;
 try {
   while (!stop.signal.aborted) {
     try {
@@ -37,12 +37,12 @@ try {
         vault,
         stop.signal,
       );
-      if (!worked && Date.now() >= nextModels) {
-        nextModels = Date.now() + 60000;
-        await refreshCodexModels(
-          (auth) => CodexLoginProcess.catalogue(binary, join(root, 'sessions'), auth),
+      if (!worked && Date.now() >= nextRefresh) {
+        const refreshed = await refreshCodexConnection(
+          (auth, save) => CodexLoginProcess.catalogue(binary, join(root, 'sessions'), auth, save),
           vault,
         );
+        nextRefresh = refreshed ? 0 : Date.now() + 10000;
       }
       if (!worked) await pause(1000, undefined, { signal: stop.signal });
     } catch {

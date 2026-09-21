@@ -5,6 +5,7 @@ import { access, event, lockProject } from './project-context';
 import { id } from '@r2cloud/contracts/hash';
 import { requireThat } from '@r2cloud/contracts/domain';
 import type { CodexLoginSession } from '@r2cloud/adapters/codex-login';
+import { codexCredentialIdentity } from '@r2cloud/adapters/codex-login';
 import type { CredentialVault } from '@r2cloud/adapters/credential-vault';
 import { setTimeout as pause } from 'node:timers/promises';
 export async function connectCodexOne(
@@ -135,27 +136,92 @@ export async function connectCodexOne(
   return true;
 }
 
-export async function refreshCodexModels(
-  read: (auth: Buffer) => Promise<unknown>,
-  vault: Pick<CredentialVault, 'read'>,
+export async function refreshCodexConnection(
+  read: (
+    auth: Buffer,
+    save: (credentials: { auth: Buffer; plan: string }) => Promise<void>,
+  ) => Promise<unknown>,
+  vault: Pick<CredentialVault, 'read' | 'put'>,
 ) {
+  const available = { OR: [{ leaseUntil: null }, { leaseUntil: { lte: new Date() } }] };
   const connection = await prisma.codexConnection.findFirst({
     where: {
       state: 'connected',
-      OR: [{ modelsUpdatedAt: null }, { modelsUpdatedAt: { lt: new Date(Date.now() - 3600000) } }],
+      AND: [available],
+      OR: [
+        { expiresAt: { lt: new Date(Date.now() + 15 * 60000) } },
+        { modelsUpdatedAt: null },
+        { modelsUpdatedAt: { lt: new Date(Date.now() - 3600000) } },
+      ],
     },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { expiresAt: 'asc' },
   });
-  if (!connection) return;
-  await access(prisma, { id: connection.userId }, connection.projectId, 'contribute');
-  const auth = await vault.read(connection.id);
+  if (!connection) return false;
+  const leaseToken = id();
+  const claimed = await prisma.codexConnection.updateMany({
+    where: {
+      id: connection.id,
+      state: 'connected',
+      modelsUpdatedAt: connection.modelsUpdatedAt,
+      ...available,
+    },
+    data: { leaseToken, leaseUntil: new Date(Date.now() + 5 * 60000) },
+  });
+  if (!claimed.count) return true;
+  const current = {
+    id: connection.id,
+    state: 'connected',
+    leaseToken,
+    leaseUntil: { gt: new Date() },
+  };
+  let auth: Buffer | undefined;
   try {
-    const models = codexModels.parse(await read(auth));
+    await access(prisma, { id: connection.userId }, connection.projectId, 'contribute');
+    auth = await vault.read(connection.id);
+    const identity = codexCredentialIdentity(auth);
+    const models = codexModels.parse(
+      await read(auth, async (credentials) => {
+        const refreshed = codexCredentialIdentity(credentials.auth);
+        requireThat(
+          refreshed.accountId === identity.accountId,
+          409,
+          'Codex account identity changed.',
+        );
+        await prisma.$transaction(async (db) => {
+          await lockProject(db, connection.projectId);
+          await access(db, { id: connection.userId }, connection.projectId, 'contribute');
+          requireThat(
+            await db.codexConnection.count({
+              where: { ...current, leaseUntil: { gt: new Date() } },
+            }),
+            409,
+            'Codex connection changed during refresh.',
+          );
+          await vault.put(connection.id, credentials.auth);
+          await db.codexConnection.update({
+            where: { id: connection.id },
+            data: { expiresAt: new Date(refreshed.expiresAt), plan: credentials.plan, error: null },
+          });
+        });
+      }),
+    );
     await prisma.codexConnection.updateMany({
-      where: { id: connection.id, state: 'connected' },
-      data: { models: json(models), modelsUpdatedAt: new Date() },
+      where: { ...current, leaseUntil: { gt: new Date() } },
+      data: {
+        models: json(models),
+        modelsUpdatedAt: new Date(),
+        leaseUntil: null,
+        leaseToken: null,
+      },
     });
+  } catch (error) {
+    await prisma.codexConnection.updateMany({
+      where: { ...current, leaseUntil: { gt: new Date() } },
+      data: { leaseUntil: new Date(Date.now() + 60000) },
+    });
+    throw error;
   } finally {
-    auth.fill(0);
+    auth?.fill(0);
   }
+  return true;
 }

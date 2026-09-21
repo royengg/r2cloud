@@ -44,7 +44,18 @@ export function ThreadPanel({
   const [reviewOpen, setReviewOpen] = useState(false);
   const [localWorkspaceId, setLocalWorkspaceId] = useState<string>();
   const [localSelected, setLocalSelected] = useState<string | null>(null);
+  const [closedThreads, setClosedThreads] = useState<Set<string>>(() => new Set());
+  const tabs = useRef<HTMLElement>(null);
   const selected = selectedThreadId === undefined ? localSelected : selectedThreadId;
+  useLayoutEffect(() => {
+    if (!selected) return;
+    setClosedThreads((current) => {
+      if (!current.has(selected)) return current;
+      const next = new Set(current);
+      next.delete(selected);
+      return next;
+    });
+  }, [selected]);
   function setSelected(id: string | null) {
     setLocalSelected(id);
     setLocalWorkspaceId(activeWorkspaceId);
@@ -104,8 +115,26 @@ export function ThreadPanel({
     localWorkspaceId ??
     `default:${project.id}:${userId}`;
   const threads = (listQuery.data?.threads ?? []).filter(
-    (thread) => (!taskId || thread.taskId === taskId) && thread.workspaceId === activeWorkspaceId,
+    (thread) =>
+      (!taskId || thread.taskId === taskId) &&
+      thread.workspaceId === activeWorkspaceId &&
+      (!closedThreads.has(thread.id) || thread.id === selected),
   );
+  function closeThread(id: string) {
+    const index = threads.findIndex((thread) => thread.id === id);
+    setClosedThreads((current) => new Set(current).add(id));
+    if (selected === id) {
+      setSelected(threads[index + 1]?.id ?? threads[index - 1]?.id ?? null);
+      setText('');
+      setError('');
+    }
+    requestAnimationFrame(() => {
+      const next =
+        tabs.current?.querySelector<HTMLButtonElement>('[aria-current]') ??
+        tabs.current?.querySelector<HTMLButtonElement>('.thread-tab-select');
+      (next ?? input.current)?.focus();
+    });
+  }
   const models = listQuery.data?.models ?? [];
   const loaded = !!listQuery.data;
   const detail = selected ? detailQuery.data : null;
@@ -264,26 +293,38 @@ export function ThreadPanel({
       <div className="thread-content">
         <div className="project-thread-toolbar">
           {onBack && <IconButton name="board" label="Project board" onClick={onBack} />}
-          <nav className="thread-tabs" aria-label="Conversation threads">
+          <nav ref={tabs} className="thread-tabs" aria-label="Conversation threads">
             {threads.map((thread) => {
               const active = !!thread.turns?.length;
               return (
-                <button
-                  key={thread.id}
-                  type="button"
-                  title={thread.title}
-                  aria-label={`${thread.title}${active ? ' — Agent running' : ''}`}
-                  aria-current={selected === thread.id ? 'page' : undefined}
-                  disabled={busy}
-                  onClick={() => {
-                    setSelected(thread.id);
-                    setText('');
-                    setError('');
-                  }}
-                >
-                  <Icon name={active ? 'loading' : 'message'} size={16} />
-                  <span>{thread.title}</span>
-                </button>
+                <div className="thread-tab" key={thread.id}>
+                  <button
+                    className="thread-tab-select"
+                    type="button"
+                    title={thread.title}
+                    aria-label={`${thread.title}${active ? ' — Agent running' : ''}`}
+                    aria-current={selected === thread.id ? 'page' : undefined}
+                    disabled={busy}
+                    onClick={() => {
+                      setSelected(thread.id);
+                      setText('');
+                      setError('');
+                    }}
+                  >
+                    <Icon name={active ? 'loading' : 'message'} size={16} />
+                    <span>{thread.title}</span>
+                  </button>
+                  <button
+                    className="thread-tab-close"
+                    type="button"
+                    aria-label={`Close ${thread.title}`}
+                    title="Close tab"
+                    disabled={busy}
+                    onClick={() => closeThread(thread.id)}
+                  >
+                    <Icon name="close" size={14} />
+                  </button>
+                </div>
               );
             })}
             {!selected && <span className="thread-tab-draft">New conversation</span>}

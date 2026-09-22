@@ -4,6 +4,7 @@ import { security } from './middleware/security';
 import { handleError } from './middleware/error';
 import { publicRoutes } from './routes/public';
 import { protectedRoutes } from './routes';
+
 export function createApp(options: AppOptions) {
   const app = express();
   app.set('json replacer', (_key: string, value: unknown) =>

@@ -15,6 +15,7 @@ export interface ProductIdentity {
   authenticate(headers: IncomingHttpHeaders): Promise<Actor>;
   signOut(req: Request, res: ExpressResponse): Promise<void>;
 }
+
 export function createIdentity(config: {
   baseURL: string;
   secret: string;

@@ -8,6 +8,7 @@ export type ProviderEvent = {
   seq: number;
   message: { method?: string; id?: string | number; params?: Record<string, any> };
 };
+
 export async function recordAgentEvents(grant: AgentGrant, events: ProviderEvent[]) {
   await prisma.$transaction(async (db) => {
     const project = await lockProject(db, grant.projectId);

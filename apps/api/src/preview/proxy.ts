@@ -7,6 +7,7 @@ import {
 import type { Duplex } from 'node:stream';
 
 export const previewCookie = '__Host-r2-preview';
+
 const hopHeaders = new Set([
   'connection',
   'keep-alive',
@@ -17,6 +18,7 @@ const hopHeaders = new Set([
   'transfer-encoding',
   'upgrade',
 ]);
+
 function cleanHeaders(headers: IncomingMessage['headers']) {
   const excluded = new Set([
     ...hopHeaders,
@@ -35,6 +37,7 @@ function cleanHeaders(headers: IncomingMessage['headers']) {
     ),
   );
 }
+
 function responseHeaders(headers: IncomingMessage['headers'], origin: string, port: number) {
   const cleaned: OutgoingHttpHeaders = cleanHeaders(headers);
   delete cleaned['content-security-policy-report-only'];
@@ -71,6 +74,7 @@ function responseHeaders(headers: IncomingMessage['headers'], origin: string, po
   }
   return cleaned;
 }
+
 export function proxyPreview(
   req: IncomingMessage,
   target: ServerResponse | Duplex,

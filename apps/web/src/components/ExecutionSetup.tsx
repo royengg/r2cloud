@@ -3,6 +3,7 @@ import { executionProfile, type ExecutionProfile } from '@r2cloud/contracts/exec
 import { api } from '../lib/api';
 import { queryClient, readQuery } from '../lib/queries';
 import { Button } from './ui';
+
 const template: ExecutionProfile = {
   directory: '.',
   install: { cmd: 'bun', args: ['install', '--frozen-lockfile'] },
@@ -14,7 +15,9 @@ const template: ExecutionProfile = {
   maxBudgetCents: 0,
   vcpus: 2,
 };
+
 type Setup = { profile: { version: number; config: ExecutionProfile; source?: string } | null };
+
 export function ExecutionSetup({ projectId, manage }: { projectId: string; manage: boolean }) {
   const [profile, setProfile] = useState<ExecutionProfile>(template);
   const [version, setVersion] = useState(0);

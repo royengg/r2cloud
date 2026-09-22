@@ -13,6 +13,7 @@ export function previewOrigin(domain: string, id: string) {
   );
   return `https://${id}.${domain}`;
 }
+
 export type LivePreviewStatus = {
   preview: { id: string; state: string; error: string | null; expiresAt: string } | null;
 };

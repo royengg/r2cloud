@@ -1,4 +1,5 @@
 import { z } from 'zod';
+
 export const codexModel = z.object({
   model: z.string().min(1).max(120),
   displayName: z.string().min(1).max(160),
@@ -14,13 +15,17 @@ export const codexModel = z.object({
     .max(20)
     .optional(),
 });
+
 export const codexModels = z.array(codexModel).max(100);
+
 export type CodexModel = z.infer<typeof codexModel>;
+
 export const threadSettings = z.object({
   title: z.string().trim().min(1).max(160),
   model: z.string().min(1).max(120).nullable().default(null),
   instructions: z.string().trim().max(8000).default(''),
 });
+
 export const threadCommand = z.discriminatedUnion('action', [
   threadSettings
     .extend({

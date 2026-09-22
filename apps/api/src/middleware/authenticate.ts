@@ -1,6 +1,7 @@
 import type { RequestHandler } from 'express';
 import type { AppOptions } from '../config/options';
 import { requestActor } from '../auth/session';
+
 export function authenticateRequest(options: AppOptions): RequestHandler {
   return async (req, res, next) => {
     try {

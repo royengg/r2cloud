@@ -1,6 +1,7 @@
 import type { DB } from '@r2cloud/database';
 import type { RunGrant } from '@r2cloud/contracts/adapters';
 import { requireThat } from '@r2cloud/contracts/domain';
+
 export async function recordAgentMessage(db: DB, grant: RunGrant, body: string) {
   const bot = await db.users.upsert({
     where: { id: `codex-agent:${grant.projectId}` },

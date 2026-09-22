@@ -3,7 +3,9 @@ import { lockRow } from '@r2cloud/database/locking';
 import { access, event, lockProject } from './project-context';
 import { digest, id } from '@r2cloud/contracts/hash';
 import { requireThat, type Actor } from '@r2cloud/contracts/domain';
+
 const active = ['queued', 'starting', 'awaiting', 'connected'];
+
 export async function codexConnection(actor: Actor, projectId: string, available: boolean) {
   const project = await access(prisma, actor, projectId);
   const row = await prisma.codexConnection.findFirst({
@@ -25,6 +27,7 @@ export async function codexConnection(actor: Actor, projectId: string, available
     },
   };
 }
+
 export async function beginCodexConnection(
   actor: Actor,
   projectId: string,
@@ -81,6 +84,7 @@ export async function beginCodexConnection(
     return result;
   });
 }
+
 export async function disconnectCodex(actor: Actor, projectId: string, connectionId: string) {
   return prisma.$transaction(async (db) => {
     await lockProject(db, projectId);

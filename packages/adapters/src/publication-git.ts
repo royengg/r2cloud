@@ -7,6 +7,7 @@ import { Fault, requireThat, type CandidateManifest } from '@r2cloud/contracts/d
 import { SetupRequired, Uncertain } from '@r2cloud/contracts/adapters';
 
 const exec = promisify(execFile);
+
 export async function pushPublicationBundle(
   candidate: CandidateManifest,
   token: string,

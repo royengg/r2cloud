@@ -1,5 +1,6 @@
 import type { NetworkPolicy, NetworkPolicyRule } from '@vercel/sandbox';
 import type { ExecutionCredentials } from './vercel-execution';
+
 export function codexNetworkPolicy(
   repository: string,
   account?: ExecutionCredentials,

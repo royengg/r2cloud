@@ -40,6 +40,7 @@ export async function reserveAgentRuntime(db: DB, grant: AgentGrant, owner: stri
     },
   });
 }
+
 export async function refreshAgentRuntimeLease(grant: AgentGrant, owner: string) {
   if (!grant.runtimeId) return;
   const runtime = await prisma.agentRuntime.findFirst({
@@ -64,10 +65,12 @@ export async function refreshAgentRuntimeLease(grant: AgentGrant, owner: string)
     data: { heartbeatAt: new Date() },
   });
 }
+
 export async function authorizeAgentRuntime(grant: AgentGrant, owner: string) {
   await access(prisma, { id: grant.actorId }, grant.projectId, 'contribute');
   await refreshAgentRuntimeLease(grant, owner);
 }
+
 export async function maintainAgentRuntimes(
   backend: AgentSession,
   control: SessionControl,

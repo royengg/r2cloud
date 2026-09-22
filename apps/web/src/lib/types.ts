@@ -1,5 +1,7 @@
 import type { CandidateManifest, Evidence } from '@r2cloud/contracts/domain';
+
 export type Person = { id: string; name: string; review?: boolean };
+
 export type Project = {
   repo_id?: string | null;
   provider_connected?: boolean;
@@ -12,6 +14,7 @@ export type Project = {
   review?: boolean;
   merge?: boolean;
 };
+
 export type Task = {
   assignee_id: string | null;
   assignee_name: string | null;
@@ -43,6 +46,7 @@ export type Task = {
   publication: { pr_number: number; url: string } | null;
   completed_at: string | null;
 };
+
 export type Comment = {
   threadId?: string | null;
   id: string;
@@ -51,6 +55,7 @@ export type Comment = {
   name: string;
   created_at: string;
 };
+
 export type Activity = {
   id: string;
   task_id: string | null;
@@ -58,6 +63,7 @@ export type Activity = {
   created_at: string;
   detail: { message?: string };
 };
+
 export type Snapshot = {
   project: Project;
   tasks: Task[];
@@ -65,6 +71,7 @@ export type Snapshot = {
   events: Activity[];
   cursor: string;
 };
+
 export type Invitation = {
   id: string;
   project_name: string;
@@ -75,6 +82,7 @@ export type Invitation = {
   merge: boolean;
   expires_at: string;
 };
+
 export type Identity = {
   invitations?: Invitation[];
   authMode?: string;
@@ -82,6 +90,7 @@ export type Identity = {
   projects: Project[];
   mode: string;
 };
+
 export const statuses: Record<string, string> = {
   todo: 'Todo',
   building: 'In progress',
@@ -93,6 +102,7 @@ export const statuses: Record<string, string> = {
   blocked: 'Blocked',
   cancelled: 'Cancelled',
 };
+
 export const columnFor = (task: Task) => task.board_status;
 
 export type ConversationWorkspace = {

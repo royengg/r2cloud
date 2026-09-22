@@ -148,6 +148,7 @@ export async function claimAgentTask(
     };
   });
 }
+
 export async function finishAgentImplementation(
   grant: AgentGrant,
   proof: string,

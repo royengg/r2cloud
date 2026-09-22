@@ -4,6 +4,7 @@ import { queryClient, readQuery } from '../lib/queries';
 import { api } from '../lib/api';
 import { CodexLogo } from './CodexLogo';
 import { Button } from './ui';
+
 type Connection = {
   id: string;
   state: string;
@@ -13,7 +14,9 @@ type Connection = {
   plan: string | null;
   error: string | null;
 };
+
 type State = { available: boolean; connection: Connection | null };
+
 export function CodexConnection({ projectId }: { projectId: string }) {
   const query = useQuery({
     ...readQuery<State>(`/projects/${projectId}/codex`),

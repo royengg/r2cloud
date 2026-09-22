@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { Avatar, Button, IconButton, Modal } from './ui';
+
 type Permissions = { contribute: boolean; review: boolean; merge: boolean };
+
 type Member = Permissions & { id: string; name: string; version: number };
+
 type Invite = Permissions & { id: string; email: string; expires_at: string };
+
 function PermissionFields({
   value,
   onChange,
@@ -35,6 +39,7 @@ function PermissionFields({
     </fieldset>
   );
 }
+
 function MemberRow({
   member,
   busy,
@@ -111,6 +116,7 @@ function MemberRow({
     </article>
   );
 }
+
 export function TeamPanel({ projectId, close }: { projectId: string; close: () => void }) {
   const [data, setData] = useState<{ members: Member[]; invitations: Invite[] } | null>(null),
     [error, setError] = useState(''),

@@ -4,6 +4,7 @@ import { queryClient, readQuery, clearProjectQueries } from './queries';
 import { projectRealtime } from './realtime';
 import { api, ApiError } from './api';
 import type { Identity, Snapshot, Task } from './types';
+
 export function useWorkspace() {
   const [identity, setIdentity] = useState<Identity | null>(null),
     [projectId, setProjectId] = useState(''),

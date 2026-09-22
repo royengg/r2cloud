@@ -3,7 +3,9 @@ import { Duplex } from 'node:stream';
 import type { Session } from '@vercel/sandbox';
 
 const relay = readFileSync(new URL('./preview-relay.ts', import.meta.url), 'utf8');
+
 type Frame = { id: number; type: string; data?: string };
+
 type Channel = { stream: Duplex; written?: (error?: Error | null) => void };
 
 export class PreviewTunnel {
@@ -12,6 +14,7 @@ export class PreviewTunnel {
   private channels = new Map<number, Channel>();
   private sequence = 0;
   private closed = false;
+
   constructor(
     private session: Pick<Session, 'openInteractive'>,
     private port: number,
@@ -19,12 +22,14 @@ export class PreviewTunnel {
     if (!Number.isInteger(port) || port < 1024 || port > 65535)
       throw new Error('Invalid preview port.');
   }
+
   private send(frame: Frame) {
     const socket = this.socket;
     if (!socket || socket.readyState !== WebSocket.OPEN || socket.bufferedAmount > 8 * 1024 * 1024)
       throw new Error('Preview connection is unavailable.');
     socket.send(new TextEncoder().encode(JSON.stringify(frame) + '\n'));
   }
+
   private receive(frame: Frame) {
     const channel = this.channels.get(frame.id);
     if (!channel) return;
@@ -44,12 +49,14 @@ export class PreviewTunnel {
     else if (frame.type === 'close') channel.stream.destroy();
     else throw new Error('Invalid preview frame.');
   }
+
   private async connect() {
     if (this.closed) throw new Error('Preview tunnel is closed.');
     if (this.connecting) return this.connecting;
     this.connecting = this.start();
     return this.connecting;
   }
+
   private async start() {
     try {
       const { url, token } = await this.session.openInteractive({
@@ -114,6 +121,7 @@ export class PreviewTunnel {
       throw new Error('Preview connection could not be established.');
     }
   }
+
   async open(): Promise<Duplex> {
     await this.connect();
     if (this.closed || this.channels.size >= 64)
@@ -174,6 +182,7 @@ export class PreviewTunnel {
     }
     return stream;
   }
+
   close(error = new Error('Preview tunnel closed.')) {
     if (this.closed) return;
     this.closed = true;

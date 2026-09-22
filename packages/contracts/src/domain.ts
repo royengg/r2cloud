@@ -1,4 +1,5 @@
 import { z } from 'zod';
+
 export const taskInput = z
   .object({
     title: z.string().trim().min(3).max(160),
@@ -7,6 +8,7 @@ export const taskInput = z
     priority: z.enum(['High', 'Medium', 'Low']).default('Medium'),
   })
   .strict();
+
 export const commandInput = z.discriminatedUnion('action', [
   z
     .object({
@@ -61,6 +63,7 @@ export const commandInput = z.discriminatedUnion('action', [
     })
     .strict(),
 ]);
+
 export const batchInput = z
   .object({
     tasks: z
@@ -80,10 +83,15 @@ export const batchInput = z
     (input) => new Set(input.tasks.map((t) => t.taskId)).size === input.tasks.length,
     'Each task may appear only once.',
   );
+
 export type BatchInput = z.infer<typeof batchInput>;
+
 export type Command = z.infer<typeof commandInput>;
+
 export type TaskInput = z.infer<typeof taskInput>;
+
 export type Actor = { id: string; kind: 'human' | 'agent'; sessionId?: string };
+
 export class Fault extends Error {
   constructor(
     public status: number,
@@ -92,9 +100,11 @@ export class Fault extends Error {
     super(message);
   }
 }
+
 export function requireThat(value: unknown, status: number, message: string): asserts value {
   if (!value) throw new Fault(status, message);
 }
+
 export type CandidateManifest = {
   orgId: string;
   projectId: string;
@@ -111,6 +121,7 @@ export type CandidateManifest = {
   limitations: string[];
   fixture: boolean;
 };
+
 export type Evidence = {
   validation?: { command: string; exitCode: number }[];
   checks: { name: string; status: 'passed' | 'failed' | 'unknown' }[];

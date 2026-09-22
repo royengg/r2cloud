@@ -17,7 +17,8 @@
     "db:migrate": "bun --bun prisma migrate deploy",
     "db:setup": "bun run db:generate && bun run db:migrate",
     "test": "bun test --timeout 30000 tests",
-    "format": "bun --bun prettier --write \"{apps,packages,scripts,tests}/**/*.{ts,tsx,css,json}\"",
+    "format": "bun --bun prettier --write --ignore-path .prettierignore .",
+    "format:check": "bun --bun prettier --check --ignore-path .prettierignore .",
     "design:lint": "bun node_modules/@google/design.md/dist/index.js lint DESIGN.md"
   },
   "devDependencies": {

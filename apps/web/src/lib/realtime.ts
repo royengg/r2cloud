@@ -2,6 +2,7 @@ import { io } from 'socket.io-client';
 import { queryClient } from './queries';
 
 const refreshing = new Map<string, { pending: boolean; promise: Promise<void> }>();
+
 export function refreshRead(path: string): Promise<void> {
   const query = queryClient.getQueryCache().find({ queryKey: ['api', path], exact: true });
   if (!query?.isActive()) {

@@ -1,6 +1,7 @@
 import type { ErrorRequestHandler } from 'express';
 import { Fault } from '@r2cloud/contracts/domain';
 import { ZodError } from 'zod';
+
 export const handleError: ErrorRequestHandler = (err, _req, res, next) => {
   if (res.headersSent) return next(err);
   const malformed = err?.type === 'entity.parse.failed' && err.status === 400;

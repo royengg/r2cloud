@@ -1,6 +1,7 @@
 import type { RequestHandler } from 'express';
 import { Fault } from '@r2cloud/contracts/domain';
 import { allowedOrigins, type AppOptions } from '../config/options';
+
 export function security(options: AppOptions): RequestHandler {
   return (req, res, next) => {
     res.set({

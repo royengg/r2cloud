@@ -1,6 +1,7 @@
 import type { DB } from '@r2cloud/database';
 import { requireThat, type Actor } from '@r2cloud/contracts/domain';
 import { codexModels } from '@r2cloud/contracts/threads';
+
 export async function availableModels(db: DB, actor: Pick<Actor, 'id'>, projectId: string) {
   const connection = await db.codexConnection.findFirst({
     where: {
@@ -14,6 +15,7 @@ export async function availableModels(db: DB, actor: Pick<Actor, 'id'>, projectI
   });
   return codexModels.parse(connection?.models ?? []);
 }
+
 export async function pinThread(
   db: DB,
   actor: Pick<Actor, 'id'>,

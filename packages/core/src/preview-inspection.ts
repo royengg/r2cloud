@@ -8,6 +8,7 @@ import { access, lockProject, event } from './project-context';
 import { activeAgentTurn } from './agent-turns';
 
 const root = resolve('.local/artifacts/previews');
+
 export async function savePreviewInspection(
   grant: AgentGrant,
   callId: string,
@@ -76,6 +77,7 @@ export async function savePreviewInspection(
     return item.id;
   });
 }
+
 export async function readPreviewScreenshot(actor: Actor, projectId: string, itemId: string) {
   await access(prisma, actor, projectId);
   const item = await prisma.agentItem.findFirst({

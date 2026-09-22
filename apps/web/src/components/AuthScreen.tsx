@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../lib/api';
 import { Button } from './ui';
 import { Icon } from './Icon';
+
 export function AuthScreen({ enabled = true }: { enabled?: boolean }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(
@@ -55,6 +56,7 @@ export function AuthScreen({ enabled = true }: { enabled?: boolean }) {
     </main>
   );
 }
+
 export function WorkspaceSetup({
   busy,
   error,

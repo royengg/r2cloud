@@ -127,6 +127,7 @@ export async function queueAgentTurn(
   });
   await event(db, projectId, thread.taskId, actor.id, 'Agent turn queued', { threadId, turnId });
 }
+
 export async function agentTimeline(
   actor: Actor,
   projectId: string,
@@ -216,6 +217,7 @@ export async function agentTimeline(
     { isolationLevel: 'RepeatableRead' },
   );
 }
+
 export async function agentCommand(
   actor: Actor,
   projectId: string,
@@ -289,6 +291,7 @@ export async function agentCommand(
     return { id: threadId };
   });
 }
+
 export async function activeAgentTurn(grant: AgentGrant) {
   const turn = await prisma.agentTurn.findFirst({
     where: {

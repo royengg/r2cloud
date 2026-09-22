@@ -7,6 +7,7 @@ import type { CodexTransport } from './codex';
 import { sandboxDigest, type SandboxJournal, type VercelIdentity } from './vercel';
 
 const root = '/tmp/r2cloud-control';
+
 export const codexBridge = readFileSync(new URL('./codex-bridge.ts', import.meta.url), 'utf8');
 
 const bridgeClient = String.raw`
@@ -30,6 +31,7 @@ process.stdout.write('{"connected":true}\n');
 process.stdin.pipe(client).pipe(process.stdout);
 
 `;
+
 type BridgeEvent = { seq: number; message: Record<string, any>; providerElapsedMs?: number };
 
 export class VercelCodexTransport implements CodexTransport {
@@ -39,10 +41,13 @@ export class VercelCodexTransport implements CodexTransport {
     private identity: VercelIdentity,
     private deadline: number,
   ) {}
+
   private eventCursor = 0;
+
   get cursor() {
     return this.eventCursor;
   }
+
   private socket?: WebSocket;
   private connecting?: Promise<void>;
   private pending = new Map<string, { resolve(value: any): void; reject(error: Error): void }>();
@@ -50,6 +55,7 @@ export class VercelCodexTransport implements CodexTransport {
   private bufferedBytes = 0;
   private failure?: Error;
   private ended?: number;
+
   private async connect() {
     if (this.connecting) return this.connecting;
     if (this.socket?.readyState === WebSocket.OPEN && !this.failure) return;
@@ -58,6 +64,7 @@ export class VercelCodexTransport implements CodexTransport {
     });
     return this.connecting;
   }
+
   private async open() {
     const { url, token } = await this.session.openInteractive({
       signal: AbortSignal.timeout(15000),
@@ -143,11 +150,13 @@ export class VercelCodexTransport implements CodexTransport {
       socket.onclose = () => fail(new Uncertain('Codex bridge disconnected.'));
     });
   }
+
   async events() {
     await this.connect();
     if (this.failure) throw this.failure;
     return this.buffered.filter((entry) => entry.seq > this.eventCursor).slice(0, 100);
   }
+
   acknowledge(seq: number) {
     this.eventCursor = seq;
     this.buffered = this.buffered.filter((entry) => {
@@ -156,10 +165,13 @@ export class VercelCodexTransport implements CodexTransport {
       return false;
     });
   }
+
   private listeners = new Set<(message: unknown) => void>();
+
   private key(value: string) {
     return createHash('sha256').update(value).digest('hex');
   }
+
   async requestOnce<T>(operationKey: string, method: string, params: unknown): Promise<T> {
     const requestId = this.key(operationKey);
     const receipt = await this.journal.beginStep(
@@ -175,18 +187,22 @@ export class VercelCodexTransport implements CodexTransport {
     await this.journal.finishStep(this.identity, `rpc:${requestId}`, response.result);
     return response.result as T;
   }
+
   async notify(method: string, params?: unknown) {
     await this.send(this.key(`notify:${method}`), { method, params });
   }
+
   async reply(id: string | number, result: unknown) {
     await this.send(this.key(`reply:${id}`), { id, result });
   }
+
   onMessage(_listener: (message: unknown) => void) {
     this.listeners.add(_listener);
     return () => {
       this.listeners.delete(_listener);
     };
   }
+
   private async send(key: string, message: unknown, lookup = false): Promise<any> {
     await this.connect();
     return new Promise((resolve, reject) => {
@@ -210,9 +226,11 @@ export class VercelCodexTransport implements CodexTransport {
       this.socket!.send(new TextEncoder().encode(JSON.stringify({ key, message, lookup }) + '\n'));
     });
   }
+
   close() {
     this.socket?.close();
   }
+
   async read<T = unknown>(path: string, limit = 1024 * 1024): Promise<T | null> {
     if (path === 'exit.json')
       return (this.ended === undefined ? null : { code: this.ended }) as T | null;
@@ -231,6 +249,7 @@ export class VercelCodexTransport implements CodexTransport {
     }
     return JSON.parse(Buffer.concat(chunks).toString()) as T;
   }
+
   async waitForTurn(threadId: string, turnId: string) {
     while (Date.now() < this.deadline) {
       for (const { seq, message } of await this.events()) {

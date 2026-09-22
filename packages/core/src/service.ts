@@ -29,6 +29,7 @@ import {
 } from '@r2cloud/contracts/domain';
 import type { RunGrant } from '@r2cloud/contracts/adapters';
 import { id } from '@r2cloud/contracts/hash';
+
 export async function createTask(actor: Actor, projectId: string, key: string, input: TaskInput) {
   input = taskInput.parse(input);
   return receipt(actor, projectId, key, { type: 'create', input }, async (db) => {
@@ -39,6 +40,7 @@ export async function createTask(actor: Actor, projectId: string, key: string, i
     return { id: tid };
   });
 }
+
 async function queueRun(
   db: DB,
   actor: Pick<Actor, 'id'>,
@@ -158,6 +160,7 @@ async function queueRun(
   });
   return { id: t.id, runId, generation: gen };
 }
+
 async function startTask(
   db: DB,
   actor: Actor,
@@ -185,6 +188,7 @@ async function startTask(
     : undefined;
   return queueRun(db, actor, p, t, claimId, input.minutes, input.budgetCents, thread, agentTurnId);
 }
+
 export async function command(
   actor: Actor,
   projectId: string,
@@ -208,6 +212,7 @@ export async function command(
     return commandInTransaction(db, actor, projectId, taskId, input);
   });
 }
+
 export async function commandInTransaction(
   db: DB,
   actor: Actor,
@@ -498,6 +503,7 @@ export async function commandInTransaction(
   );
   return { id: taskId, approvalId, operationId };
 }
+
 export async function addComment(
   actor: Actor,
   projectId: string,
@@ -533,6 +539,7 @@ export async function addComment(
     return { id: commentId };
   });
 }
+
 export async function snapshot(actor: Actor, projectId: string) {
   return prisma.$transaction(
     async (db) => {
@@ -661,6 +668,7 @@ export async function snapshot(actor: Actor, projectId: string) {
     { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
   );
 }
+
 export async function projects(actor: Actor) {
   const rows = await prisma.projects.findMany({
     where: { project_access: { some: { user_id: actor.id, memberships: { user_id: actor.id } } } },
@@ -680,6 +688,7 @@ export async function projects(actor: Actor) {
     workspace_role: organisations.memberships[0]?.role,
   }));
 }
+
 /** Explicit, all-or-nothing batches. No authority beyond named tasks. */
 export async function startBatch(actor: Actor, projectId: string, key: string, input: BatchInput) {
   input = batchInput.parse(input);

@@ -1,5 +1,7 @@
 import { Prisma, schema, type DB } from './index';
+
 const namespace = Prisma.raw(`"${schema}"`);
+
 // Prisma 7 has no row-lock API. Keep PostgreSQL locking here; data access uses models.
 const tables = {
   organisations: Prisma.sql`organisations`,
@@ -10,11 +12,13 @@ const tables = {
   runs: Prisma.sql`runs`,
   jobs: Prisma.sql`jobs`,
 };
+
 export async function lockRow(db: DB, table: keyof typeof tables, id: string) {
   await db.$queryRaw(
     Prisma.sql`SELECT id FROM ${namespace}.${tables[table]} WHERE id=${id} FOR UPDATE`,
   );
 }
+
 export async function nextJob(db: DB, kinds: string[], projectId?: string) {
   const rows = await db.$queryRaw<{ id: string }[]>(Prisma.sql`
     SELECT id FROM ${namespace}.jobs WHERE kind IN (${Prisma.join(kinds)}) AND available_at<=now()
@@ -24,6 +28,7 @@ export async function nextJob(db: DB, kinds: string[], projectId?: string) {
   `);
   return rows[0]?.id;
 }
+
 export async function nextRepositoryConnection(db: DB) {
   const rows = await db.$queryRaw<{ id: string }[]>`
     SELECT id FROM ${namespace}.repository_connections WHERE status='queued' AND expires_at>now()
@@ -31,6 +36,7 @@ export async function nextRepositoryConnection(db: DB) {
   `;
   return rows[0]?.id;
 }
+
 export async function nextCodexConnection(db: DB) {
   const rows = await db.$queryRaw<{ id: string }[]>`
     SELECT id FROM ${namespace}.codex_connections WHERE state='queued' AND expires_at>now()

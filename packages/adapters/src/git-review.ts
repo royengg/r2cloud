@@ -7,8 +7,11 @@ import { Fault, type CandidateManifest } from '@r2cloud/contracts/domain';
 import type { ReviewIndex, ReviewDiff } from '@r2cloud/contracts/review';
 
 const exec = promisify(execFile);
+
 const pending = new Map<string, Promise<ReviewIndex & { diffs: Record<string, ReviewDiff> }>>();
+
 const root = resolve('.local/artifacts');
+
 async function git(directory: string, args: string[], maxBuffer = 2 * 1024 ** 2) {
   return (
     await exec(
@@ -42,6 +45,7 @@ async function git(directory: string, args: string[], maxBuffer = 2 * 1024 ** 2)
     )
   ).stdout;
 }
+
 export async function inspectGitReview(
   directory: string,
   base: string,
@@ -133,6 +137,7 @@ export async function inspectGitReview(
   }
   return { files, commits, diffs };
 }
+
 export async function savedGitReview(manifest: CandidateManifest, commit?: string) {
   if (
     !/^[a-f0-9]{64}$/.test(manifest.artifactDigest) ||

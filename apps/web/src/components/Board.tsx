@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { type Task, columnFor, canMoveTask } from '../lib/types';
 import { Icon } from './Icon';
 import { Avatar, IconButton, Status } from './ui';
+
 export function Board({
   tasks,
   allTasks,
@@ -178,6 +179,7 @@ export function Board({
     </>
   );
 }
+
 function TaskCard({
   task,
   index,

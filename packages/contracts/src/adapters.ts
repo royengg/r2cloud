@@ -1,5 +1,6 @@
 import type { PinnedExecutionProfile } from './execution';
 import type { CandidateManifest, Evidence } from './domain';
+
 export type RunGrant = {
   operationId: string;
   runId: string;
@@ -30,17 +31,21 @@ export type RunGrant = {
     mode: string;
   };
 };
+
 export type RunResult = { manifest: CandidateManifest; evidence: Evidence; stopProof: string };
+
 export type Observation<T> =
   | { state: 'absent' }
   | { state: 'unknown' }
   | { state: 'running' }
   | { state: 'finished'; result: T };
+
 export interface ExecutionBackend {
   readonly mode: 'fixture' | 'managed';
   observe(operationId: string): Promise<Observation<RunResult>>;
   start(grant: RunGrant): Promise<RunResult>;
 }
+
 export type PublicationResult = {
   prNumber: number;
   url: string;
@@ -49,11 +54,13 @@ export type PublicationResult = {
   targetRef: string;
   branch: string;
 };
+
 export type MergeResult = PublicationResult & {
   merged: boolean;
   mergeSha: string | null;
   requiredChecksPassed: boolean;
 };
+
 export type PublicationGrant = {
   operationId: string;
   candidate: CandidateManifest;
@@ -62,6 +69,7 @@ export type PublicationGrant = {
   publication?: PublicationResult;
   github?: { repositoryId: number; installationId: number; approverId: string };
 };
+
 // Only the isolated publisher process receives this adapter. Runner/API constructors do not accept it.
 export interface PublisherBackend {
   readonly mode: 'fixture' | 'github';
@@ -69,7 +77,9 @@ export interface PublisherBackend {
   publish(grant: PublicationGrant, authorize?: () => Promise<void>): Promise<PublicationResult>;
   merge(grant: PublicationGrant, authorize?: () => Promise<void>): Promise<MergeResult>;
 }
+
 export class Uncertain extends Error {}
+
 export class SetupRequired extends Error {}
 
 export type DiscoveredRepository = {
@@ -79,6 +89,7 @@ export type DiscoveredRepository = {
   defaultBranch: string;
   baseSha: string;
 };
+
 export interface RepositoryDiscovery {
   discover(input: {
     code: string;

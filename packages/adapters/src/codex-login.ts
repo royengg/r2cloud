@@ -3,6 +3,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { readFile, mkdir, mkdtemp, writeFile, readdir, readlink, rm } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { Uncertain } from '@r2cloud/contracts/adapters';
+
 export function codexCredentialIdentity(auth: Buffer) {
   const tokens = JSON.parse(auth.toString()).tokens;
   if (typeof tokens?.access_token !== 'string' || typeof tokens.account_id !== 'string')
@@ -13,12 +14,14 @@ export function codexCredentialIdentity(auth: Buffer) {
   if (!Number.isFinite(payload.exp)) throw new Error('Codex credential expiration is unavailable.');
   return { accountId: tokens.account_id as string, expiresAt: payload.exp * 1000 };
 }
+
 export interface CodexLoginSession {
   start(): Promise<{ loginId: string; userCode: string }>;
   completed(loginId: string): boolean;
   credentials(): Promise<{ auth: Buffer; plan: string }>;
   close(): Promise<void>;
 }
+
 export class CodexLoginProcess implements CodexLoginSession {
   private process: ChildProcessWithoutNullStreams;
   private pending = new Map<
@@ -34,6 +37,7 @@ export class CodexLoginProcess implements CodexLoginSession {
   private completion: { loginId: string; success: boolean } | null = null;
   private stopped = false;
   private exited: Promise<void>;
+
   private constructor(
     binary: string,
     private home: string,
@@ -92,6 +96,7 @@ export class CodexLoginProcess implements CodexLoginSession {
       }
     });
   }
+
   static async create(binary: string, root: string) {
     await mkdir(root, { recursive: true, mode: 0o700 });
     const home = await mkdtemp(join(root, 'login-'));
@@ -107,6 +112,7 @@ export class CodexLoginProcess implements CodexLoginSession {
       throw error;
     }
   }
+
   static async catalogue(
     binary: string,
     root: string,
@@ -146,6 +152,7 @@ export class CodexLoginProcess implements CodexLoginSession {
       await session.close();
     }
   }
+
   private fail() {
     this.stopped = true;
     for (const p of this.pending.values()) {
@@ -154,6 +161,7 @@ export class CodexLoginProcess implements CodexLoginSession {
     }
     this.pending.clear();
   }
+
   private message(value: unknown) {
     if (!value || typeof value !== 'object' || Array.isArray(value))
       throw new Error('Invalid Codex message.');
@@ -185,6 +193,7 @@ export class CodexLoginProcess implements CodexLoginSession {
       else p.resolve(message.result);
     }
   }
+
   private request<T>(
     method: 'initialize' | 'account/login/start' | 'account/read' | 'model/list',
     params: unknown,
@@ -200,6 +209,7 @@ export class CodexLoginProcess implements CodexLoginSession {
       this.process.stdin.write(JSON.stringify({ id, method, params }) + '\n');
     });
   }
+
   async start() {
     await this.request('initialize', { clientInfo: { name: 'r2cloud-login', version: '0.1.0' } });
     this.process.stdin.write(JSON.stringify({ method: 'initialized', params: {} }) + '\n');
@@ -220,12 +230,14 @@ export class CodexLoginProcess implements CodexLoginSession {
       throw new Error('Unsupported Codex sign-in response.');
     return { loginId: result.loginId, userCode: result.userCode };
   }
+
   completed(loginId: string) {
     if (this.stopped) throw new Uncertain('Codex sign-in was interrupted.');
     if (this.completion?.loginId !== loginId) return false;
     if (this.completion.success !== true) throw new Error('Codex sign-in was not completed.');
     return true;
   }
+
   async credentials(refreshToken = false) {
     const result = await this.request<{ account: { type: string; planType: string } }>(
       'account/read',
@@ -247,6 +259,7 @@ export class CodexLoginProcess implements CodexLoginSession {
       throw new Error('A managed ChatGPT login is required.');
     return { auth, plan: result.account.planType.slice(0, 40) };
   }
+
   async close() {
     this.process.kill('SIGTERM');
     const timer = setTimeout(() => this.process.kill('SIGKILL'), 3000);

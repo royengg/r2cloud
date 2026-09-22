@@ -1,9 +1,12 @@
 import { execFileSync } from 'node:child_process';
 
 const config = JSON.parse(process.argv.at(-1)!);
+
 if (!/^[a-zA-Z0-9-]{1,100}$/.test(config.runId) || !/^[a-f0-9]{40}$/.test(config.baseSha))
   throw new Error('Invalid recovery identity.');
+
 const deadline = Date.now() + 20000;
+
 function git(args: string[], index = false) {
   return execFileSync(
     'git',
@@ -26,7 +29,9 @@ function git(args: string[], index = false) {
     },
   ).trim();
 }
+
 const head = git(['rev-parse', 'HEAD']);
+
 if (
   !git(['status', '--porcelain']) &&
   head === config.baseSha &&

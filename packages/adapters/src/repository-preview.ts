@@ -4,8 +4,10 @@ import type { ExecutionProfile } from '@r2cloud/contracts/execution';
 import { sandboxPath } from './sandbox-bun';
 
 const supervisor = readFileSync(new URL('./preview-supervisor.ts', import.meta.url), 'utf8');
+
 export class RepositoryPreview {
   private retained = false;
+
   constructor(
     private sandbox: Sandbox,
     readonly setup: ExecutionProfile,
@@ -16,6 +18,7 @@ export class RepositoryPreview {
       commit?: string;
     },
   ) {}
+
   async start(snapshot = this.retained) {
     if (snapshot) this.retained = true;
     const timeout = Math.min(45000, this.deadline - Date.now() - 20000);
@@ -47,6 +50,7 @@ export class RepositoryPreview {
         `The dev server did not become ready. Check the command, port, health path and required environment variables. ${(await result.stdout()).slice(-4000)}`.trim(),
       );
   }
+
   async stop() {
     const result = await this.sandbox.currentSession().runCommand({
       cmd: 'bun',

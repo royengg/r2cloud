@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { createProject } from '@r2cloud/core/projects';
 import { createWorkspace } from '@r2cloud/core/onboarding';
+
 export function workspacesRoutes() {
   const router = Router();
   router.post('/workspaces', async (req, res) => {

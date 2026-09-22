@@ -7,7 +7,9 @@ import { projectAdministrator } from './team';
 import { id, hash, digest } from '@r2cloud/contracts/hash';
 import { requireThat, type Actor } from '@r2cloud/contracts/domain';
 import type { RepositoryDiscovery, DiscoveredRepository } from '@r2cloud/contracts/adapters';
+
 export type ConnectionConfig = { clientId: string; callbackURL: string; appSlug: string };
+
 export async function connectionStatus(actor: Actor, projectId: string, config?: ConnectionConfig) {
   const project = await access(prisma, actor, projectId);
   const repository = project.repo_id
@@ -46,6 +48,7 @@ export async function connectionStatus(actor: Actor, projectId: string, config?:
     pending,
   };
 }
+
 export async function beginRepositoryConnection(
   actor: Actor,
   projectId: string,
@@ -104,6 +107,7 @@ export async function beginRepositoryConnection(
     return result;
   });
 }
+
 export async function queueRepositoryCallback(actor: Actor, state: string, code: string) {
   requireThat(
     state.length >= 32 && state.length <= 128 && code.length > 0 && code.length <= 512,
@@ -127,6 +131,7 @@ export async function queueRepositoryCallback(actor: Actor, state: string, code:
     return { projectId: row.projectId };
   });
 }
+
 export async function discoverOne(backend: RepositoryDiscovery) {
   const request = await prisma.$transaction(async (db) => {
     await db.repositoryConnection.updateMany({
@@ -202,6 +207,7 @@ export async function discoverOne(backend: RepositoryDiscovery) {
   }
   return true;
 }
+
 export async function attachRepository(actor: Actor, projectId: string, raw: unknown) {
   const input = z
     .object({ connectionId: z.string().min(1), repositoryId: z.number().int().positive() })

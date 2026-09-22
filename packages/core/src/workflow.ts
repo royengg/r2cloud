@@ -17,6 +17,7 @@ import {
   type PublicationResult,
   type MergeResult,
 } from '@r2cloud/contracts/adapters';
+
 async function reserve(kinds: string[], projectId?: string) {
   return prisma.$transaction(async (db) => {
     const jobId = await nextJob(db, kinds, projectId);
@@ -32,6 +33,7 @@ async function reserve(kinds: string[], projectId?: string) {
     });
   });
 }
+
 async function assertJob(db: DB, job: jobs) {
   await lockRow(db, 'jobs', job.id);
   requireThat(
@@ -42,6 +44,7 @@ async function assertJob(db: DB, job: jobs) {
     'Worker lease was superseded.',
   );
 }
+
 async function executionGrant(job: jobs): Promise<RunGrant> {
   return prisma.$transaction(async (db) => {
     await lockProject(db, job.project_id);
@@ -97,6 +100,7 @@ async function executionGrant(job: jobs): Promise<RunGrant> {
     };
   });
 }
+
 async function finishRun(job: jobs, grant: RunGrant, result: RunResult) {
   return prisma.$transaction(async (db) => {
     await lockProject(db, job.project_id);
@@ -180,6 +184,7 @@ async function finishRun(job: jobs, grant: RunGrant, result: RunResult) {
     );
   });
 }
+
 async function publicationGrant(job: jobs, reconcile = false): Promise<PublicationGrant> {
   return prisma.$transaction(async (db) => {
     await lockProject(db, job.project_id);
@@ -302,6 +307,7 @@ async function publicationGrant(job: jobs, reconcile = false): Promise<Publicati
     };
   });
 }
+
 async function finishPublication(
   job: jobs,
   g: PublicationGrant,
@@ -392,6 +398,7 @@ async function finishPublication(
     );
   });
 }
+
 async function failure(job: jobs, error: unknown) {
   const setup = error instanceof SetupRequired;
   const blocked = setup || job.attempts >= 5 || error instanceof Fault;
@@ -472,6 +479,7 @@ async function failure(job: jobs, error: unknown) {
     );
   });
 }
+
 export async function executeOne(backend: ExecutionBackend, projectId?: string) {
   const job = await reserve(['execute'], projectId);
   if (!job) return false;
@@ -503,6 +511,7 @@ export async function executeOne(backend: ExecutionBackend, projectId?: string) 
   }
   return true;
 }
+
 export async function publishOne(backend: PublisherBackend) {
   const job = await reserve(['publish', 'merge']);
   if (!job) return false;

@@ -3,6 +3,7 @@ import { prisma, json, type DB } from '@r2cloud/database';
 import { lockAgentRuntime, lockRow } from '@r2cloud/database/locking';
 import { requireThat } from '@r2cloud/contracts/domain';
 import type { SandboxJournal, VercelIdentity } from '@r2cloud/adapters/vercel';
+
 async function fence(db: DB, identity: VercelIdentity, owner?: string) {
   const runtime = await lockAgentRuntime(db, identity.runId);
   if (runtime) {
@@ -51,8 +52,10 @@ async function fence(db: DB, identity: VercelIdentity, owner?: string) {
   requireThat(run && job, 409, 'Stale or unauthorised sandbox execution.');
   return { manifest: run.manifest, agent: false };
 }
+
 export class PostgresSandboxJournal implements SandboxJournal {
   constructor(private owner?: string) {}
+
   async reserve(identity: VercelIdentity, name: string, configHash: string, minutes: number) {
     return prisma.$transaction(async (db) => {
       const run = await fence(db, identity, this.owner);
@@ -89,6 +92,7 @@ export class PostgresSandboxJournal implements SandboxJournal {
       };
     });
   }
+
   async get(identity: VercelIdentity) {
     return prisma.$transaction(async (db) => {
       await fence(db, identity, this.owner);
@@ -102,6 +106,7 @@ export class PostgresSandboxJournal implements SandboxJournal {
       return row ? { ...row, runId: row.runId ?? row.agentTurnId! } : null;
     });
   }
+
   async mark(identity: VercelIdentity, state: string, stopProof?: string) {
     await prisma.$transaction(async (db) => {
       await fence(db, identity, this.owner);
@@ -115,6 +120,7 @@ export class PostgresSandboxJournal implements SandboxJournal {
       requireThat(row.count, 409, 'Sandbox lifecycle was superseded.');
     });
   }
+
   async beginStep(identity: VercelIdentity, key: string, payloadHash: string) {
     return prisma.$transaction(async (db) => {
       await fence(db, identity, this.owner);
@@ -141,6 +147,7 @@ export class PostgresSandboxJournal implements SandboxJournal {
       };
     });
   }
+
   async finishStep(identity: VercelIdentity, key: string, result: unknown) {
     await prisma.$transaction(async (db) => {
       await fence(db, identity, this.owner);

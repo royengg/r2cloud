@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { executionProfile, type ExecutionProfile } from '@r2cloud/contracts/execution';
 
 export const setupDetectionVersion = 1;
+
 const manifestSchema = z.object({
   scripts: z.record(z.string(), z.string()).optional(),
   dependencies: z.record(z.string(), z.string()).optional(),
@@ -9,13 +10,17 @@ const manifestSchema = z.object({
   packageManager: z.string().optional(),
   workspaces: z.unknown().optional(),
 });
+
 type Manifest = z.infer<typeof manifestSchema>;
+
 const frameworks = ['next', 'vite', 'astro', '@sveltejs/kit', 'react-scripts'];
+
 function framework(manifest: Manifest) {
   return frameworks.find(
     (name) => manifest.dependencies?.[name] || manifest.devDependencies?.[name],
   );
 }
+
 export function detectRepositorySetup(
   files: Record<string, string>,
   directory?: string,
@@ -127,6 +132,7 @@ export function detectRepositorySetup(
     vcpus: 2,
   });
 }
+
 async function read(response: Response, limit: number) {
   if (!response.ok)
     throw new Error(
@@ -147,6 +153,7 @@ async function read(response: Response, limit: number) {
   }
   return Buffer.concat(chunks).toString();
 }
+
 export async function discoverRepositorySetup(
   repository: string,
   baseSha: string,

@@ -1,6 +1,7 @@
 import { json, type DB } from '@r2cloud/database';
 import { lockRow } from '@r2cloud/database/locking';
 import { requireThat, type Actor } from '@r2cloud/contracts/domain';
+
 export async function access(
   db: DB,
   actor: Pick<Actor, 'id'>,
@@ -29,7 +30,9 @@ export async function access(
     workspace_role: grant.memberships.role,
   };
 }
+
 export type AccessibleProject = Awaited<ReturnType<typeof access>>;
+
 export async function lockProject(db: DB, projectId: string) {
   const project = await db.projects.findUnique({
     where: { id: projectId },
@@ -41,6 +44,7 @@ export async function lockProject(db: DB, projectId: string) {
   await lockRow(db, 'projects', projectId);
   return project;
 }
+
 export async function event(
   db: DB,
   projectId: string,

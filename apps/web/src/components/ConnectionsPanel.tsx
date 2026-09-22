@@ -8,6 +8,7 @@ import { Button, IconButton, Modal } from './ui';
 import { Select } from './Select';
 import { Icon } from './Icon';
 import type { DiscoveredRepository } from '@r2cloud/contracts/adapters';
+
 type State = {
   repository: { full_name: string; target_ref: string } | null;
   manage: boolean;
@@ -21,6 +22,7 @@ type State = {
     expires_at: string;
   } | null;
 };
+
 export function ConnectionsPanel({
   projectId,
   close,

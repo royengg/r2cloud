@@ -35,6 +35,7 @@ import {
   UserIcon,
   Loading03Icon,
 } from '@hugeicons/core-free-icons';
+
 const icons = {
   delete: Delete02Icon,
   github: GithubIcon,
@@ -71,7 +72,9 @@ const icons = {
   person: UserIcon,
   loading: Loading03Icon,
 };
+
 export type IconName = keyof typeof icons;
+
 export function Icon({
   name,
   size = 20,

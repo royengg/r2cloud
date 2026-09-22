@@ -3,9 +3,11 @@ import { prisma, json, type DB } from '@r2cloud/database';
 import { access, lockProject, event } from './project-context';
 import { digest, id } from '@r2cloud/contracts/hash';
 import { requireThat, type Actor } from '@r2cloud/contracts/domain';
+
 const permissions = z
   .object({ contribute: z.boolean(), review: z.boolean(), merge: z.boolean() })
   .strict();
+
 const inviteInput = permissions.extend({
   email: z
     .string()
@@ -14,6 +16,7 @@ const inviteInput = permissions.extend({
     .max(254)
     .transform((s) => s.toLowerCase()),
 });
+
 export async function projectAdministrator(db: DB, actor: Pick<Actor, 'id'>, projectId: string) {
   const project = await access(db, actor, projectId);
   requireThat(
@@ -23,6 +26,7 @@ export async function projectAdministrator(db: DB, actor: Pick<Actor, 'id'>, pro
   );
   return project;
 }
+
 async function checked<T>(
   actor: Actor,
   projectId: string,
@@ -59,6 +63,7 @@ async function checked<T>(
     return result;
   });
 }
+
 export async function team(actor: Actor, projectId: string) {
   await projectAdministrator(prisma, actor, projectId);
   const grants = await prisma.project_access.findMany({
@@ -88,6 +93,7 @@ export async function team(actor: Actor, projectId: string) {
   }));
   return { members, invitations };
 }
+
 export async function invite(actor: Actor, projectId: string, key: string, raw: unknown) {
   const input = inviteInput.parse(raw);
   return checked(actor, projectId, key, { action: 'invite', ...input }, async (db) => {
@@ -135,6 +141,7 @@ export async function invite(actor: Actor, projectId: string, key: string, raw: 
     return { id: invitationId };
   });
 }
+
 export async function revokeInvitation(
   actor: Actor,
   projectId: string,
@@ -157,6 +164,7 @@ export async function revokeInvitation(
     },
   );
 }
+
 export async function invitationInbox(actor: Actor) {
   const recipient = await prisma.users.findUnique({
     where: { id: actor.id },
@@ -184,6 +192,7 @@ export async function invitationInbox(actor: Actor) {
     expires_at: i.expiresAt,
   }));
 }
+
 export async function acceptInvitation(actor: Actor, invitationId: string) {
   return prisma.$transaction(async (db) => {
     const pending = await db.projectInvitation.findUnique({
@@ -248,6 +257,7 @@ export async function acceptInvitation(actor: Actor, invitationId: string) {
     return { projectId: invitation.projectId };
   });
 }
+
 export async function updateMember(
   actor: Actor,
   projectId: string,

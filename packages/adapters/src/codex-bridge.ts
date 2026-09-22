@@ -4,20 +4,30 @@ import { createServer, type Socket } from 'node:net';
 import type { Readable } from 'node:stream';
 
 type Message = { id?: string | number; method?: string; params?: Record<string, any> };
+
 type Event = { seq: number; message: Message; providerElapsedMs: number | null };
+
 const root = '/tmp/r2cloud-control';
+
 mkdirSync(root, { mode: 0o700, recursive: true });
+
 for (const directory of ['in', 'out', 'events'])
   mkdirSync(`${root}/${directory}`, { recursive: true });
+
 const [, , uid, gid, , directory] = execFileSync('getent', ['passwd', 'r2-agent'], {
   encoding: 'utf8',
 })
   .trim()
   .split(':');
+
 if (!uid || !gid || !directory) throw new Error('Agent user is unavailable.');
+
 const home = `${directory}/.codex`;
+
 mkdirSync(home, { mode: 0o700, recursive: true });
+
 chownSync(home, Number(uid), Number(gid));
+
 const agent = spawn(
   'setpriv',
   [
@@ -44,15 +54,22 @@ const agent = spawn(
     stdio: ['pipe', 'pipe', 'ignore'],
   },
 );
+
 const clients = new Set<Socket>();
+
 const seen = new Set<string>();
+
 let sequence = 0;
+
 let batch: Event[] = [];
+
 let turnStarted: number | undefined;
+
 function save(path: string, value: unknown) {
   writeFileSync(`${root}/${path}.tmp`, JSON.stringify(value), { mode: 0o600 });
   renameSync(`${root}/${path}.tmp`, `${root}/${path}`);
 }
+
 function send(client: Socket, value: unknown) {
   if (client.destroyed) return;
   if (client.writableLength > 32 * 1024 * 1024) {
@@ -61,9 +78,11 @@ function send(client: Socket, value: unknown) {
   }
   client.write(JSON.stringify(value) + '\n');
 }
+
 function emit(value: unknown) {
   for (const client of clients) send(client, value);
 }
+
 function lines(stream: Readable, accept: (value: any) => void, fail: () => void) {
   let buffer = '';
   stream.setEncoding('utf8');
@@ -89,6 +108,7 @@ function lines(stream: Readable, accept: (value: any) => void, fail: () => void)
   });
   stream.on('error', fail);
 }
+
 lines(
   agent.stdout,
   (message: Message) => {
@@ -118,6 +138,7 @@ lines(
   },
   () => agent.kill('SIGKILL'),
 );
+
 const server = createServer((client) => {
   client.on('close', () => clients.delete(client));
   lines(
@@ -165,14 +186,20 @@ const server = createServer((client) => {
     () => client.destroy(),
   );
 });
+
 server.listen(`${root}/bridge.sock`);
+
 function finish(code: number | null) {
   save('exit.json', { code });
   emit({ exit: code ?? 1 });
   for (const client of clients) client.end();
   server.close();
 }
+
 agent.on('error', () => agent.kill('SIGKILL'));
+
 agent.stdin.on('error', () => agent.kill('SIGKILL'));
+
 agent.on('close', finish);
+
 server.on('error', () => agent.kill('SIGKILL'));

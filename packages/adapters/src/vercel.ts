@@ -1,7 +1,9 @@
 import { Sandbox, type SandboxRegion } from '@vercel/sandbox';
 import { createHash } from 'node:crypto';
 import { Uncertain, SetupRequired } from '@r2cloud/contracts/adapters';
+
 export type VercelIdentity = { operationId: string; runId: string; generation: number };
+
 export type VercelPlan = {
   image: string;
   snapshotId?: string;
@@ -10,12 +12,14 @@ export type VercelPlan = {
   vcpus: 2 | 4;
   // Approved clean base image only. Repository material is transferred by the supervisor.
 };
+
 export type Allocation = VercelIdentity & {
   name: string;
   configHash: string;
   state: string;
   stopProof?: string | null;
 };
+
 export interface SandboxJournal {
   reserve(
     identity: VercelIdentity,
@@ -32,9 +36,12 @@ export interface SandboxJournal {
   ): Promise<{ fresh: boolean; result?: unknown }>;
   finishStep(identity: VercelIdentity, key: string, result: unknown): Promise<void>;
 }
+
 type SDK = Pick<typeof Sandbox, 'create' | 'get'>;
+
 export const sandboxDigest = (input: unknown) =>
   createHash('sha256').update(JSON.stringify(input)).digest('hex');
+
 /** Cloud control plane only. Never executes repository code in the API/worker host. */
 export class VercelSandboxes {
   constructor(
@@ -45,6 +52,7 @@ export class VercelSandboxes {
     if (!credentials.token || !credentials.teamId || !credentials.projectId)
       throw new SetupRequired('Configure the project-specific Vercel Sandbox credentials.');
   }
+
   async ensure(identity: VercelIdentity, plan: VercelPlan) {
     if (
       !plan.region ||
@@ -106,6 +114,7 @@ export class VercelSandboxes {
       throw new Uncertain('Sandbox creation has an uncertain outcome; replacement is blocked.');
     }
   }
+
   private async existing(identity: VercelIdentity, allocation: Allocation) {
     try {
       // Reading lifecycle state must never wake a stopped sandbox.
@@ -127,6 +136,7 @@ export class VercelSandboxes {
       throw new Uncertain('Existing sandbox could not be confirmed; replacement is blocked.');
     }
   }
+
   async observe(identity: VercelIdentity) {
     const allocation = await this.journal.get(identity);
     if (!allocation) return { state: 'absent' as const };
@@ -139,6 +149,7 @@ export class VercelSandboxes {
       return { state: 'unknown' as const };
     }
   }
+
   async command(
     identity: VercelIdentity,
     key: string,

@@ -4,6 +4,7 @@ export type DiffLine = {
   old?: number;
   next?: number;
 };
+
 export function diffLines(patch: string): DiffLine[] {
   let old = 0,
     next = 0,

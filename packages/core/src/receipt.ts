@@ -2,6 +2,7 @@ import { prisma, json, type DB } from '@r2cloud/database';
 import { access, lockProject } from './project-context';
 import { digest } from '@r2cloud/contracts/hash';
 import { requireThat, type Actor } from '@r2cloud/contracts/domain';
+
 export async function receipt<T>(
   actor: Actor,
   projectId: string,

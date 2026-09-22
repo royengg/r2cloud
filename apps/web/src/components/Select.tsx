@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Icon } from './Icon';
 
 type Option = { value: string; label: string };
+
 export function Select({
   label,
   value,

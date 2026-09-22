@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode, type ButtonHTMLAttributes } from 'react';
 import { Icon, type IconName } from './Icon';
 import { statuses } from '../lib/types';
+
 export function Button({
   children,
   icon,
@@ -24,6 +25,7 @@ export function Button({
     </button>
   );
 }
+
 export function IconButton({
   name,
   label,
@@ -40,6 +42,7 @@ export function IconButton({
     </button>
   );
 }
+
 export function Avatar({
   name,
   size = 'normal',
@@ -59,6 +62,7 @@ export function Avatar({
     </span>
   );
 }
+
 export function Status({ state }: { state: string }) {
   return (
     <span className={`status status-${state}`}>
@@ -78,6 +82,7 @@ export function Status({ state }: { state: string }) {
     </span>
   );
 }
+
 export function Modal({
   children,
   label,

@@ -8,6 +8,7 @@ import type { CodexLoginSession } from '@r2cloud/adapters/codex-login';
 import { codexCredentialIdentity } from '@r2cloud/adapters/codex-login';
 import type { CredentialVault } from '@r2cloud/adapters/credential-vault';
 import { setTimeout as pause } from 'node:timers/promises';
+
 export async function connectCodexOne(
   create: (id: string) => Promise<CodexLoginSession>,
   vault: Pick<CredentialVault, 'put' | 'remove'>,

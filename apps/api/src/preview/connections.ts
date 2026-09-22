@@ -8,6 +8,7 @@ type Entry = {
   lastUsed: number;
   expiresAt: number;
 };
+
 export function previewConnections(credentials: {
   token: string;
   teamId: string;

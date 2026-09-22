@@ -19,15 +19,19 @@ export class TaskCheckout {
       ? '/vercel/sandbox/r2-previews/source'
       : '/vercel/sandbox/agent/repository';
   }
+
   private get user() {
     return this.purpose === 'preview' ? 'r2-preview' : 'r2-agent';
   }
+
   readonly setup;
   private author?: ReturnType<typeof githubCommitAuthor>;
+
   private commitAuthor() {
     if (!('runId' in this.grant)) throw new Error('Preview checkouts cannot create commits.');
     return (this.author ??= githubCommitAuthor(this.grant.config.githubUserId));
   }
+
   constructor(
     private sandbox: Sandbox,
     private grant:
@@ -41,6 +45,7 @@ export class TaskCheckout {
     if (digest(this.setup) !== grant.config.executionSetup?.digest)
       throw new Error('Repository setup changed.');
   }
+
   private async run(cmd: string, args: string[], cwd = this.path, limitMs = 180000) {
     const timeout = Math.min(limitMs, this.deadline - Date.now() - 15000);
     if (timeout < 1000) throw new Error('Execution time limit reached.');
@@ -62,6 +67,7 @@ export class TaskCheckout {
       signal: AbortSignal.timeout(timeout + 5000),
     });
   }
+
   async prepare() {
     const g = this.grant;
     const author = this.purpose === 'implementation' ? await this.commitAuthor() : undefined;
@@ -230,11 +236,14 @@ for root,dirs,files in os.walk('${this.path}',topdown=False,followlinks=False):
       ...('taskId' in g ? { taskId: g.taskId, generation: g.generation } : {}),
     };
   }
+
   private get cwd() {
     return this.setup.directory === '.' ? this.path : `${this.path}/${this.setup.directory}`;
   }
+
   private recoveryTree: string | undefined;
   private recoveryResult: Omit<RunResult, 'stopProof'> | undefined;
+
   async checkpoint() {
     return this.capture(
       'Edits saved before interruption. Review and rerun checks before publication.',
@@ -242,9 +251,11 @@ for root,dirs,files in os.walk('${this.path}',topdown=False,followlinks=False):
       true,
     );
   }
+
   async candidate(summary: string, interrupted = false) {
     return this.capture(summary, interrupted);
   }
+
   private async capture(
     summary: string,
     interrupted = false,

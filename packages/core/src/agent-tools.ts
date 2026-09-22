@@ -85,12 +85,14 @@ const definitions = {
       .strict(),
   },
 };
+
 export const agentTools = Object.entries(definitions).map(([name, d]) => ({
   type: 'function',
   name,
   description: d.description,
   inputSchema: z.toJSONSchema(d.schema),
 }));
+
 export async function waitForAgentResponse(
   grant: AgentGrant,
   sourceId: string,
@@ -149,6 +151,7 @@ export async function waitForAgentResponse(
   }
   throw new Error('The response window expired. Continue in this thread to try again.');
 }
+
 export async function callAgentTool(
   grant: AgentGrant,
   callId: string,

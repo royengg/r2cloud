@@ -2,14 +2,18 @@ if (process.env.R2_GITHUB_APP_CLIENT_SECRET || process.env.R2_CODEX_VAULT_KEY)
   throw new Error(
     'Keep GitHub App and Codex vault secrets in their broker environments, not the API environment.',
   );
+
 import { createHttpServer } from '../server';
+
 if (process.env.R2_MODE && process.env.R2_MODE !== 'product') throw new Error('Unknown R2_MODE.');
+
 const configured = Boolean(
   process.env.GITHUB_CLIENT_ID &&
   process.env.GITHUB_CLIENT_SECRET &&
   process.env.BETTER_AUTH_SECRET &&
   process.env.BETTER_AUTH_URL,
 );
+
 const identity = configured
   ? (await import('../auth/identity')).createIdentity({
       baseURL: process.env.BETTER_AUTH_URL!,
@@ -18,6 +22,7 @@ const identity = configured
       githubClientSecret: process.env.GITHUB_CLIENT_SECRET!,
     }).identity
   : undefined;
+
 if (
   !configured &&
   [
@@ -27,6 +32,7 @@ if (
   ].some(Boolean)
 )
   throw new Error('GitHub authentication configuration is incomplete.');
+
 const repositoryConnection =
   identity && process.env.R2_GITHUB_APP_CLIENT_ID && process.env.R2_GITHUB_APP_SLUG
     ? {
@@ -35,8 +41,10 @@ const repositoryConnection =
         callbackURL: identity.origin + '/api/repository-callback',
       }
     : undefined;
+
 if (repositoryConnection && !/^[a-z0-9-]+$/.test(repositoryConnection.appSlug))
   throw new Error('Invalid GitHub App slug.');
+
 const { server } = createHttpServer({
   previewDomain: process.env.R2_PREVIEW_DOMAIN,
   previewRoutesFile: process.env.R2_PREVIEW_ROUTES_FILE,
@@ -44,6 +52,7 @@ const { server } = createHttpServer({
   repositoryConnection,
   codexLogin: process.env.R2_CODEX_LOGIN_ENABLED === 'true',
 });
+
 server.listen(4310, '127.0.0.1', () =>
   console.log(`R2Cloud API · product · http://127.0.0.1:4310`),
 );

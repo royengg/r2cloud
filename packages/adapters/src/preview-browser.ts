@@ -11,8 +11,11 @@ const resultSchema = z.object({
   errors: z.array(z.string().max(1000)).max(20),
   screenshot: z.string().max(700000),
 });
+
 const page = readFileSync(new URL('./preview-browser-page.ts', import.meta.url), 'utf8');
+
 const relay = readFileSync(new URL('./preview-browser-relay.ts', import.meta.url), 'utf8');
+
 export async function inspectPreview(
   sandbox: Sandbox,
   port: number,

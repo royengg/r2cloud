@@ -1,11 +1,17 @@
 import { createConnection, type Socket } from 'node:net';
 
 const port = Number(process.argv.at(-1));
+
 if (!Number.isInteger(port) || port < 1024 || port > 65535) process.exit(1);
+
 if (process.stdin.isTTY) process.stdin.setRawMode(true);
+
 const streams = new Map<number, { socket: Socket; paused: boolean }>();
+
 let buffered = '';
+
 let blocked = false;
+
 function send(frame: object) {
   if (process.stdout.writableLength > 8 * 1024 * 1024) process.exit(1);
   if (!process.stdout.write(JSON.stringify(frame) + '\n')) {
@@ -13,10 +19,12 @@ function send(frame: object) {
     for (const { socket } of streams.values()) socket.pause();
   }
 }
+
 process.stdout.on('drain', () => {
   blocked = false;
   for (const entry of streams.values()) if (!entry.paused) entry.socket.resume();
 });
+
 process.stdin.on('data', (chunk: Buffer) => {
   buffered += chunk.toString();
   if (buffered.length > 1024 * 1024) process.exit(1);
@@ -73,5 +81,7 @@ process.stdin.on('data', (chunk: Buffer) => {
     }
   }
 });
+
 process.stdin.on('end', () => process.exit(0));
+
 send({ ready: true });

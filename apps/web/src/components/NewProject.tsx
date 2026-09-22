@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button, IconButton, Modal } from './ui';
 import { Icon } from './Icon';
+
 export function NewProject({
   workspace,
   busy,

@@ -3,6 +3,7 @@ export type Skill = {
   description: string;
   source: 'built-in' | 'project';
 };
+
 export type PinnedSkill = Skill & { version: string; digest: string; content: string };
 
 export function skillMentions(text: string) {

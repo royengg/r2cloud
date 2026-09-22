@@ -4,12 +4,19 @@ import { mkdtempSync, chmodSync, chownSync, rmSync } from 'node:fs';
 import { once } from 'node:events';
 
 const config = JSON.parse(process.argv.at(-1)!);
+
 const sockets = new Set<Socket>();
+
 const gid = Number(execFileSync('id', ['-g', 'r2-browser'], { encoding: 'utf8' }).trim());
+
 const directory = mkdtempSync('/tmp/r2-browser-');
+
 const socketPath = directory + '/preview.sock';
+
 chownSync(directory, 0, gid);
+
 chmodSync(directory, 0o750);
+
 const relay = createServer((socket) => {
   if (sockets.size >= 128) {
     socket.destroy();
@@ -31,10 +38,15 @@ const relay = createServer((socket) => {
   }
   socket.pipe(upstream).pipe(socket);
 });
+
 relay.listen(socketPath);
+
 await once(relay, 'listening');
+
 chownSync(socketPath, 0, gid);
+
 chmodSync(socketPath, 0o660);
+
 const inner = `
 const {createServer,createConnection}=require('node:net');
 const {spawn,execFileSync}=require('node:child_process');
@@ -51,6 +63,7 @@ relay.listen(config.port,'127.0.0.1',()=>{
  child.on('error',()=>process.exit(1));child.on('exit',code=>process.exit(code??1));
 });
 `;
+
 const child = spawn(
   'unshare',
   ['--net', 'bun', '-e', inner, '--', JSON.stringify({ ...config, socketPath })],
@@ -60,15 +73,21 @@ const child = spawn(
     env: { PATH: process.env.PATH, LANG: 'C.UTF-8' },
   },
 );
+
 const kill = () => {
   try {
     process.kill(-child.pid!, 'SIGKILL');
   } catch {}
 };
+
 const timer = setTimeout(kill, 35000);
+
 process.once('SIGTERM', kill);
+
 process.once('SIGINT', kill);
+
 let bytes = 0;
+
 child.stdout.on('data', (chunk) => {
   bytes += chunk.length;
   if (bytes > 3 * 1024 * 1024) {
@@ -77,7 +96,9 @@ child.stdout.on('data', (chunk) => {
   }
   process.stdout.write(chunk);
 });
+
 child.stderr.resume();
+
 try {
   const [code] = await once(child, 'exit');
   process.exitCode = code === 0 && bytes <= 3 * 1024 * 1024 ? 0 : 1;

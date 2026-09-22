@@ -7,6 +7,7 @@ import { access, event } from './project-context';
 import { receipt } from './receipt';
 import { availableModels } from './thread-context';
 import { availableSkills } from './skills';
+
 export async function readThreads(actor: Actor, projectId: string, threadId?: string) {
   const db = prisma;
   await access(db, actor, projectId);
@@ -91,6 +92,7 @@ export async function readThreads(actor: Actor, projectId: string, threadId?: st
     })),
   };
 }
+
 export async function changeThread(
   actor: Actor,
   projectId: string,

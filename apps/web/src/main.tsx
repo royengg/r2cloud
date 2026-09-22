@@ -6,6 +6,7 @@ import '@fontsource-variable/plus-jakarta-sans';
 import { App } from './App';
 import './design/tokens.css';
 import './style.css';
+
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>

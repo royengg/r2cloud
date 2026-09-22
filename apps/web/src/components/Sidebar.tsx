@@ -8,6 +8,7 @@ import { Icon } from './Icon';
 import { Button, IconButton, Modal } from './ui';
 import { AccountMenu } from './AccountMenu';
 import { WorkspacePicker } from './WorkspacePicker';
+
 export function Sidebar({
   identity,
   project,

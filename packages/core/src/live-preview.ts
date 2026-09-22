@@ -38,6 +38,7 @@ async function available(db: DB, previewId: string) {
   );
   return preview;
 }
+
 async function session(db: DB, actor: Actor, sessionId: string) {
   requireThat(actor.kind === 'human', 403, 'A signed-in person must open the preview.');
   const identity = await db.authSession.findFirst({
@@ -51,6 +52,7 @@ async function session(db: DB, actor: Actor, sessionId: string) {
   requireThat(identity, 401, 'Sign in again to open this preview.');
   return identity;
 }
+
 export async function readLivePreview(actor: Actor, projectId: string, threadId: string) {
   await access(prisma, actor, projectId);
   requireThat(
@@ -79,6 +81,7 @@ export async function readLivePreview(actor: Actor, projectId: string, threadId:
     },
   };
 }
+
 export async function issueLivePreview(actor: Actor, projectId: string, previewId: string) {
   return prisma.$transaction(async (db) => {
     await access(db, actor, projectId);
@@ -103,6 +106,7 @@ export async function issueLivePreview(actor: Actor, projectId: string, previewI
     return { ticket };
   });
 }
+
 export async function redeemLivePreview(previewId: string, ticket: string) {
   requireThat(/^[\w-]{43}$/.test(ticket), 401, 'Invalid preview ticket.');
   return prisma.$transaction(async (db) => {
@@ -129,6 +133,7 @@ export async function redeemLivePreview(previewId: string, ticket: string) {
     return { token, expiresAt: grant.expiresAt };
   });
 }
+
 export async function authorizeLivePreview(previewId: string, token: string) {
   requireThat(/^[\w-]{43}$/.test(token), 401, 'Open this preview from its project thread.');
   const grant = await prisma.livePreviewGrant.findUnique({ where: { tokenHash: hash(token) } });

@@ -28,6 +28,7 @@ export function ModelPicker({
     />
   );
 }
+
 export function ThinkingPicker({
   model,
   value,
@@ -67,6 +68,7 @@ export function ThinkingPicker({
     />
   );
 }
+
 function ChoicePicker({
   label: setting,
   icon,

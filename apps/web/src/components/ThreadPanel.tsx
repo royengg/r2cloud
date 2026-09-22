@@ -15,6 +15,7 @@ import { refreshRead } from '../lib/realtime';
 import type { AgentTimeline as Timeline } from '@r2cloud/contracts/agent';
 import { AgentTimeline } from './AgentTimeline';
 import { ModelPicker, ThinkingPicker } from './ModelPicker';
+
 type Detail = {
   failure?: string | null;
   activity?: string | null;
@@ -23,6 +24,7 @@ type Detail = {
   task: { id: string; title: string; state: string; version: number } | null;
   run: { state: string; stopped_at: string | null } | null;
 };
+
 export function ThreadPanel({
   project,
   taskId,

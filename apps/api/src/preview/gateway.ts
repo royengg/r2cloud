@@ -13,18 +13,22 @@ export type PreviewGrant = {
   port: number;
   expiresAt: number;
 };
+
 type Dependencies = {
   authorize(id: string, token: string): Promise<PreviewGrant>;
   redeem(id: string, ticket: string): Promise<{ token: string; expiresAt: Date }>;
   connect(grant: PreviewGrant): Promise<Duplex>;
 };
+
 const prefix = '/_r2cloud/';
+
 function page(nonce: string) {
   return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Opening preview</title><body><p id="status">Opening your preview…</p><script nonce="${nonce}">
 const ticket=location.hash.slice(1);history.replaceState(null,'',location.pathname);
 fetch('/_r2cloud/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticket})}).then(async response=>{if(!response.ok)throw Error();location.replace('/');}).catch(()=>{document.getElementById('status').textContent='This preview link has expired. Open it again from your project thread.';});
 </script></body></html>`;
 }
+
 function cookie(req: IncomingMessage) {
   const tokens = (req.headers.cookie ?? '')
     .split(';')
@@ -33,6 +37,7 @@ function cookie(req: IncomingMessage) {
   requireThat(tokens.length === 1, 401, 'Open this preview from its project thread.');
   return tokens[0].slice(tokens[0].indexOf('=') + 1).trim();
 }
+
 async function ticketBody(req: IncomingMessage) {
   requireThat(req.headers['content-type']?.split(';')[0] === 'application/json', 415, 'Use JSON.');
   let body = '';
@@ -52,6 +57,7 @@ async function ticketBody(req: IncomingMessage) {
     throw new Fault(400, 'Invalid preview ticket.');
   }
 }
+
 export function createPreviewGateway(
   domain: string | ((host: string) => Promise<{ id: string; origin: string }>),
   dependencies: Dependencies,

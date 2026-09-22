@@ -1,4 +1,5 @@
 import { z } from 'zod';
+
 const relativePath = z
   .string()
   .max(200)
@@ -10,6 +11,7 @@ const relativePath = z
         !p.split('/').some((x) => x === '..' || x === '')),
     'Use a relative repository directory.',
   );
+
 const command = z
   .object({
     cmd: z
@@ -26,6 +28,7 @@ const command = z
       .max(40),
   })
   .strict();
+
 export const executionProfile = z
   .object({
     directory: relativePath,
@@ -42,5 +45,7 @@ export const executionProfile = z
     vcpus: z.union([z.literal(2), z.literal(4)]),
   })
   .strict();
+
 export type ExecutionProfile = z.infer<typeof executionProfile>;
+
 export type PinnedExecutionProfile = { version: number; digest: string; config: ExecutionProfile };

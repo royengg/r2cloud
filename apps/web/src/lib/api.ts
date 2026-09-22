@@ -7,7 +7,9 @@ export class ApiError extends Error {
     this.name = 'ApiError';
   }
 }
+
 const pending = new Map<string, string>();
+
 export async function api<T = unknown>(
   path: string,
   body?: unknown,

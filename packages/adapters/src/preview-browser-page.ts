@@ -2,9 +2,13 @@ import { createRequire } from 'node:module';
 import type { chromium as Chromium } from 'playwright-core';
 
 const load = createRequire('/opt/r2cloud/browser/package.json');
+
 const { chromium } = load('playwright-core') as { chromium: typeof Chromium };
+
 const config = JSON.parse(process.argv.at(-1)!);
+
 const origin = `http://127.0.0.1:${config.port}`;
+
 const browser = await chromium.launch({
   executablePath: '/tmp/chromium',
   headless: true,
@@ -22,6 +26,7 @@ const browser = await chromium.launch({
     FONTCONFIG_PATH: '/tmp/fonts',
   },
 });
+
 try {
   const context = await browser.newContext({
     viewport: { width: config.width, height: config.height },

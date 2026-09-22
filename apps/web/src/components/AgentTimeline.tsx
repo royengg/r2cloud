@@ -4,6 +4,7 @@ import { PreviewScreenshot } from './PreviewScreenshot';
 import type { AgentTimeline as Timeline, AgentRequest } from '@r2cloud/contracts/agent';
 import { Button } from './ui';
 import { CodexLogo } from './CodexLogo';
+
 export function AgentTimeline({
   projectId,
   timeline,
@@ -90,6 +91,7 @@ export function AgentTimeline({
     </>
   );
 }
+
 function Request({
   request,
   respond,

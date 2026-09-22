@@ -10,6 +10,7 @@ import { readQuery } from '../lib/queries';
 import { ModelPicker, ThinkingPicker } from './ModelPicker';
 import { Icon } from './Icon';
 import type { Project, Task } from '../lib/types';
+
 export function Composer({
   project,
   onOpen,

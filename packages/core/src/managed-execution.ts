@@ -112,6 +112,7 @@ export function executionControl(projectId: string, vault: CredentialVault): Exe
     },
   };
 }
+
 export async function heartbeatExecution(projectId: string) {
   const expiresAt = new Date(Date.now() + 30000);
   await prisma.executionRuntime.upsert({

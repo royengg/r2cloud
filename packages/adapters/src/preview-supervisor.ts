@@ -12,11 +12,17 @@ import {
   fstatSync,
 } from 'node:fs';
 import { createServer } from 'node:net';
+
 const config = JSON.parse(process.argv.at(-1)!);
+
 const deadline = Date.now() + config.timeout;
+
 const root = '/tmp/r2cloud-preview-control';
+
 mkdirSync(root, { recursive: true, mode: 0o700 });
+
 const state = root + '/preview-process.json';
+
 function birth(pid: number) {
   try {
     return readFileSync('/proc/' + pid + '/stat', 'utf8')
@@ -26,6 +32,7 @@ function birth(pid: number) {
     return null;
   }
 }
+
 function stop() {
   let old: { pid: number; birth: string };
   try {
@@ -43,9 +50,13 @@ function stop() {
   }
   rmSync(state, { force: true });
 }
+
 stop();
+
 if (config.stop) process.exit(0);
+
 const releaseDeadline = Math.min(deadline, Date.now() + 5000);
+
 while (true) {
   try {
     await new Promise<void>((resolve, reject) => {
@@ -62,18 +73,23 @@ while (true) {
     await Bun.sleep(100);
   }
 }
+
 const source = config.independent
   ? '/vercel/sandbox/r2-previews/source'
   : '/vercel/sandbox/agent/repository';
+
 if (lstatSync(source).isSymbolicLink() || realpathSync(source) !== source)
   throw Error('Invalid preview checkout');
+
 let user = config.independent ? 'r2-preview' : 'r2-agent',
   directory = source;
+
 function run(command: string, args: string[]) {
   const timeout = deadline - Date.now();
   if (timeout <= 0) throw Error('Preview preparation timed out');
   return execFileSync(command, args, { timeout });
 }
+
 if (config.snapshot) {
   try {
     run('id', ['r2-preview']);
@@ -89,12 +105,18 @@ if (config.snapshot) {
   run('chmod', ['-R', 'u+rwX', directory]);
   user = 'r2-preview';
 }
+
 const cwd = config.directory === '.' ? directory : directory + '/' + config.directory;
+
 const resolved = realpathSync(cwd);
+
 if (resolved !== directory && !resolved.startsWith(directory + '/'))
   throw Error('Invalid preview directory');
+
 const logPath = root + '/preview.log';
+
 const log = openSync(logPath, 'w', 0o600);
+
 const child = spawn('runuser', ['-u', user, '--', config.cmd, ...config.args], {
   cwd,
   detached: true,
@@ -109,13 +131,18 @@ const child = spawn('runuser', ['-u', user, '--', config.cmd, ...config.args], {
     HOST: '127.0.0.1',
   },
 });
+
 await new Promise<void>((resolve, reject) => {
   child.once('spawn', resolve);
   child.once('error', reject);
 });
+
 closeSync(log);
+
 writeFileSync(state, JSON.stringify({ pid: child.pid, birth: birth(child.pid!) }), { mode: 0o600 });
+
 child.unref();
+
 function failed() {
   stop();
   const file = openSync(logPath, 'r');
@@ -125,6 +152,7 @@ function failed() {
   process.stdout.write(bytes);
   process.exit(1);
 }
+
 while (Date.now() < deadline) {
   if (!birth(child.pid!)) failed();
   try {
@@ -137,4 +165,5 @@ while (Date.now() < deadline) {
   } catch {}
   await Bun.sleep(300);
 }
+
 failed();

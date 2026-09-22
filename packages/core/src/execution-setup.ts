@@ -6,7 +6,9 @@ import { projectAdministrator } from './team';
 import { digest } from '@r2cloud/contracts/hash';
 import { requireThat, type Actor } from '@r2cloud/contracts/domain';
 import { executionProfile } from '@r2cloud/contracts/execution';
+
 export { executionProfile } from '@r2cloud/contracts/execution';
+
 export async function readExecutionSetup(actor: Actor, projectId: string) {
   const project = await access(prisma, actor, projectId);
   const [profile, connection, subscription, runtime] = await Promise.all([
@@ -49,6 +51,7 @@ export async function readExecutionSetup(actor: Actor, projectId: string) {
     ),
   };
 }
+
 export async function saveExecutionSetup(
   actor: Actor,
   projectId: string,
@@ -119,6 +122,7 @@ export async function saveExecutionSetup(
     return result;
   });
 }
+
 /** Called while the task's authoritative project lock is held. Never runs commands. */
 export async function pinExecutionSetup(
   db: DB,
@@ -165,13 +169,16 @@ const detectedSetup = z.object({
   detector: z.number(),
   config: executionProfile,
 });
+
 function storedSetup(value: unknown) {
   const detected = detectedSetup.safeParse(value);
   return detected.success
     ? detected.data
     : { source: 'manual' as const, config: executionProfile.parse(value) };
 }
+
 const discoveries = new Map<string, Promise<void>>();
+
 export async function ensureExecutionSetup(actor: Actor, projectId: string, directory?: string) {
   const project = await access(prisma, actor, projectId, 'contribute');
   requireThat(project.repo_id, 409, 'Connect a repository before preparing execution.');

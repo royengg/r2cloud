@@ -3,6 +3,7 @@ import { prisma } from '@r2cloud/database';
 import type { AppOptions } from '../config/options';
 import { invitationInbox } from '@r2cloud/core/team';
 import { projects } from '@r2cloud/core/service';
+
 export function accountRoutes(options: AppOptions) {
   const router = Router();
   router.get('/me', async (_req, res) => {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+
 export const previewInspection = z
   .object({
     path: z

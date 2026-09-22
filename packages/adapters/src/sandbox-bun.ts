@@ -1,7 +1,9 @@
 export const sandboxPath =
   '/opt/r2cloud/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
+
 export const bunIntegrity =
   '9/E/UXOTpSo3YsV5g+FhtTd/qTpiWoKuxS12cqtuYA1ssu9fRAoPQnipFgGyck3tWO63iUdxBiygq+kELFawng==';
+
 export const installBun = String.raw`
 import base64, hashlib, io, pathlib, tarfile, urllib.request
 url = 'https://registry.npmjs.org/@oven/bun-linux-x64/-/bun-linux-x64-1.4.2.tgz'

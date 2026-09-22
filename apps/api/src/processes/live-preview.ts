@@ -5,13 +5,20 @@ import { authorizeLivePreview, redeemLivePreview } from '@r2cloud/core/live-prev
 import { prisma } from '@r2cloud/database';
 
 const domain = process.env.R2_PREVIEW_DOMAIN;
+
 const routesFile = process.env.R2_PREVIEW_ROUTES_FILE;
+
 const token = process.env.R2_VERCEL_TOKEN;
+
 const teamId = process.env.R2_VERCEL_TEAM_ID;
+
 const projectId = process.env.R2_VERCEL_PROJECT_ID;
+
 if ((!domain && !routesFile) || (domain && routesFile) || !token || !teamId || !projectId)
   throw new Error('Configure the isolated preview gateway environment.');
+
 const connections = previewConnections({ token, teamId, projectId });
+
 const gateway = createPreviewGateway(
   routesFile ? temporaryPreviewOrigins(routesFile).forHost : domain!,
   {
@@ -20,10 +27,13 @@ const gateway = createPreviewGateway(
     connect: connections.connect,
   },
 );
+
 gateway.server.listen(4311, '127.0.0.1', () =>
   console.log('Private preview gateway ready on loopback port 4311.'),
 );
+
 let stopping = false;
+
 function stop() {
   if (stopping) return;
   stopping = true;
@@ -31,5 +41,7 @@ function stop() {
   connections.close();
   void prisma.$disconnect();
 }
+
 process.on('SIGTERM', stop);
+
 process.on('SIGINT', stop);

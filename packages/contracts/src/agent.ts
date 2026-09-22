@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { PinnedSkill } from './skills';
+
 export const agentInput = z.discriminatedUnion('action', [
   z
     .object({
@@ -11,6 +12,7 @@ export const agentInput = z.discriminatedUnion('action', [
     .strict(),
   z.object({ action: z.literal('stop') }).strict(),
 ]);
+
 export type AgentItem = {
   revision?: string;
   id: string;
@@ -20,6 +22,7 @@ export type AgentItem = {
   status: string;
   detail: Record<string, unknown>;
 };
+
 export type AgentRequest = {
   id: string;
   kind: string;
@@ -27,6 +30,7 @@ export type AgentRequest = {
   detail: Record<string, unknown>;
   resolved: boolean;
 };
+
 export type AgentTimeline = {
   nextBefore?: string | null;
   reset?: boolean;
@@ -37,6 +41,7 @@ export type AgentTimeline = {
   turnId: string | null;
   actorId: string | null;
 };
+
 export type AgentGrant = {
   id: string;
   projectId: string;

@@ -1,5 +1,6 @@
 import { codexModels, type CodexModel } from '@r2cloud/contracts/threads';
 import { EventEmitter } from 'node:events';
+
 /** Transport is supplied by a trusted managed supervisor, never a shell on the API host.
  * requestOnce persists request intent/result by operation key. An ambiguous turn/start
  * must be reconciled; it cannot be blindly replayed on a fresh connection. */
@@ -9,6 +10,7 @@ export interface CodexTransport {
   reply(id: string | number, result: unknown): Promise<void>;
   onMessage(listener: (message: any) => void): () => void;
 }
+
 export class CodexHarness extends EventEmitter {
   readonly capabilities = {
     authenticationHealth: true,
@@ -21,6 +23,7 @@ export class CodexHarness extends EventEmitter {
     stopAcknowledgement: 'turn-only' as const,
     usage: 'when-reported' as const,
   };
+
   constructor(private transport: CodexTransport) {
     super();
     transport.onMessage((m) => {
@@ -34,6 +37,7 @@ export class CodexHarness extends EventEmitter {
       this.emit('event', m);
     });
   }
+
   async initialize(connectionId: string) {
     await this.transport.requestOnce(`${connectionId}:init`, 'initialize', {
       clientInfo: { name: 'r2cloud', title: 'R2Cloud', version: '0.1.0' },
@@ -41,6 +45,7 @@ export class CodexHarness extends EventEmitter {
     });
     await this.transport.notify('initialized');
   }
+
   health(key: string) {
     return this.transport.requestOnce<{ account: unknown; requiresOpenaiAuth: boolean }>(
       key,
@@ -48,6 +53,7 @@ export class CodexHarness extends EventEmitter {
       { refreshToken: false },
     );
   }
+
   /** The owning credential broker calls this in a fresh, isolated Codex home.
    * No OAuth token is returned to the product API or browser. */
   async subscriptionLogin(key: string) {
@@ -72,15 +78,19 @@ export class CodexHarness extends EventEmitter {
       userCode: result.userCode,
     };
   }
+
   cancelSubscriptionLogin(key: string, loginId: string) {
     return this.transport.requestOnce(key, 'account/login/cancel', { loginId });
   }
+
   logout(key: string) {
     return this.transport.requestOnce(key, 'account/logout', {});
   }
+
   rateLimits(key: string) {
     return this.transport.requestOnce(key, 'account/rateLimits/read', {});
   }
+
   async models(key: string) {
     const models: CodexModel[] = [];
     let cursor: string | null = null;
@@ -97,6 +107,7 @@ export class CodexHarness extends EventEmitter {
     }
     throw new Error('Codex model catalog exceeded its limit.');
   }
+
   async start(key: string, cwd: string, model?: string | null) {
     return this.transport.requestOnce<{ thread: { id: string } }>(key, 'thread/start', {
       cwd,
@@ -105,9 +116,11 @@ export class CodexHarness extends EventEmitter {
       sandbox: 'workspace-write',
     });
   }
+
   resume(key: string, threadId: string) {
     return this.transport.requestOnce(key, 'thread/resume', { threadId });
   }
+
   input(
     key: string,
     threadId: string,
@@ -121,9 +134,11 @@ export class CodexHarness extends EventEmitter {
       ...(effort ? { effort } : {}),
     });
   }
+
   interrupt(key: string, threadId: string, turnId: string) {
     return this.transport.requestOnce(key, 'turn/interrupt', { threadId, turnId });
   }
+
   // Product approval is never routed to a model's permission request. Default deny.
   denyPermission(id: string | number) {
     return this.transport.reply(id, { decision: 'decline' });

@@ -7,10 +7,14 @@ import { prisma } from '@r2cloud/database';
 import { connectCodexOne, refreshCodexConnection } from '@r2cloud/core/codex-broker';
 import { CodexLoginProcess, cleanStoppedLoginHomes } from '@r2cloud/adapters/codex-login';
 import { CredentialVault } from '@r2cloud/adapters/credential-vault';
+
 const binary = process.env.R2_CODEX_BINARY ?? '';
+
 if (!isAbsolute(binary))
   throw new Error('Set R2_CODEX_BINARY to a pinned native Codex executable.');
+
 const file = await open(binary, 'r');
+
 try {
   const header = Buffer.alloc(4);
   await file.read(header, 0, 4, 0);
@@ -19,16 +23,27 @@ try {
 } finally {
   await file.close();
 }
+
 const { stdout } = await promisify(execFile)(binary, ['--version'], { env: {}, timeout: 5000 });
+
 if (stdout.trim() !== 'codex-cli 0.153.2') throw new Error('This broker requires Codex 0.153.2.');
+
 const root = resolve(process.env.R2_CODEX_BROKER_DIR ?? '.local/codex-broker');
+
 const vault = new CredentialVault(join(root, 'vault'), process.env.R2_CODEX_VAULT_KEY ?? '');
+
 await cleanStoppedLoginHomes(join(root, 'sessions'));
+
 const stop = new AbortController();
+
 process.on('SIGINT', () => stop.abort());
+
 process.on('SIGTERM', () => stop.abort());
+
 console.log('Personal Codex login broker ready');
+
 let nextRefresh = 0;
+
 try {
   while (!stop.signal.aborted) {
     try {

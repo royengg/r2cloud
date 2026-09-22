@@ -5,6 +5,7 @@ import { Fault } from '@r2cloud/contracts/domain';
 import { access } from '@r2cloud/core/project-context';
 import { requestActor } from '../auth/session';
 import { allowedOrigins, type AppOptions } from '../config/options';
+
 export function attachRealtime(server: HttpServer, options: AppOptions) {
   const io = new SocketServer(server, {
     maxHttpBufferSize: 1024,

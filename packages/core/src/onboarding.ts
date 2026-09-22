@@ -4,9 +4,11 @@ import { lockRow } from '@r2cloud/database/locking';
 import { event } from './project-context';
 import { digest, id } from '@r2cloud/contracts/hash';
 import { requireThat, type Actor } from '@r2cloud/contracts/domain';
+
 const workspaceInput = z
   .object({ name: z.string().trim().min(3).max(80), projectName: z.string().trim().min(3).max(80) })
   .strict();
+
 export async function createWorkspace(actor: Actor, key: string, input: unknown) {
   const value = workspaceInput.parse(input);
   requireThat(key.length >= 8 && key.length <= 200, 400, 'A valid command key is required.');

@@ -7,6 +7,7 @@ import {
   type CandidateManifest,
   type Evidence,
 } from '@r2cloud/contracts/domain';
+
 export async function issuePreview(actor: Actor, projectId: string, candidateId: string) {
   return prisma.$transaction(async (db) => {
     await access(db, actor, projectId);
@@ -36,6 +37,7 @@ export async function issuePreview(actor: Actor, projectId: string, candidateId:
     return { url: `${origin}/view#${token}`, expiresInSeconds: 300, fixture: true };
   });
 }
+
 export async function readPreview(token: string) {
   return prisma.$transaction(async (db) => {
     const g = await db.preview_grants.findFirst({

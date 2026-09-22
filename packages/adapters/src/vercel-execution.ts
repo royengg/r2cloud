@@ -26,6 +26,7 @@ export type ExecutionCredentials = {
   plan: string;
   expiresAt: number;
 };
+
 export type ExecutionControl = {
   authorize(grant: RunGrant): Promise<ExecutionCredentials>;
   recover(
@@ -36,9 +37,11 @@ export type ExecutionControl = {
   models?(grant: RunGrant, models: CodexModel[]): Promise<void>;
   previousArtifact(grant: RunGrant): Promise<{ digest: string; headSha: string }>;
 };
+
 export class VercelCodexExecution implements ExecutionBackend {
   readonly mode = 'managed';
   private cloud: VercelSandboxes;
+
   constructor(
     private credentials: { token: string; teamId: string; projectId: string },
     private image: string,
@@ -50,6 +53,7 @@ export class VercelCodexExecution implements ExecutionBackend {
   ) {
     this.cloud = new VercelSandboxes(credentials, journal, sdk);
   }
+
   async observe(operationId: string): Promise<Observation<RunResult>> {
     const previous = await this.control.recover(operationId);
     if (!previous) return { state: 'absent' };
@@ -57,6 +61,7 @@ export class VercelCodexExecution implements ExecutionBackend {
     const observed = await this.cloud.observe(previous.identity);
     return { state: observed.state === 'running' ? 'running' : 'unknown' };
   }
+
   async start(grant: RunGrant): Promise<RunResult> {
     const author = await githubCommitAuthor(grant.config.githubUserId, this.http);
     const pinned = grant.config.executionSetup;
@@ -461,6 +466,7 @@ export class VercelCodexExecution implements ExecutionBackend {
       clearInterval(monitor);
     }
   }
+
   private async assertHobby() {
     const response = await this.http(
       `https://api.vercel.com/v2/teams/${encodeURIComponent(this.credentials.teamId)}`,
@@ -474,6 +480,7 @@ export class VercelCodexExecution implements ExecutionBackend {
         'An active Vercel Hobby connection is required for free-only execution.',
       );
   }
+
   private async store(session: Session, runId: string) {
     const root = resolve(this.artifacts);
     await mkdir(root, { recursive: true, mode: 0o700 });

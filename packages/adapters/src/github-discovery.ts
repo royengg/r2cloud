@@ -1,5 +1,6 @@
 import { SetupRequired } from '@r2cloud/contracts/adapters';
 import type { DiscoveredRepository, RepositoryDiscovery } from '@r2cloud/contracts/adapters';
+
 /** Only the connection broker process receives this GitHub App client secret. */
 export class GitHubDiscovery implements RepositoryDiscovery {
   constructor(
@@ -9,6 +10,7 @@ export class GitHubDiscovery implements RepositoryDiscovery {
     if (!config.clientId || !config.clientSecret || !config.callbackURL)
       throw new SetupRequired('GitHub App authorization is not configured.');
   }
+
   async discover(input: { code: string; verifier: string; githubUserId: string }) {
     const tokenResponse = await this.http('https://github.com/login/oauth/access_token', {
       method: 'POST',

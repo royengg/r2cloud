@@ -13,17 +13,25 @@ import { VercelCodexExecution } from '@r2cloud/adapters/vercel-execution';
 import { executionControl, heartbeatExecution } from '@r2cloud/core/managed-execution';
 import { PostgresSandboxJournal } from '@r2cloud/core/sandbox-journal';
 import { executeOne } from '@r2cloud/core/workflow';
+
 const projectId = process.env.R2_EXECUTION_PROJECT_ID;
+
 const token = process.env.R2_VERCEL_TOKEN;
+
 const teamId = process.env.R2_VERCEL_TEAM_ID;
+
 const vercelProjectId = process.env.R2_VERCEL_PROJECT_ID;
+
 const image = process.env.R2_VERCEL_IMAGE;
+
 if (!projectId || !token || !teamId || !vercelProjectId || !image)
   throw new Error('Configure the project-scoped managed worker.');
+
 const vault = new CredentialVault(
   join(resolve(process.env.R2_CODEX_BROKER_DIR ?? '.local/codex-broker'), 'vault'),
   process.env.R2_CODEX_VAULT_KEY ?? '',
 );
+
 const backend = new VercelCodexExecution(
   { token, teamId, projectId: vercelProjectId },
   image,
@@ -31,8 +39,11 @@ const backend = new VercelCodexExecution(
   new PostgresSandboxJournal(),
   executionControl(projectId, vault),
 );
+
 const owner = randomUUID();
+
 const sessionControl = agentControl(projectId, vault, owner);
+
 const sessions = new AgentSession(
   { token, teamId, projectId: vercelProjectId },
   image,
@@ -42,8 +53,11 @@ const sessions = new AgentSession(
   undefined,
   process.env.R2_VERCEL_SNAPSHOT_ID,
 );
+
 let stopping = false;
+
 const abort = new AbortController();
+
 function report(operation: string, error: unknown) {
   const name = error instanceof Error ? error.constructor.name : 'UnknownError';
   const category = [
@@ -67,7 +81,9 @@ function report(operation: string, error: unknown) {
     }),
   );
 }
+
 let shutdown: Promise<unknown> | undefined;
+
 function stop() {
   if (stopping) return;
   stopping = true;
@@ -82,9 +98,13 @@ function stop() {
     })
     .catch((error) => report('request_shutdown', error));
 }
+
 process.on('SIGTERM', stop);
+
 process.on('SIGINT', stop);
+
 let checking = false;
+
 async function heartbeat() {
   if (checking || stopping) return;
   checking = true;
@@ -101,7 +121,9 @@ async function heartbeat() {
     checking = false;
   }
 }
+
 let maintaining = false;
+
 async function maintain() {
   if (maintaining || stopping) return;
   maintaining = true;
@@ -111,18 +133,25 @@ async function maintain() {
     maintaining = false;
   }
 }
+
 await heartbeat();
+
 await maintain();
+
 const cleanupTimer = setInterval(
   () => void maintain().catch((error) => report('runtime_maintenance', error)),
   5000,
 );
+
 const timer = setInterval(
   () => void heartbeat().catch((error) => report('worker_heartbeat', error)),
   10000,
 );
+
 console.log('Managed execution worker ready for the configured project');
+
 const processing = new Set<string>();
+
 async function processTurns() {
   while (!stopping) {
     try {
@@ -145,6 +174,7 @@ async function processTurns() {
     }
   }
 }
+
 try {
   await Promise.all([processTurns(), processTurns()]);
 } finally {

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Avatar } from './ui';
 import { Icon } from './Icon';
+
 export function AccountMenu({
   name,
   onSignOut,

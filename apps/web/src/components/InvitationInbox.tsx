@@ -1,6 +1,7 @@
 import type { Invitation } from '../lib/types';
 import { Button } from './ui';
 import { Icon } from './Icon';
+
 export function InvitationInbox({
   invitations,
   busy,

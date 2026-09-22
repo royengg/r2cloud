@@ -6,6 +6,7 @@ import { requireThat } from '@r2cloud/contracts/domain';
 import { skillMentions, type PinnedSkill } from '@r2cloud/contracts/skills';
 
 const root = new URL('../skills/', import.meta.url);
+
 const bundled: PinnedSkill[] = readdirSync(root).map((name) => {
   const content = readFileSync(new URL(`${name}/SKILL.md`, root), 'utf8');
   const { description } = YAML.parse(content.split('---')[1]!) as { description: string };

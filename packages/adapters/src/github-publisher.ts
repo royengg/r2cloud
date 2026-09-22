@@ -11,6 +11,7 @@ import { pushPublicationBundle } from './publication-git';
 
 export class GitHubPublisher implements PublisherBackend {
   readonly mode = 'github' as const;
+
   constructor(
     private config: { appId: string; privateKey: string },
     private http: typeof fetch = fetch,

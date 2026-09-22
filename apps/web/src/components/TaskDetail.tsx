@@ -8,6 +8,7 @@ import type { Command } from '@r2cloud/contracts/domain';
 import type { Task, Project, Activity } from '../lib/types';
 import { Icon } from './Icon';
 import { Avatar, Button, IconButton, Modal, Status } from './ui';
+
 export function TaskDetail({
   task,
   project,

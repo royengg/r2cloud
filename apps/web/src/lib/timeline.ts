@@ -19,6 +19,7 @@ export function mergeTimeline(
     }),
   };
 }
+
 export function timelineQuery(path: string) {
   return {
     ...readQuery<AgentTimeline>(path),

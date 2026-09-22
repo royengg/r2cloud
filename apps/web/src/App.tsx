@@ -16,6 +16,7 @@ import { Icon } from './components/Icon';
 import { Avatar, Button, IconButton, Modal } from './components/ui';
 import { useWorkspace } from './lib/useWorkspace';
 import { api } from './lib/api';
+
 export function App() {
   const w = useWorkspace();
   const composerInput = useRef<HTMLTextAreaElement>(null);

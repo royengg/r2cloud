@@ -1427,6 +1427,154 @@ button .icon {
   margin-block-start: 8px;
 }
 .task-form-modal,
+.skills-modal {
+  width: 680px;
+  padding: 28px;
+}
+.skills-header,
+.skills-toolbar,
+.skills-actions,
+.skills-actions > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.skills-header,
+.skills-actions {
+  justify-content: space-between;
+}
+.skills-header {
+  align-items: flex-start;
+}
+.skills-header > div {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.skills-project,
+.skills-intro,
+.skills-footnote,
+.skills-empty,
+.skills-row p {
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+  line-height: 1.6;
+}
+.skills-project {
+  margin-block-end: 4px;
+}
+.skills-intro {
+  margin-block: 12px 24px;
+}
+.skills-section {
+  margin-block-start: 28px;
+}
+.skills-section h3 {
+  font-size: var(--text-label);
+  margin-block-end: 12px;
+}
+.skills-section h3 span {
+  margin-inline-start: 6px;
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+.skills-list {
+  display: grid;
+  gap: 8px;
+}
+.skills-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-align: start;
+}
+.skills-row > div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.skills-row strong {
+  font-size: var(--text-label);
+  font-weight: 550;
+}
+.skills-row p {
+  margin-block-start: 4px;
+}
+.skills-state {
+  font-size: var(--text-caption);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+.skills-footnote {
+  margin-block-start: 24px;
+}
+.skills-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: grid;
+  gap: 20px;
+}
+.skills-fields label {
+  font-size: var(--text-caption);
+  font-weight: 550;
+}
+.skills-fields .skills-enabled {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 400;
+}
+.skills-fields .skills-enabled input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+.skills-actions {
+  margin-block-start: 24px;
+  position: sticky;
+  bottom: 0;
+  padding-block: 12px;
+  background: var(--color-canvas);
+}
+.skills-actions > div {
+  margin-inline-start: auto;
+}
+.skills-delete {
+  margin-block-start: 20px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--color-danger);
+}
+.skills-delete p {
+  font-size: var(--text-caption);
+  margin-block-end: 12px;
+}
+.skills-delete .button {
+  margin-inline-end: 8px;
+}
+@media (hover: hover) {
+  .skills-row:hover:not(:disabled) {
+    background: var(--color-surface-muted);
+  }
+}
+@media (max-width: 500px) {
+  .skills-modal {
+    padding: 20px;
+  }
+  .skills-row {
+    padding: 12px;
+    gap: 10px;
+  }
+}
 .confirmation-modal,
 .connections-modal,
 .participants-modal {

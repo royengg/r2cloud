@@ -18,6 +18,8 @@ Each task has one implementation owner. Agents work in isolated cloud sandboxes 
 
 Type `/` in either chat box to choose a skill, or write a name directly—for example, `/better-ui review this screen`. The starter skills cover UI polish, accessibility, debugging, code review, testing and planning. Skills guide the same conversation; they do not grant permission to edit or publish code.
 
+Open **Skills** under a project in the sidebar to view its instructions. Workspace owners and admins can create custom skills, import a `SKILL.md`, edit instructions, or disable and delete skills. Imports include instructions only, without supporting scripts or files. Changes apply to future messages; queued turns retain their pinned instructions.
+
 ## Current limits
 
 The coding pilot supports one configured project and public repositories. It uses your connected Codex subscription and Vercel Hobby sandbox capacity. Sandboxes stay available for quick follow-ups, stop after two minutes idle, and have a ten-minute total limit.

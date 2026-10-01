@@ -17,6 +17,7 @@ export function Sidebar({
   onClose,
   onConnections,
   onRepositoryReview,
+  onSkills,
   onNewProject,
   onSignOut,
   mobile,
@@ -31,6 +32,7 @@ export function Sidebar({
   onClose: () => void;
   onConnections: () => void;
   onRepositoryReview: () => void;
+  onSkills: () => void;
   onNewProject: () => void;
   onSignOut: () => void;
   mobile: boolean;
@@ -140,6 +142,10 @@ export function Sidebar({
                     >
                       <Icon name="branch" size={15} />
                       <span className="sidebar-thread-title">Changes</span>
+                    </button>
+                    <button className="sidebar-thread" onClick={onSkills}>
+                      <Icon name="sparkles" size={15} />
+                      <span className="sidebar-thread-title">Skills</span>
                     </button>
                     {threadQuery.isPending ? (
                       <p className="sidebar-thread-hint" role="status">

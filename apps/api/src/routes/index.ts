@@ -1,4 +1,5 @@
 import { reviewRoutes } from './review';
+import { skillRoutes } from './skills';
 import { livePreviewRoutes } from './live-preview';
 import { threadRoutes } from './threads';
 import { Router } from 'express';
@@ -21,6 +22,7 @@ export function protectedRoutes(options: AppOptions) {
   router.use(workspacesRoutes());
   router.use(tasksRoutes());
   router.use(threadRoutes());
+  router.use(skillRoutes());
   router.use(reviewRoutes());
   router.use(livePreviewRoutes(options.previewDomain, options.previewRoutesFile));
   return router;

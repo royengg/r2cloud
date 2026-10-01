@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AuthScreen, WorkspaceSetup } from './components/AuthScreen';
 import { Select } from './components/Select';
 import { Sidebar } from './components/Sidebar';
+import { SkillsPanel } from './components/SkillsPanel';
 import { Board } from './components/Board';
 import { ThreadPanel } from './components/ThreadPanel';
 import { Composer } from './components/Composer';
@@ -26,6 +27,7 @@ export function App() {
       ? w.snapshot?.tasks.find((task) => task.id === chatTask.id)
       : undefined;
   const [repositoryReview, setRepositoryReview] = useState(false);
+  const [skillsOpen, setSkillsOpen] = useState(false);
   const [mobile, setMobile] = useState(() => innerWidth < 900),
     [sidebarOpen, setSidebarOpen] = useState(() => innerWidth >= 900),
     [attention, setAttention] = useState(false),
@@ -189,6 +191,10 @@ export function App() {
           onNewProject={() => setNewProject(true)}
           onClose={() => setSidebarOpen(false)}
           onConnections={() => setConnections(true)}
+          onSkills={() => {
+            setSkillsOpen(true);
+            if (mobile) setSidebarOpen(false);
+          }}
           onRepositoryReview={() => {
             setRepositoryReview(true);
             if (mobile) setSidebarOpen(false);
@@ -453,6 +459,14 @@ export function App() {
           projectId={w.projectId}
           close={() => setConnections(false)}
           onConnected={() => w.loadIdentity(w.projectId)}
+        />
+      )}
+      {skillsOpen && project && (
+        <SkillsPanel
+          key={w.projectId}
+          projectId={w.projectId}
+          projectName={project.name}
+          close={() => setSkillsOpen(false)}
         />
       )}
       {participants && ['owner', 'admin'].includes(context?.workspace_role ?? '') && (

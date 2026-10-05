@@ -1,6 +1,6 @@
 # r2cloud
 
-A shared workspace for turning product ideas into working software with Codex.
+A collaborative agent development environment for product managers, combining Kanban boards, cloud agents, and shared workspaces.
 
 Describe a task, organise it on your board, and work with an agent in a conversation. Keep your team’s tasks, feedback, and review decisions together.
 
@@ -13,12 +13,33 @@ Describe a task, organise it on your board, and work with an agent in a conversa
 3. **Connect your tools.** Choose a GitHub repository and link your personal Codex account separately.
 4. **Work in a thread.** Ask questions, explore the codebase, or plan changes. Follow streamed replies and activity, choose a model, and answer questions inline.
 5. **Start and review work.** Approve implementation of a specific task, then inspect the preview, saved diffs and validation results. Questions alone do not start code changes.
+6. **Publish for code review.** The assignee or a publication reviewer with GitHub write access can approve opening a pull request. Merging requires separate project merge permission and GitHub write access. Tasks complete only after GitHub confirms the approved commit was merged.
 
 Each task has one implementation owner. Agents work in isolated cloud sandboxes and cannot push or merge your code. Publication and merging require separate human approval; a finished agent reply does not make a task Completed.
 
-Type `/` in either chat box to choose a skill, or write a name directly—for example, `/better-ui review this screen`. The starter skills cover UI polish, accessibility, debugging, code review, testing and planning. Skills guide the same conversation; they do not grant permission to edit or publish code.
+## Project skills
 
-Open **Skills** under a project in the sidebar to view its instructions. Workspace owners and admins can create custom skills, import a `SKILL.md`, edit instructions, or disable and delete skills. Imports include instructions only, without supporting scripts or files. Changes apply to future messages; queued turns retain their pinned instructions.
+Type `/` in the project chat box or a thread to choose a skill, or write `/better-ui review this screen` directly. Six built-in skills cover UI polish, accessibility, debugging, code review, testing and planning.
+
+Open **Skills** under a project in the sidebar to manage reusable instructions:
+
+- **Create or import:** workspace owners and admins can choose **New skill** or import a `SKILL.md`, review its contents, and save it.
+- **Edit and control availability:** update custom instructions, disable a skill to remove it from suggestions, or delete it. Built-in skills are read-only.
+- **Use across the project:** project members can view skills and use enabled skills in conversations they can send messages to. Each queued message retains the instructions it was submitted with, even if the skill later changes.
+
+A `SKILL.md` contains a command name and description in YAML frontmatter, followed by Markdown instructions:
+
+```markdown
+---
+name: brand-voice
+description: Write clear, consistent product copy.
+---
+
+Use short sentences and familiar words.
+Make button labels describe the action.
+```
+
+Save it, then use `/brand-voice improve these button labels` in a conversation. Custom skills are scoped to their project. Imports include instructions only, without supporting scripts or other files. Skills do not grant permission to edit or publish code.
 
 ## Current limits
 
